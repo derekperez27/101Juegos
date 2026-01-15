@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Free Kick Master - Mundial de Tiros Libres</title>
+<style>
+  :root{--bg:#0b1220;--panel:#0f1724;--accent:#ffd166;--muted:#aab3c6}
+  html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Arial;background:linear-gradient(180deg,#071028 0%,#0b1220 100%);color:#e6eef8}
+  .container{max-width:1100px;margin:18px auto;padding:16px}
+  h1{margin:8px 0;color:var(--accent);text-align:center}
+  #gameWrap{display:flex;gap:16px}
+  canvas{background:linear-gradient(180deg,#3aa0ff10,#0b1220);border:2px solid rgba(255,255,255,0.04);box-shadow:0 8px 24px rgba(0,0,0,0.6)}
+  #hud{width:360px;background:linear-gradient(180deg,var(--panel),#071022);padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,0.03)}
+  .stat{display:flex;justify-content:space-between;margin-bottom:8px}
+  .label{color:var(--muted)}
+  .big{font-size:20px;font-weight:700;color:#fff}
+  .phase{font-weight:700;color:var(--accent);text-align:center;margin-bottom:12px}
+  .controls{margin-top:8px}
+  .meter{height:14px;background:#0b1724;border:1px solid rgba(255,255,255,0.03);border-radius:6px;overflow:hidden}
+  .meter > i{display:block;height:100%;background:linear-gradient(90deg,#27ae60,#2ecc71);width:0%}
+  .meter.effect > i{background:linear-gradient(90deg,#f39c12,#f1c40f)}
+  .btn{display:inline-block;padding:8px 12px;margin-top:8px;background:#112233;border:1px solid #2b3b4a;color:#fff;border-radius:6px;cursor:pointer}
+  .btn:active{transform:translateY(1px)}
+  #log{height:160px;overflow:auto;background:#071428;margin-top:10px;padding:8px;border-radius:6px;font-size:13px}
+  .footer{margin-top:12px;color:var(--muted);font-size:13px;text-align:center}
+  .instructions{font-size:13px;color:var(--muted);margin-top:8px}
+  .center{display:flex;gap:8px;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Free Kick Master — Mundial de Tiros Libres</h1>
+  <div id="gameWrap">
+    <canvas id="field" width="720" height="420"></canvas>
+    <div id="hud">
+      <div class="phase" id="phaseName">Fase: Grupos</div>
+      <div class="stat"><div class="label">Tiros restantes</div><div class="big" id="shotsLeft">9</div></div>
+      <div class="stat"><div class="label">Goles marcados</div><div class="big" id="goals">0</div></div>
+      <div class="stat"><div class="label">Objetivo mínimo</div><div class="big" id="goalTarget">3</div></div>
+      <div class="stat"><div class="label">Ronda</div><div class="big" id="roundName">Fase de Grupos</div></div>
+      <div class="instructions">CONTROLES:<br>1. <strong>DIRECCIÓN</strong>: Haz clic y arrastra para apuntar<br>2. <strong>POTENCIA</strong>: Suelta para iniciar barra de timing (ida/vuelta)<br>3. <strong>EFECTO</strong>: Clic en el momento justo para capturar la curva<br><br>Tres fases separadas, precisión requerida en cada una.</div>
+
+      <div style="margin-top:10px">
+        <div class="label">Barra de potencia</div>
+        <div class="meter" id="powerMeter"><i></i></div>
+      </div>
+
+      <div style="margin-top:8px">
+        <div class="label">Medidor de efecto (suelta para fijar)</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+          <div style="display:flex;gap:6px;align-items:center">
+            <div class="btn" id="effectLeft">Efecto ←</div>
+            <div class="btn" id="effectNone">Ninguno</div>
+            <div class="btn" id="effectRight">Efecto →</div>
+          </div>
+        </div>
+        <div style="margin-top:6px" class="meter effect" id="effectMeter"><i></i></div>
+      </div>
+
+      <div style="margin-top:10px;" class="center">
+        <div class="btn" id="resetShot">Reset Shot</div>
+        <div class="btn" id="skipToNext">Siguiente Ronda (debug)</div>
+      </div>
+
+      <div id="log"></div>
+      <div class="footer">Desarrollado en HTML5 Canvas • Ajusta dificultad dinámicamente</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Free Kick Master - single file implementation
+// Author: Copilot-style assistant
+// Goals: direction, power, effect; tournament progression; AI goalie and barrier
+
+// ======= Globals & Canvas =======
+const canvas = document.getElementById('field');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// HUD elements
+const shotsLeftEl = document.getElementById('shotsLeft');
+const goalsEl = document.getElementById('goals');
+const phaseNameEl = document.getElementById('phaseName');
+const roundNameEl = document.getElementById('roundName');
+const goalTargetEl = document.getElementById('goalTarget');
+const powerMeterEl = document.getElementById('powerMeter').firstElementChild;
+const effectMeterEl = document.getElementById('effectMeter').firstElementChild;
+const logEl = document.getElementById('log');
+
+function log(msg){ const d=document.createElement('div'); d.textContent = msg; logEl.prepend(d); }
+
+// ======= Tournament Phases & Difficulty =======
+const PHASES = [
+  { id:'groups', name:'Fase de Grupos', barrier:3, goalie:{react:0.4,speed:2.0}, effectTolerance:0.35, shots:9, target:3 },
+  { id:'round16', name:'Dieciseisavos', barrier:4, goalie:{react:0.5,speed:2.4}, effectTolerance:0.30, shots:9, target:3 },
+  { id:'round8', name:'Octavos', barrier:5, goalie:{react:0.6,speed:2.8}, effectTolerance:0.26, shots:9, target:3 },
+  { id:'quarter', name:'Cuartos', barrier:6, goalie:{react:0.7,speed:3.2}, effectTolerance:0.22, shots:9, target:3 },
+  { id:'semi', name:'Semifinal', barrier:7, goalie:{react:0.78,speed:3.6}, effectTolerance:0.18, shots:9, target:3 },
+  { id:'final', name:'Final', barrier:8, goalie:{react:0.85,speed:4.0}, effectTolerance:0.14, shots:9, target:3 }
+];
+let currentPhaseIndex = 0;
+let currentPhase = PHASES[currentPhaseIndex];
+
+// State per round
+let shotsLeft = currentPhase.shots;
+let goals = 0;
+let target = currentPhase.target;
+
+// Ball & shot state - THREE PHASE SYSTEM
+let shotPhase = 'idle'; // 'aiming', 'power', 'effect', 'flying'
+let aimStart = null; // {x,y}
+let aimPos = null; // current pointer
+let aimAngle = 0; // stored angle from phase 1
+let powerBarValue = 0; // 0..1, oscillates during power phase
+let powerDirection = 1; // 1 or -1
+let effectCaptured = 0; // final effect value
+let shotInProgress = false;
+let ball = null; // {x,y,vx,vy,curve}
+
+// Barrier and goalie
+const goal = { x: W-40, y: H/2-60, width: 4, height: 120, top: H/2-60, bottom: H/2+60 };
+let barrierCount = currentPhase.barrier; // players in wall
+let goalie = { x: W-100, y: H/2, vy:0, speed: currentPhase.goalie.speed, reaction: currentPhase.goalie.react, targetY: H/2 };
+
+// Effect meter oscillation
+// effect: magnitude and side selection
+let effectMag = 0; // 0..1 magnitude
+let effectOscDir = 1; // oscillation direction for magnitude
+let effectSide = 1; // -1 left, 0 none, 1 right
+
+// Timing
+let lastT = performance.now();
+
+// Initialize
+function resetRoundVars(){ shotsLeft = currentPhase.shots; goals = 0; target = currentPhase.target; barrierCount = currentPhase.barrier; goalie.speed = currentPhase.goalie.speed; goalie.reaction = currentPhase.goalie.react; updateHUD(); log(`Comienza ${currentPhase.name}. Barrera: ${barrierCount} jugadores.`); }
+
+function updateHUD(){ shotsLeftEl.textContent = shotsLeft; goalsEl.textContent = goals; phaseNameEl.textContent = `Fase: ${currentPhase.name}`; roundNameEl.textContent = currentPhase.name; goalTargetEl.textContent = target; }
+
+resetRoundVars();
+
+// ======= Input Handling - THREE PHASE SYSTEM =======
+canvas.addEventListener('pointerdown', (e)=>{
+  if (shotPhase === 'idle' && !shotInProgress){
+    // START PHASE 1: AIMING
+    shotPhase = 'aiming';
+    aimStart = getMousePos(e);
+    aimPos = aimStart;
+    log('FASE 1: Apuntando... Arrastra y suelta.');
+  } else if (shotPhase === 'power'){
+    // PHASE 2 COMPLETE: capture power
+    const capturedPower = powerBarValue;
+    powerBarValue = capturedPower; // ensure stable
+    shotPhase = 'effect';
+    // start effect oscillation
+    effectMag = 0; effectOscDir = 1;
+    log(`Potencia: ${(capturedPower*100).toFixed(0)}% — FASE 3: Haz clic para capturar efecto! Selecciona lado si deseas.`);
+  } else if (shotPhase === 'effect'){
+    // PHASE 3 COMPLETE: capture effect and SHOOT
+    effectCaptured = (effectSide === 0) ? 0 : effectSide * effectMag; // side*mag
+    executeShot();
+  }
+});
+window.addEventListener('pointermove',(e)=>{ if (shotPhase === 'aiming') aimPos = getMousePos(e); });
+window.addEventListener('pointerup',(e)=>{ 
+  if (shotPhase === 'aiming'){
+    // Complete aiming, move to power phase
+    aimPos = getMousePos(e);
+    const playerX = 80, playerY = H/2;
+    const dx = aimPos.x - playerX;
+    const dy = aimPos.y - playerY;
+    aimAngle = Math.atan2(dy, dx);
+    shotPhase = 'power';
+    powerBarValue = 0;
+    powerDirection = 1;
+    log(`Dirección: ${(aimAngle*180/Math.PI).toFixed(0)}° — FASE 2: Haz clic para capturar potencia!`);
+  }
+});
+
+function getMousePos(e){ const rect = canvas.getBoundingClientRect(); return { x: (e.clientX-rect.left)*(canvas.width/rect.width), y: (e.clientY-rect.top)*(canvas.height/rect.height) }; }
+
+// Reset shot (for testing)
+document.getElementById('resetShot').addEventListener('click', ()=>{ 
+  if(shotInProgress || shotPhase !== 'idle'){ 
+    shotInProgress=false; 
+    ball=null; 
+    shotPhase='idle'; 
+    log('Tiro cancelado.'); 
+  } 
+});
+// Skip round debug
+document.getElementById('skipToNext').addEventListener('click', ()=>{ advancePhase(true); });
+
+// Effect side buttons
+document.getElementById('effectLeft').addEventListener('click', ()=>{ effectSide = -1; updateEffectMeter(); log('Efecto: IZQUIERDA seleccionado'); });
+document.getElementById('effectNone').addEventListener('click', ()=>{ effectSide = 0; updateEffectMeter(); log('Efecto: NINGUNO'); });
+document.getElementById('effectRight').addEventListener('click', ()=>{ effectSide = 1; updateEffectMeter(); log('Efecto: DERECHA seleccionado'); });
+
+// ======= Shot Creation - EXECUTE with captured values =======
+function executeShot(){
+  if (shotInProgress) return;
+  const playerX = 80, playerY = H/2;
+  const power = powerBarValue; // 0..1 from timing
+  const effect = effectCaptured; // -1..1 from timing
+  const angle = aimAngle; // stored from phase 1
+
+  // Create ball with physics
+  const speedMultiplier = 8 + power*6; // 8..14
+  ball = { 
+    x: playerX + 30, 
+    y: playerY, 
+    vx: Math.cos(angle) * speedMultiplier, 
+    vy: Math.sin(angle) * speedMultiplier * 0.7, 
+    curve: effect * 0.18 * (0.5 + power*0.5), // stronger mapping: effect * power
+    traveled: 0,
+    trail: []
+  };
+  
+  shotInProgress = true; 
+  shotsLeft--; 
+  shotPhase = 'flying';
+  updateHUD(); 
+  log(`¡DISPARO! Potencia: ${(power*100).toFixed(0)}% | Efecto: ${effect.toFixed(2)} | Ángulo: ${(angle*180/Math.PI).toFixed(0)}°`);
+  
+  // goalie prediction
+  predictGoalie(ball);
+}
+
+function predictGoalie(ball){
+  // Basic prediction: anticipate final y at goal X
+  const time = (goal.x - ball.x) / ball.vx; // approx
+  let predictedY = ball.y + ball.vy*time + 0.5*ball.curve*time*time*10; // curve contributes
+  // Add noise based on phase (less noise = better goalie)
+  const noise = (1 - goalie.reaction) * 120; // higher reaction -> less noise
+  predictedY += (Math.random()*2-1)*noise;
+  // clamp
+  goalie.targetY = clamp(predictedY, goal.top+10, goal.bottom-10);
+}
+
+// ======= Physics & Collisions =======
+function simulate(dt){
+  // Power bar oscillates during 'power' phase
+  if (shotPhase === 'power'){
+    powerBarValue += powerDirection * dt * 1.5; // ida y vuelta
+    if (powerBarValue > 1){ powerBarValue = 1; powerDirection = -1; }
+    if (powerBarValue < 0){ powerBarValue = 0; powerDirection = 1; }
+    powerMeterEl.style.width = `${powerBarValue*100}%`;
+  }
+  
+  // Effect meter oscillates during 'effect' phase (magnitude only)
+  if (shotPhase === 'effect'){
+    effectMag += effectOscDir * dt * 1.6;
+    if (effectMag > 1){ effectMag = 1; effectOscDir = -1; }
+    if (effectMag < 0){ effectMag = 0; effectOscDir = 1; }
+    updateEffectMeter();
+  }
+
+  if (shotInProgress && ball){
+    // apply curve: Magnus-like lateral acceleration proportional to forward speed
+    // stronger power and larger effect -> stronger curve
+    const forwardSpeed = Math.hypot(ball.vx, ball.vy);
+    ball.vy += ball.curve * dt * forwardSpeed * 0.03; // curve affects vertical motion
+    ball.x += ball.vx * dt * 60;
+    ball.y += ball.vy * dt * 60;
+    // add position to trail for rendering
+    if (!ball.trail) ball.trail = [];
+    ball.trail.push({ x: ball.x, y: ball.y });
+    if (ball.trail.length > 16) ball.trail.shift();
+    ball.traveled += Math.hypot(ball.vx, ball.vy) * dt * 60;
+
+    // barrier check: simple check near barrier x
+    const wallX = W-220; // barrier position
+    if (ball.x >= wallX && ball.x <= wallX+12 && Math.abs(ball.y - H/2) < 80){
+      // chance to hit a wall player depending on barrierCount and vertical overlap
+      const playerHeight = 18; const sections = barrierCount;
+      const segment = Math.floor((ball.y - (H/2 - (sections*playerHeight)/2))/playerHeight);
+      if (segment >=0 && segment < sections){
+        // blocked
+        log('🛡️ La barrera bloqueó el disparo.');
+        shotInProgress=false; ball=null; shotPhase='idle';
+        checkRoundEnd();
+        return;
+      }
+    }
+
+    // Goal detection: when ball crosses goal.x
+    if (ball.x >= goal.x){
+      // check between posts and under crossbar
+      if (ball.y > goal.top && ball.y < goal.bottom){
+        // time for goalie to attempt save
+        const saved = goalkeeperAttempt(ball);
+        if (!saved){
+          log('⚽ ¡¡¡GOOOL!!! Anotación perfecta.'); goals++; updateHUD();
+        } else {
+          log('🧤 Parada del portero. Gran atajada.');
+        }
+      } else {
+        log('❌ Fuera. El balón salió de la portería.');
+      }
+      shotInProgress=false; ball=null; shotPhase='idle'; checkRoundEnd();
+      return;
+    }
+
+    // Out of bounds
+    if (ball.y < 0 || ball.y > H) { log('❌ Fuera. Demasiada altura.'); shotInProgress=false; ball=null; shotPhase='idle'; checkRoundEnd(); return; }
+  }
+
+  // Goalie movement: moves towards targetY with speed
+  const dy = goalie.targetY - goalie.y; const maxMove = goalie.speed*dt*60;
+  goalie.y += clamp(dy, -maxMove, maxMove);
+}
+
+function goalkeeperAttempt(ball){
+  // Determine if goalie reaches ball center in time
+  // Estimate time to goal
+  const timeToGoal = (goal.x - ball.x) / Math.max(0.0001, ball.vx);
+  // distance to move
+  const dy = Math.abs(goalie.y - ball.y);
+  const needed = dy / (goalie.speed*60);
+  // If goalie needed < timeToGoal * reaction factor -> save chance
+  const reactionEffective = goalie.reaction + (Math.random()*0.3 - 0.15); // slight randomness
+  const canReach = needed <= timeToGoal*reactionEffective;
+  if (!canReach) return false; // too slow
+  // Even if reaches, there's still chance to fail depending on shot power and effect
+  // Stronger power and good effect reduces save chance
+  const powerFactor = Math.hypot(ball.vx, ball.vy);
+  const effectAbs = Math.abs(ball.curve);
+  const difficultyFactor = 1 - currentPhase.effectTolerance; // higher difficulty = larger value
+  const saveProbability = clamp(0.9 - powerFactor*0.08 + (0.2*effectAbs) - difficultyFactor*0.15, 0.05, 0.9);
+  return Math.random() < saveProbability;
+}
+
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+// ======= Round logic =======
+function checkRoundEnd(){
+  updateHUD();
+  if (shotsLeft <= 0){
+    // evaluate
+    if (goals >= target){
+      log(`🏆 ¡AVANZAS! ${goals}/${target} goles — Clasificado para la siguiente ronda.`);
+      setTimeout(()=>advancePhase(true),1200);
+    } else {
+      log(`💔 ELIMINADO: ${goals}/${target} goles — Has sido eliminado del torneo.`);
+      setTimeout(()=>advancePhase(false),1200);
+    }
+  }
+}
+
+function advancePhase(playerWon){
+  if (!playerWon){ // elimination -> reset tournament
+    alert(`Has sido eliminado en ${currentPhase.name}. Lograste ${goals} goles.`);
+    currentPhaseIndex = 0; currentPhase = PHASES[currentPhaseIndex]; resetRoundVars(); return;
+  }
+  // advance
+  if (currentPhaseIndex < PHASES.length-1){ currentPhaseIndex++; currentPhase = PHASES[currentPhaseIndex]; resetRoundVars(); } else {
+    alert('¡Has ganado el Mundial! Felicidades, campeón.'); currentPhaseIndex = 0; currentPhase = PHASES[currentPhaseIndex]; resetRoundVars();
+  }
+}
+
+// ======= Render =======
+function drawField(){
+  ctx.clearRect(0,0,W,H);
+  // grass
+  const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0e3b2f'); g.addColorStop(1,'#083b2b');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+  // midline
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(W*0.5,0); ctx.lineTo(W*0.5,H); ctx.stroke();
+
+  // goal area
+  ctx.fillStyle='#ffffff10'; ctx.fillRect(W-240,H/2-110,240,220);
+  // draw goal
+  ctx.fillStyle='#fff'; ctx.fillRect(goal.x,goal.top,goal.width,goal.height);
+  // posts
+  ctx.fillStyle='#fff'; ctx.fillRect(W-40,goal.top-6,6,6); ctx.fillRect(W-40,goal.bottom,6,6);
+
+  // barrier
+  drawBarrier();
+
+  // player
+  drawPlayer(80,H/2);
+
+  // goalie
+  drawGoalie(goalie.x,goalie.y);
+
+  // aim helper during AIMING phase
+  if (shotPhase === 'aiming' && aimStart && aimPos){
+    ctx.strokeStyle='rgba(255,209,102,0.8)'; ctx.lineWidth=3; 
+    ctx.setLineDash([8,4]);
+    ctx.beginPath(); ctx.moveTo(80,H/2); ctx.lineTo(aimPos.x,aimPos.y); ctx.stroke();
+    ctx.setLineDash([]);
+    // crosshair at aim point
+    ctx.strokeStyle='rgba(255,209,102,0.6)';
+    ctx.beginPath();
+    ctx.moveTo(aimPos.x-10, aimPos.y); ctx.lineTo(aimPos.x+10, aimPos.y);
+    ctx.moveTo(aimPos.x, aimPos.y-10); ctx.lineTo(aimPos.x, aimPos.y+10);
+    ctx.stroke();
+  }
+  
+  // Phase indicator text on canvas
+  ctx.fillStyle = '#ffd166'; ctx.font = 'bold 16px Inter, Arial'; ctx.textAlign = 'left';
+  if (shotPhase === 'aiming') ctx.fillText('FASE 1: DIRECCIÓN (arrastra)', 20, 30);
+  if (shotPhase === 'power') ctx.fillText('FASE 2: POTENCIA (clic para capturar)', 20, 30);
+  if (shotPhase === 'effect') ctx.fillText('FASE 3: EFECTO (clic para capturar)', 20, 30);
+  if (shotPhase === 'flying') ctx.fillText('¡Observa el tiro!', 20, 30);
+
+  // draw net lines for better goal visuals
+  ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.lineWidth=1;
+  const netX = W-200; const netY1 = H/2-90; const netY2 = H/2+90;
+  for(let i=0;i<8;i++){
+    const sx = netX + i*6; ctx.beginPath(); ctx.moveTo(sx, netY1); ctx.lineTo(sx-20, netY2); ctx.stroke();
+  }
+
+  // ball (with trail)
+  if (ball){ drawBallWithTrail(ball); }
+}
+
+function drawBarrier(){
+  const wallX = W-220;
+  const playerH = 18;
+  const total = barrierCount;
+  const startY = H/2 - (total*playerH)/2;
+  ctx.fillStyle = '#222';
+  for(let i=0;i<total;i++){
+    const y = startY + i*playerH;
+    ctx.fillStyle = '#383838'; ctx.fillRect(wallX, y, 14, playerH-2);
+    ctx.fillStyle = '#fff'; ctx.fillRect(wallX+4, y+3, 6, 6);
+  }
+}
+
+function drawPlayer(x,y){ ctx.fillStyle='#ffdd99'; ctx.beginPath(); ctx.arc(x,y,16,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#aa6'; ctx.fillRect(x-12,y+16,24,6); }
+function drawGoalie(x,y){ ctx.fillStyle='#3b82f6'; ctx.beginPath(); ctx.arc(x,y,20,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#072'; ctx.fillRect(x-18,y+20,36,8); }
+function drawBall(x,y){ ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y,8,0,Math.PI*2); ctx.fill(); }
+
+function drawBallWithTrail(b){
+  // draw fading trail
+  if (b.trail){
+    for (let i=b.trail.length-1;i>=0;i--){
+      const p = b.trail[i];
+      const alpha = (i+1)/b.trail.length * 0.6;
+      ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 6*(i/b.trail.length)+2, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  // shadow
+  ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(b.x+6,b.y+10,10,4,0,0,Math.PI*2); ctx.fill();
+  // ball
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(b.x,b.y,8,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#cccccc'; ctx.beginPath(); ctx.arc(b.x-2,b.y-2,2,0,Math.PI*2); ctx.fill();
+}
+
+function updateEffectMeter(){ const v = Math.floor(effectMag*100); effectMeterEl.style.width = `${v}%`; 
+  // color by side
+  if(effectSide < 0) effectMeterEl.style.background = 'linear-gradient(90deg,#f39c12,#e67e22)';
+  else if(effectSide > 0) effectMeterEl.style.background = 'linear-gradient(90deg,#27ae60,#2ecc71)';
+  else effectMeterEl.style.background = 'linear-gradient(90deg,#bdc3c7,#95a5a6)';
+}
+
+// ======= Main Loop =======
+function frame(t){ const dt = Math.min((t-lastT)/1000,0.05); lastT=t; simulate(dt); drawField(); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+
+// ======= Utility & Start/Reset =======
+function resetGameToPhase(index=0){ currentPhaseIndex=index; currentPhase=PHASES[currentPhaseIndex]; resetRoundVars(); }
+
+// initialize effect meter
+effectMag = 0; effectOscDir = 1; effectSide = 1; updateEffectMeter();
+
+// On load instructions
+log('⚽ Bienvenido a Free Kick Master — Mundial de Tiros Libres');
+log('🎯 Sistema de 3 fases: Dirección → Potencia (timing) → Efecto (timing)');
+log('🏆 Objetivo: 3+ goles en 9 tiros para avanzar de ronda');
+log('¡Haz clic en el campo para comenzar!');
+
+</script>
+</body>
+</html>

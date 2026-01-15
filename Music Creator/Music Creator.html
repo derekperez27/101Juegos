@@ -1,0 +1,1232 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Music Creator - Editor Musical Interactivo</title>
+<style>
+  :root{
+    --bg:#0a0e27;
+    --panel:#141b3d;
+    --accent:#ff6b9d;
+    --secondary:#c44569;
+    --highlight:#feca57;
+    --text:#e8eaf6;
+    --muted:#7986cb;
+    --success:#26de81;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    height:100%;
+    font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+    background:linear-gradient(135deg,#0a0e27 0%,#1a1f3a 100%);
+    color:var(--text);
+    overflow:hidden;
+  }
+  
+  .app{
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    padding:12px;
+    gap:12px;
+  }
+  
+  /* Header */
+  .header{
+    background:var(--panel);
+    padding:16px 24px;
+    border-radius:12px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.4);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  
+  .header h1{
+    font-size:28px;
+    color:var(--accent);
+    text-shadow:0 0 20px rgba(255,107,157,0.5);
+  }
+  
+  .mode-switch{
+    display:flex;
+    gap:8px;
+    background:rgba(0,0,0,0.3);
+    padding:4px;
+    border-radius:8px;
+  }
+  
+  .mode-btn{
+    padding:8px 20px;
+    background:transparent;
+    border:none;
+    color:var(--muted);
+    cursor:pointer;
+    border-radius:6px;
+    font-weight:600;
+    transition:all 0.3s;
+  }
+  
+  .mode-btn.active{
+    background:var(--accent);
+    color:#fff;
+    box-shadow:0 0 15px rgba(255,107,157,0.6);
+  }
+  
+  /* Main Content */
+  .main{
+    display:flex;
+    gap:12px;
+    flex:1;
+    min-height:0;
+  }
+  
+  /* Sound Panel */
+  .sound-panel{
+    width:320px;
+    background:var(--panel);
+    border-radius:12px;
+    padding:16px;
+    overflow-y:auto;
+    box-shadow:0 4px 20px rgba(0,0,0,0.4);
+  }
+  
+  .sound-panel h2{
+    margin-bottom:16px;
+    color:var(--highlight);
+    font-size:18px;
+  }
+  
+  .sound-category{
+    margin-bottom:24px;
+  }
+  
+  .sound-category h3{
+    font-size:14px;
+    color:var(--muted);
+    margin-bottom:8px;
+    text-transform:uppercase;
+    letter-spacing:1px;
+  }
+  
+  .sound-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+  }
+  
+  .sound-key{
+    background:linear-gradient(135deg,rgba(255,107,157,0.1),rgba(196,69,105,0.1));
+    border:2px solid rgba(255,107,157,0.3);
+    border-radius:8px;
+    padding:12px 8px;
+    cursor:pointer;
+    text-align:center;
+    transition:all 0.2s;
+    position:relative;
+    user-select:none;
+  }
+  
+  .sound-key:hover{
+    border-color:var(--accent);
+    transform:translateY(-2px);
+    box-shadow:0 4px 12px rgba(255,107,157,0.4);
+  }
+  
+  .sound-key.playing{
+    background:linear-gradient(135deg,var(--accent),var(--secondary));
+    border-color:var(--highlight);
+    box-shadow:0 0 20px rgba(254,202,87,0.6);
+    transform:scale(0.95);
+  }
+  
+  .sound-key .key{
+    display:block;
+    font-size:18px;
+    font-weight:700;
+    color:var(--highlight);
+    margin-bottom:4px;
+  }
+  
+  .sound-key .label{
+    display:block;
+    font-size:11px;
+    color:var(--text);
+    opacity:0.8;
+  }
+  
+  /* Timeline Editor */
+  .timeline-panel{
+    flex:1;
+    background:var(--panel);
+    border-radius:12px;
+    padding:16px;
+    display:flex;
+    flex-direction:column;
+    box-shadow:0 4px 20px rgba(0,0,0,0.4);
+    overflow:hidden;
+  }
+  
+  .timeline-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:16px;
+  }
+  
+  .timeline-header h2{
+    color:var(--highlight);
+    font-size:18px;
+  }
+  
+  .controls{
+    display:flex;
+    gap:8px;
+  }
+  
+  .control-btn{
+    padding:10px 20px;
+    border:none;
+    border-radius:8px;
+    font-weight:600;
+    cursor:pointer;
+    transition:all 0.3s;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  
+  .control-btn.play{
+    background:var(--success);
+    color:#fff;
+  }
+  
+  .control-btn.play:hover{
+    box-shadow:0 0 15px rgba(38,222,129,0.6);
+  }
+  
+  .control-btn.stop{
+    background:var(--accent);
+    color:#fff;
+  }
+  
+  .control-btn.stop:hover{
+    box-shadow:0 0 15px rgba(255,107,157,0.6);
+  }
+  
+  .control-btn.clear{
+    background:rgba(255,255,255,0.1);
+    color:var(--text);
+  }
+  
+  /* Timeline Canvas Area */
+  .timeline-container{
+    flex:1;
+    position:relative;
+    background:rgba(0,0,0,0.3);
+    border-radius:8px;
+    overflow:auto;
+    min-height:200px;
+  }
+  
+  .timeline-canvas{
+    position:absolute;
+    top:0;
+    left:0;
+    cursor:crosshair;
+  }
+  
+  .playhead{
+    position:absolute;
+    top:0;
+    width:2px;
+    background:var(--highlight);
+    box-shadow:0 0 10px rgba(254,202,87,0.8);
+    pointer-events:none;
+    z-index:100;
+    transition:left 0.05s linear;
+  }
+  
+  /* Free Mode Indicator */
+  .free-mode-msg{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    height:100%;
+    flex-direction:column;
+    gap:12px;
+    color:var(--muted);
+  }
+  
+  .free-mode-msg .icon{
+    font-size:64px;
+    opacity:0.3;
+  }
+  
+  .free-mode-msg p{
+    font-size:18px;
+  }
+  
+  /* Instructions */
+  .instructions{
+    background:rgba(0,0,0,0.2);
+    padding:12px;
+    border-radius:8px;
+    margin-top:8px;
+    font-size:13px;
+    color:var(--muted);
+  }
+  
+  .instructions strong{
+    color:var(--highlight);
+  }
+  
+  /* Scrollbars */
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-track{background:rgba(0,0,0,0.2);border-radius:4px}
+  ::-webkit-scrollbar-thumb{background:var(--accent);border-radius:4px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--secondary)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <h1>🎵 Music Creator</h1>
+    <div class="mode-switch">
+      <button class="mode-btn active" data-mode="free">🎹 Modo Libre</button>
+      <button class="mode-btn" data-mode="editor">📝 Modo Editor</button>
+    </div>
+  </div>
+  
+  <!-- Main Content -->
+  <div class="main">
+    <!-- Sound Panel -->
+    <div class="sound-panel">
+      <h2>🎼 Biblioteca de Sonidos</h2>
+      
+      <div class="sound-category">
+        <h3>🥁 Batería</h3>
+        <div class="sound-grid" id="drums"></div>
+      </div>
+      
+      <div class="sound-category">
+        <h3>🎹 Sintetizador</h3>
+        <div class="sound-grid" id="synth"></div>
+      </div>
+      
+      <div class="sound-category">
+        <h3>🎸 Bajo</h3>
+        <div class="sound-grid" id="bass"></div>
+      </div>
+      
+      <div class="sound-category">
+        <h3>✨ Efectos</h3>
+        <div class="sound-grid" id="effects"></div>
+      </div>
+      
+      <div class="sound-category">
+        <h3>🎺 Bases/Loops</h3>
+        <div class="sound-grid" id="loops"></div>
+      </div>
+      
+      <div class="instructions">
+        <strong>MODO LIBRE:</strong> Pulsa las teclas o haz clic para tocar en vivo.<br>
+        <strong>MODO EDITOR:</strong> Haz clic en el timeline para colocar sonidos. Arrastra para mover. Clic derecho para eliminar.
+      </div>
+    </div>
+    
+    <!-- Timeline Panel -->
+    <div class="timeline-panel">
+      <div class="timeline-header">
+        <h2 id="timeline-title">⚡ Toca libremente</h2>
+        <div class="controls" id="editor-controls" style="display:none">
+          <button class="control-btn play" id="playBtn">▶ Play</button>
+          <button class="control-btn stop" id="stopBtn">⏹ Stop</button>
+          <button class="control-btn clear" id="clearBtn">🗑️ Limpiar</button>
+        </div>
+      </div>
+      
+      <div class="timeline-container" id="timelineContainer">
+        <div class="free-mode-msg" id="freeModeMsg">
+          <div class="icon">🎹</div>
+          <p>Presiona las teclas o haz clic en los sonidos para tocar música</p>
+        </div>
+        <canvas class="timeline-canvas" id="timelineCanvas" style="display:none"></canvas>
+        <div class="playhead" id="playhead" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ======= MUSIC CREATOR - ARCHITECTURE =======
+// 1. Sound Engine (Web Audio API)
+// 2. Sound Library
+// 3. UI Manager
+// 4. Timeline Editor
+// 5. Playback System
+
+// ======= 1. SOUND ENGINE =======
+class SoundEngine {
+  constructor() {
+    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    this.masterGain = this.audioContext.createGain();
+    this.masterGain.connect(this.audioContext.destination);
+    this.masterGain.gain.value = 0.7;
+  }
+  
+  // Play drum sound (noise-based)
+  playDrum(type, duration = 0.1) {
+    const now = this.audioContext.currentTime;
+    const oscillator = this.audioContext.createOscillator();
+    const gainNode = this.audioContext.createGain();
+    const filter = this.audioContext.createBiquadFilter();
+    
+    switch(type) {
+      case 'kick':
+        oscillator.frequency.setValueAtTime(150, now);
+        oscillator.frequency.exponentialRampToValueAtTime(0.01, now + 0.5);
+        gainNode.gain.setValueAtTime(1, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+        break;
+      case 'snare':
+        oscillator.type = 'triangle';
+        oscillator.frequency.value = 200;
+        filter.type = 'highpass';
+        filter.frequency.value = 1000;
+        gainNode.gain.setValueAtTime(0.7, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        break;
+      case 'hihat':
+        oscillator.type = 'square';
+        oscillator.frequency.value = 10000;
+        filter.type = 'highpass';
+        filter.frequency.value = 7000;
+        gainNode.gain.setValueAtTime(0.3, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+        break;
+      case 'clap':
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.value = 1500;
+        gainNode.gain.setValueAtTime(0.5, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        break;
+      case 'tom':
+        oscillator.frequency.setValueAtTime(220, now);
+        oscillator.frequency.exponentialRampToValueAtTime(50, now + 0.3);
+        gainNode.gain.setValueAtTime(0.8, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        break;
+      case 'crash':
+        oscillator.type = 'square';
+        oscillator.frequency.value = 8000;
+        filter.type = 'bandpass';
+        filter.frequency.value = 3000;
+        gainNode.gain.setValueAtTime(0.4, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 1);
+        break;
+    }
+    
+    oscillator.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(this.masterGain);
+    
+    oscillator.start(now);
+    oscillator.stop(now + (type === 'crash' ? 1 : 0.5));
+  }
+  
+  // Play synth note
+  playSynth(freq, duration = 0.3, type = 'sine') {
+    const now = this.audioContext.currentTime;
+    const oscillator = this.audioContext.createOscillator();
+    const gainNode = this.audioContext.createGain();
+    
+    oscillator.type = type;
+    oscillator.frequency.value = freq;
+    
+    gainNode.gain.setValueAtTime(0.4, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(this.masterGain);
+    
+    oscillator.start(now);
+    oscillator.stop(now + duration);
+  }
+  
+  // Play bass note
+  playBass(freq, duration = 0.4) {
+    const now = this.audioContext.currentTime;
+    const oscillator = this.audioContext.createOscillator();
+    const gainNode = this.audioContext.createGain();
+    const filter = this.audioContext.createBiquadFilter();
+    
+    oscillator.type = 'sawtooth';
+    oscillator.frequency.value = freq;
+    filter.type = 'lowpass';
+    filter.frequency.value = 300;
+    filter.Q.value = 5;
+    
+    gainNode.gain.setValueAtTime(0.6, now);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
+    
+    oscillator.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(this.masterGain);
+    
+    oscillator.start(now);
+    oscillator.stop(now + duration);
+  }
+  
+  // Play effect sound
+  playEffect(type, duration = 1) {
+    const now = this.audioContext.currentTime;
+    const oscillator = this.audioContext.createOscillator();
+    const gainNode = this.audioContext.createGain();
+    
+    switch(type) {
+      case 'riser':
+        oscillator.frequency.setValueAtTime(100, now);
+        oscillator.frequency.exponentialRampToValueAtTime(2000, now + duration);
+        gainNode.gain.setValueAtTime(0.3, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        break;
+      case 'drop':
+        oscillator.frequency.setValueAtTime(1000, now);
+        oscillator.frequency.exponentialRampToValueAtTime(50, now + duration * 0.5);
+        gainNode.gain.setValueAtTime(0.5, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        break;
+      case 'laser':
+        oscillator.frequency.setValueAtTime(2000, now);
+        oscillator.frequency.exponentialRampToValueAtTime(100, now + duration * 0.5);
+        gainNode.gain.setValueAtTime(0.4, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        break;
+      case 'coin':
+        oscillator.frequency.setValueAtTime(800, now);
+        oscillator.frequency.setValueAtTime(1200, now + 0.05);
+        gainNode.gain.setValueAtTime(0.5, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        break;
+      case 'blip':
+        oscillator.type = 'square';
+        oscillator.frequency.value = 1000;
+        gainNode.gain.setValueAtTime(0.3, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        break;
+      case 'whoosh':
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(500, now);
+        oscillator.frequency.exponentialRampToValueAtTime(50, now + duration);
+        gainNode.gain.setValueAtTime(0.4, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        break;
+    }
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(this.masterGain);
+    
+    oscillator.start(now);
+    oscillator.stop(now + duration);
+  }
+  
+  // Play loop sound (bases musicales)
+  playLoop(type, duration = 4) {
+    const now = this.audioContext.currentTime;
+    
+    switch(type) {
+      case 'drumloop':
+        // Kick pattern every 0.5s
+        for (let i = 0; i < duration * 2; i++) {
+          setTimeout(() => this.playDrum('kick'), i * 500);
+          if (i % 2 === 1) setTimeout(() => this.playDrum('snare'), i * 500);
+          setTimeout(() => this.playDrum('hihat'), i * 250);
+        }
+        break;
+      case 'bassline':
+        const bassNotes = [65.41, 73.42, 82.41, 73.42];
+        for (let i = 0; i < duration; i++) {
+          const freq = bassNotes[i % bassNotes.length];
+          setTimeout(() => this.playBass(freq, 0.8), i * 1000);
+        }
+        break;
+      case 'trumpet':
+        // Trumpet with vibrato and rich harmonics
+        const trumpetOsc1 = this.audioContext.createOscillator();
+        const trumpetOsc2 = this.audioContext.createOscillator();
+        const trumpetGain = this.audioContext.createGain();
+        const trumpetFilter = this.audioContext.createBiquadFilter();
+        const vibrato = this.audioContext.createOscillator();
+        const vibratoGain = this.audioContext.createGain();
+        
+        trumpetOsc1.type = 'sawtooth';
+        trumpetOsc2.type = 'square';
+        trumpetOsc1.frequency.value = 523.25; // C5
+        trumpetOsc2.frequency.value = 523.25;
+        
+        // Vibrato
+        vibrato.frequency.value = 5;
+        vibratoGain.gain.value = 10;
+        vibrato.connect(vibratoGain);
+        vibratoGain.connect(trumpetOsc1.frequency);
+        vibratoGain.connect(trumpetOsc2.frequency);
+        
+        trumpetFilter.type = 'lowpass';
+        trumpetFilter.frequency.value = 2000;
+        trumpetFilter.Q.value = 3;
+        
+        trumpetGain.gain.setValueAtTime(0, now);
+        trumpetGain.gain.linearRampToValueAtTime(0.35, now + 0.05);
+        trumpetGain.gain.setValueAtTime(0.35, now + duration - 0.1);
+        trumpetGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        
+        trumpetOsc1.connect(trumpetFilter);
+        trumpetOsc2.connect(trumpetFilter);
+        trumpetFilter.connect(trumpetGain);
+        trumpetGain.connect(this.masterGain);
+        
+        vibrato.start(now);
+        trumpetOsc1.start(now);
+        trumpetOsc2.start(now);
+        vibrato.stop(now + duration);
+        trumpetOsc1.stop(now + duration);
+        trumpetOsc2.stop(now + duration);
+        break;
+      case 'pad':
+        // Lush pad with multiple detuned layers
+        const padOsc1 = this.audioContext.createOscillator();
+        const padOsc2 = this.audioContext.createOscillator();
+        const padOsc3 = this.audioContext.createOscillator();
+        const padOsc4 = this.audioContext.createOscillator();
+        const padGain = this.audioContext.createGain();
+        const padFilter = this.audioContext.createBiquadFilter();
+        
+        padOsc1.type = 'sine';
+        padOsc2.type = 'triangle';
+        padOsc3.type = 'sine';
+        padOsc4.type = 'triangle';
+        
+        const baseFreq = 261.63; // C4
+        padOsc1.frequency.value = baseFreq;
+        padOsc2.frequency.value = baseFreq * 1.005; // slight detune
+        padOsc3.frequency.value = baseFreq * 1.5; // fifth
+        padOsc4.frequency.value = baseFreq * 1.495;
+        
+        padFilter.type = 'lowpass';
+        padFilter.frequency.value = 1200;
+        padFilter.Q.value = 2;
+        
+        padGain.gain.setValueAtTime(0, now);
+        padGain.gain.linearRampToValueAtTime(0.25, now + 0.3);
+        padGain.gain.setValueAtTime(0.25, now + duration - 0.5);
+        padGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        
+        padOsc1.connect(padFilter);
+        padOsc2.connect(padFilter);
+        padOsc3.connect(padFilter);
+        padOsc4.connect(padFilter);
+        padFilter.connect(padGain);
+        padGain.connect(this.masterGain);
+        
+        padOsc1.start(now);
+        padOsc2.start(now);
+        padOsc3.start(now);
+        padOsc4.start(now);
+        padOsc1.stop(now + duration);
+        padOsc2.stop(now + duration);
+        padOsc3.stop(now + duration);
+        padOsc4.stop(now + duration);
+        break;
+      case 'strings':
+        // Rich strings with vibrato
+        const strOsc1 = this.audioContext.createOscillator();
+        const strOsc2 = this.audioContext.createOscillator();
+        const strOsc3 = this.audioContext.createOscillator();
+        const strGain = this.audioContext.createGain();
+        const strFilter = this.audioContext.createBiquadFilter();
+        const strVibrato = this.audioContext.createOscillator();
+        const strVibratoGain = this.audioContext.createGain();
+        
+        strOsc1.type = 'sawtooth';
+        strOsc2.type = 'sawtooth';
+        strOsc3.type = 'triangle';
+        
+        const strFreq = 329.63; // E4
+        strOsc1.frequency.value = strFreq;
+        strOsc2.frequency.value = strFreq * 1.003;
+        strOsc3.frequency.value = strFreq * 2; // octave
+        
+        // Vibrato
+        strVibrato.frequency.value = 4;
+        strVibratoGain.gain.value = 8;
+        strVibrato.connect(strVibratoGain);
+        strVibratoGain.connect(strOsc1.frequency);
+        strVibratoGain.connect(strOsc2.frequency);
+        
+        strFilter.type = 'lowpass';
+        strFilter.frequency.value = 1500;
+        strFilter.Q.value = 4;
+        
+        strGain.gain.setValueAtTime(0, now);
+        strGain.gain.linearRampToValueAtTime(0.3, now + 0.2);
+        strGain.gain.setValueAtTime(0.3, now + duration - 0.3);
+        strGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+        
+        strOsc1.connect(strFilter);
+        strOsc2.connect(strFilter);
+        strOsc3.connect(strFilter);
+        strFilter.connect(strGain);
+        strGain.connect(this.masterGain);
+        
+        strVibrato.start(now);
+        strOsc1.start(now);
+        strOsc2.start(now);
+        strOsc3.start(now);
+        strVibrato.stop(now + duration);
+        strOsc1.stop(now + duration);
+        strOsc2.stop(now + duration);
+        strOsc3.stop(now + duration);
+        break;
+      case 'arpeggio':
+        const arpNotes = [261.63, 329.63, 392.00, 523.25];
+        for (let i = 0; i < duration * 4; i++) {
+          const freq = arpNotes[i % arpNotes.length];
+          setTimeout(() => this.playSynth(freq, 0.2), i * 250);
+        }
+        break;
+    }
+  }
+}
+
+// ======= 2. SOUND LIBRARY =======
+const SOUND_LIBRARY = {
+  drums: [
+    { key: 'Q', label: 'Kick', type: 'drum', sound: 'kick', color: '#ff6b9d' },
+    { key: 'W', label: 'Snare', type: 'drum', sound: 'snare', color: '#c44569' },
+    { key: 'E', label: 'HiHat', type: 'drum', sound: 'hihat', color: '#feca57' },
+    { key: 'R', label: 'Clap', type: 'drum', sound: 'clap', color: '#48dbfb' },
+    { key: 'T', label: 'Tom', type: 'drum', sound: 'tom', color: '#ff9ff3' },
+    { key: 'Y', label: 'Crash', type: 'drum', sound: 'crash', color: '#54a0ff' },
+  ],
+  synth: [
+    { key: 'A', label: 'Do', type: 'synth', freq: 261.63, color: '#ee5a6f' },
+    { key: 'S', label: 'Re', type: 'synth', freq: 293.66, color: '#f29263' },
+    { key: 'D', label: 'Mi', type: 'synth', freq: 329.63, color: '#f3c969' },
+    { key: 'F', label: 'Fa', type: 'synth', freq: 349.23, color: '#95e1d3' },
+    { key: 'G', label: 'Sol', type: 'synth', freq: 392.00, color: '#38ada9' },
+    { key: 'H', label: 'La', type: 'synth', freq: 440.00, color: '#546de5' },
+    { key: 'J', label: 'Si', type: 'synth', freq: 493.88, color: '#a55eea' },
+    { key: 'K', label: 'Do+', type: 'synth', freq: 523.25, color: '#eb3b5a' },
+    { key: 'L', label: 'Re+', type: 'synth', freq: 587.33, color: '#fd7272' },
+  ],
+  bass: [
+    { key: 'Z', label: 'Bass 1', type: 'bass', freq: 65.41, color: '#2d3436' },
+    { key: 'X', label: 'Bass 2', type: 'bass', freq: 73.42, color: '#636e72' },
+    { key: 'C', label: 'Bass 3', type: 'bass', freq: 82.41, color: '#b2bec3' },
+    { key: 'V', label: 'Bass 4', type: 'bass', freq: 87.31, color: '#fdcb6e' },
+    { key: 'B', label: 'Bass 5', type: 'bass', freq: 98.00, color: '#e17055' },
+    { key: 'N', label: 'Bass 6', type: 'bass', freq: 110.00, color: '#6c5ce7' },
+  ],
+  effects: [
+    { key: '1', label: 'Riser', type: 'effect', sound: 'riser', color: '#00d2d3' },
+    { key: '2', label: 'Drop', type: 'effect', sound: 'drop', color: '#ff7979' },
+    { key: '3', label: 'Laser', type: 'effect', sound: 'laser', color: '#badc58' },
+    { key: '4', label: 'Coin', type: 'effect', sound: 'coin', color: '#f9ca24' },
+    { key: '5', label: 'Blip', type: 'effect', sound: 'blip', color: '#6ab04c' },
+    { key: '6', label: 'Whoosh', type: 'effect', sound: 'whoosh', color: '#4834d4' },
+  ],
+  loops: [
+    { key: 'U', label: 'Drum Loop', type: 'loop', sound: 'drumloop', color: '#e74c3c', defaultDuration: 8 },
+    { key: 'I', label: 'BassLine', type: 'loop', sound: 'bassline', color: '#2c3e50', defaultDuration: 8 },
+    { key: 'O', label: 'Trumpet', type: 'loop', sound: 'trumpet', color: '#e67e22', defaultDuration: 4 },
+    { key: 'P', label: 'Pad', type: 'loop', sound: 'pad', color: '#9b59b6', defaultDuration: 8 },
+    { key: 'M', label: 'Strings', type: 'loop', sound: 'strings', color: '#16a085', defaultDuration: 8 },
+    { key: ',', label: 'Arpeggio', type: 'loop', sound: 'arpeggio', color: '#3498db', defaultDuration: 4 },
+  ]
+};
+
+// ======= 3. UI MANAGER =======
+class UIManager {
+  constructor(soundEngine) {
+    this.soundEngine = soundEngine;
+    this.mode = 'free'; // 'free' or 'editor'
+    this.selectedSound = null;
+    this.keyElements = new Map();
+    
+    this.initSoundPanels();
+    this.initModeSwitch();
+    this.initKeyboardListeners();
+  }
+  
+  initSoundPanels() {
+    // Render all sound categories
+    Object.keys(SOUND_LIBRARY).forEach(category => {
+      const container = document.getElementById(category);
+      SOUND_LIBRARY[category].forEach(sound => {
+        const keyEl = this.createSoundKey(sound);
+        container.appendChild(keyEl);
+        this.keyElements.set(sound.key, keyEl);
+      });
+    });
+  }
+  
+  createSoundKey(sound) {
+    const div = document.createElement('div');
+    div.className = 'sound-key';
+    div.dataset.key = sound.key;
+    div.innerHTML = `
+      <span class="key">${sound.key}</span>
+      <span class="label">${sound.label}</span>
+    `;
+    
+    div.addEventListener('click', () => {
+      this.playSound(sound);
+      if (this.mode === 'editor') {
+        this.selectedSound = sound;
+      }
+    });
+    
+    return div;
+  }
+  
+  playSound(sound, visualFeedback = true, duration = null) {
+    // Play sound
+    if (sound.type === 'drum') {
+      this.soundEngine.playDrum(sound.sound);
+    } else if (sound.type === 'synth') {
+      this.soundEngine.playSynth(sound.freq);
+    } else if (sound.type === 'bass') {
+      this.soundEngine.playBass(sound.freq);
+    } else if (sound.type === 'effect') {
+      this.soundEngine.playEffect(sound.sound, duration || 1);
+    } else if (sound.type === 'loop') {
+      this.soundEngine.playLoop(sound.sound, duration || sound.defaultDuration || 4);
+    }
+    
+    // Visual feedback
+    if (visualFeedback) {
+      const keyEl = this.keyElements.get(sound.key);
+      if (keyEl) {
+        keyEl.classList.add('playing');
+        setTimeout(() => keyEl.classList.remove('playing'), 200);
+      }
+    }
+  }
+  
+  initModeSwitch() {
+    const modeBtns = document.querySelectorAll('.mode-btn');
+    modeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        this.switchMode(mode);
+        modeBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+  }
+  
+  switchMode(mode) {
+    this.mode = mode;
+    const freeModeMsg = document.getElementById('freeModeMsg');
+    const timelineCanvas = document.getElementById('timelineCanvas');
+    const editorControls = document.getElementById('editor-controls');
+    const timelineTitle = document.getElementById('timeline-title');
+    const playhead = document.getElementById('playhead');
+    
+    if (mode === 'free') {
+      freeModeMsg.style.display = 'flex';
+      timelineCanvas.style.display = 'none';
+      editorControls.style.display = 'none';
+      playhead.style.display = 'none';
+      timelineTitle.textContent = '⚡ Toca libremente';
+    } else {
+      freeModeMsg.style.display = 'none';
+      timelineCanvas.style.display = 'block';
+      editorControls.style.display = 'flex';
+      timelineTitle.textContent = '📝 Editor de Composición';
+      timeline.resize();
+    }
+  }
+  
+  initKeyboardListeners() {
+    document.addEventListener('keydown', (e) => {
+      const key = e.key.toUpperCase();
+      const sound = this.findSoundByKey(key);
+      if (sound) {
+        e.preventDefault();
+        this.playSound(sound);
+      }
+    });
+  }
+  
+  findSoundByKey(key) {
+    for (const category of Object.values(SOUND_LIBRARY)) {
+      const found = category.find(s => s.key === key);
+      if (found) return found;
+    }
+    return null;
+  }
+}
+
+// ======= 4. TIMELINE EDITOR =======
+class TimelineEditor {
+  constructor(soundEngine, uiManager) {
+    this.soundEngine = soundEngine;
+    this.uiManager = uiManager;
+    this.canvas = document.getElementById('timelineCanvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.container = document.getElementById('timelineContainer');
+    
+    this.notes = []; // { sound, time, duration, id }
+    this.nextNoteId = 0;
+    this.gridSize = 50; // pixels per beat
+    this.trackHeight = 40;
+    this.tracks = this.createTracks();
+    this.selectedNote = null;
+    this.dragging = false;
+    this.resizing = false;
+    this.resizeEdge = null;
+    this.dragStartX = 0;
+    this.dragStartTime = 0;
+    this.dragStartDuration = 0;
+    
+    this.resize();
+    this.initCanvasInteraction();
+    this.render();
+  }
+  
+  createTracks() {
+    const tracks = [];
+    Object.keys(SOUND_LIBRARY).forEach(category => {
+      SOUND_LIBRARY[category].forEach(sound => {
+        tracks.push({ sound, y: tracks.length * this.trackHeight });
+      });
+    });
+    return tracks;
+  }
+  
+  resize() {
+    const rect = this.container.getBoundingClientRect();
+    const minWidth = Math.max(rect.width, 2000);
+    const height = this.tracks.length * this.trackHeight;
+    
+    this.canvas.width = minWidth;
+    this.canvas.height = height;
+    this.render();
+  }
+  
+  initCanvasInteraction() {
+    let clickStartX = 0;
+    let clickStartY = 0;
+    let hasMoved = false;
+    
+    // Helper to get correct canvas coordinates
+    const getCanvasCoords = (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      return {
+        x: e.clientX - rect.left + this.container.scrollLeft,
+        y: e.clientY - rect.top + this.container.scrollTop
+      };
+    };
+    
+    // Mouse down - record position
+    this.canvas.addEventListener('mousedown', (e) => {
+      const coords = getCanvasCoords(e);
+      clickStartX = coords.x;
+      clickStartY = coords.y;
+      hasMoved = false;
+      
+      const clickedNote = this.findNoteAt(clickStartX, clickStartY);
+      if (clickedNote) {
+        // Check if clicking on resize edge
+        const noteX = clickedNote.time * this.gridSize;
+        const noteW = clickedNote.duration * this.gridSize;
+        
+        if (clickStartX > noteX + noteW - 8) {
+          // Resize from right edge
+          this.resizing = true;
+          this.resizeEdge = 'right';
+          this.selectedNote = clickedNote;
+          this.dragStartX = clickStartX;
+          this.dragStartDuration = clickedNote.duration;
+        } else if (clickStartX < noteX + 8) {
+          // Resize from left edge
+          this.resizing = true;
+          this.resizeEdge = 'left';
+          this.selectedNote = clickedNote;
+          this.dragStartX = clickStartX;
+          this.dragStartTime = clickedNote.time;
+          this.dragStartDuration = clickedNote.duration;
+        } else {
+          // Prepare for potential drag
+          this.selectedNote = clickedNote;
+          this.dragStartX = clickStartX;
+          this.dragStartTime = clickedNote.time;
+        }
+      }
+    });
+    
+    // Mouse move - drag or resize
+    this.canvas.addEventListener('mousemove', (e) => {
+      const coords = getCanvasCoords(e);
+      const x = coords.x;
+      
+      // Check if mouse moved significantly
+      if (this.selectedNote && !this.dragging && !this.resizing) {
+        const deltaX = Math.abs(x - clickStartX);
+        if (deltaX > 5) {
+          hasMoved = true;
+          this.dragging = true;
+        }
+      }
+      
+      if (this.dragging && this.selectedNote) {
+        const deltaX = x - this.dragStartX;
+        const deltaBeats = Math.round(deltaX / this.gridSize);
+        this.selectedNote.time = Math.max(0, this.dragStartTime + deltaBeats);
+        this.render();
+      } else if (this.resizing && this.selectedNote) {
+        hasMoved = true;
+        const deltaX = x - this.dragStartX;
+        const deltaBeats = deltaX / this.gridSize;
+        
+        if (this.resizeEdge === 'right') {
+          this.selectedNote.duration = Math.max(0.5, this.dragStartDuration + deltaBeats);
+        } else if (this.resizeEdge === 'left') {
+          const newTime = this.dragStartTime + deltaBeats;
+          const newDuration = this.dragStartDuration - deltaBeats;
+          if (newDuration > 0.5) {
+            this.selectedNote.time = Math.max(0, newTime);
+            this.selectedNote.duration = newDuration;
+          }
+        }
+        this.render();
+      }
+    });
+    
+    // Mouse up - stop drag or resize, or add note if was just a click
+    this.canvas.addEventListener('mouseup', (e) => {
+      const coords = getCanvasCoords(e);
+      const x = coords.x;
+      const y = coords.y;
+      
+      // If didn't drag/resize, it's a simple click
+      if (!hasMoved && !this.dragging && !this.resizing) {
+        const clickedNote = this.findNoteAt(x, y);
+        if (!clickedNote) {
+          // Add new note - calculate track from Y coordinate
+          const track = Math.floor(y / this.trackHeight);
+          if (track >= 0 && track < this.tracks.length) {
+            const time = Math.floor(x / this.gridSize) * this.gridSize;
+            const sound = this.tracks[track].sound;
+            const duration = sound.defaultDuration || 1;
+            this.addNote(sound, time / this.gridSize, duration);
+            this.render();
+          }
+        }
+      }
+      
+      this.dragging = false;
+      this.resizing = false;
+      this.resizeEdge = null;
+      this.selectedNote = null;
+      hasMoved = false;
+    });
+    
+    // Right click - delete note
+    this.canvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const coords = getCanvasCoords(e);
+      const x = coords.x;
+      const y = coords.y;
+      
+      const note = this.findNoteAt(x, y);
+      if (note) {
+        this.notes = this.notes.filter(n => n.id !== note.id);
+        this.render();
+      }
+    });
+  }
+  
+  findNoteAt(x, y) {
+    for (const note of this.notes) {
+      const track = this.tracks.findIndex(t => t.sound.key === note.sound.key);
+      const noteX = note.time * this.gridSize;
+      const noteY = track * this.trackHeight;
+      const noteW = note.duration * this.gridSize;
+      const noteH = this.trackHeight;
+      
+      if (x >= noteX && x <= noteX + noteW && y >= noteY && y < noteY + noteH) {
+        return note;
+      }
+    }
+    return null;
+  }
+  
+  addNote(sound, time, duration) {
+    this.notes.push({
+      sound,
+      time,
+      duration,
+      id: this.nextNoteId++
+    });
+    this.notes.sort((a, b) => a.time - b.time);
+  }
+  
+  clear() {
+    this.notes = [];
+    this.render();
+  }
+  
+  render() {
+    const ctx = this.ctx;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    
+    // Background
+    ctx.fillStyle = '#0a0e27';
+    ctx.fillRect(0, 0, w, h);
+    
+    // Grid lines (vertical)
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < w; x += this.gridSize) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+    
+    // Track lines (horizontal)
+    for (let i = 0; i <= this.tracks.length; i++) {
+      const y = i * this.trackHeight;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+    
+    // Track labels
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    this.tracks.forEach((track, i) => {
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.fillText(`${track.sound.key}: ${track.sound.label}`, 8, i * this.trackHeight + this.trackHeight/2);
+    });
+    
+    // Notes
+    this.notes.forEach(note => {
+      const track = this.tracks.findIndex(t => t.sound.key === note.sound.key);
+      if (track === -1) return;
+      
+      const x = note.time * this.gridSize;
+      const y = track * this.trackHeight;
+      const w = note.duration * this.gridSize;
+      const h = this.trackHeight - 2;
+      
+      // Note background
+      ctx.fillStyle = note.sound.color || '#ff6b9d';
+      ctx.globalAlpha = 0.7;
+      ctx.fillRect(x + 1, y + 1, w - 2, h);
+      ctx.globalAlpha = 1;
+      
+      // Note border
+      ctx.strokeStyle = note.selected ? '#feca57' : 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = note.selected ? 2 : 1;
+      ctx.strokeRect(x + 1, y + 1, w - 2, h);
+      
+      // Note label
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(note.sound.label, x + w/2, y + this.trackHeight/2);
+    });
+  }
+}
+
+// ======= 5. PLAYBACK SYSTEM =======
+class PlaybackSystem {
+  constructor(timeline, uiManager) {
+    this.timeline = timeline;
+    this.uiManager = uiManager;
+    this.isPlaying = false;
+    this.startTime = 0;
+    this.currentTime = 0;
+    this.playhead = document.getElementById('playhead');
+    
+    this.initControls();
+  }
+  
+  initControls() {
+    document.getElementById('playBtn').addEventListener('click', () => this.play());
+    document.getElementById('stopBtn').addEventListener('click', () => this.stop());
+    document.getElementById('clearBtn').addEventListener('click', () => this.timeline.clear());
+  }
+  
+  play() {
+    if (this.isPlaying) return;
+    this.isPlaying = true;
+    this.startTime = performance.now();
+    this.currentTime = 0;
+    this.playhead.style.display = 'block';
+    this.tick();
+  }
+  
+  stop() {
+    this.isPlaying = false;
+    this.currentTime = 0;
+    this.playhead.style.display = 'none';
+    this.updatePlayhead();
+  }
+  
+  tick() {
+    if (!this.isPlaying) return;
+    
+    const now = performance.now();
+    this.currentTime = (now - this.startTime) / 1000; // seconds
+    const beat = this.currentTime;
+    
+    // Check for notes to play
+    this.timeline.notes.forEach(note => {
+      const noteStart = note.time;
+      const noteEnd = note.time + note.duration;
+      
+      // Play if we just crossed the note start
+      if (note.lastPlayTime !== this.currentTime && beat >= noteStart && beat < noteStart + 0.1) {
+        this.uiManager.playSound(note.sound, true, note.duration);
+        note.lastPlayTime = this.currentTime;
+      }
+    });
+    
+    this.updatePlayhead();
+    requestAnimationFrame(() => this.tick());
+  }
+  
+  updatePlayhead() {
+    const x = this.currentTime * this.timeline.gridSize;
+    this.playhead.style.left = `${x}px`;
+    this.playhead.style.height = `${this.timeline.canvas.height}px`;
+  }
+}
+
+// ======= INITIALIZATION =======
+const soundEngine = new SoundEngine();
+const uiManager = new UIManager(soundEngine);
+const timeline = new TimelineEditor(soundEngine, uiManager);
+const playback = new PlaybackSystem(timeline, uiManager);
+
+// Resize handler
+window.addEventListener('resize', () => {
+  if (uiManager.mode === 'editor') {
+    timeline.resize();
+  }
+});
+
+console.log('🎵 Music Creator loaded successfully!');
+</script>
+</body>
+</html>
