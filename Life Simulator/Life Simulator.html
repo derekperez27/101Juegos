@@ -1,0 +1,1284 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>Life Simulator - Simulador de Vida</title>
+	<style>
+		:root{--bg:#0b1226;--panel:#0f1724;--accent:#6dd3b0;--accent-2:#ff9aa2;--muted:#9aa7ff;--text:#ffffff}
+		*{box-sizing:border-box;margin:0;padding:0}
+		html,body{height:100%;font-family:Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#071028 0%,#0b1226 100%);color:var(--text)}
+		.app{padding:14px;display:flex;gap:12px;height:100vh}
+		.sidebar{width:320px;background:var(--panel);border-radius:10px;padding:12px;overflow:auto}
+		.main{flex:1;display:flex;flex-direction:column;gap:12px}
+		.panel{background:rgba(255,255,255,0.03);border-radius:10px;padding:12px;min-height:120px}
+		h1{color:var(--accent);font-size:20px;margin-bottom:8px}
+		.attr{display:flex;flex-direction:column;gap:8px}
+		.attr-row{display:flex;justify-content:space-between;align-items:center}
+		.bar{height:12px;background:rgba(255,255,255,0.06);border-radius:8px;overflow:hidden;flex:1;margin-left:8px}
+		.bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#ffd1a9)}
+		.controls{display:flex;gap:8px}
+		button{background:var(--accent);color:#061225;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:700}
+		button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--text)}
+		.timeline{display:flex;gap:8px;align-items:center}
+		.age-display{font-weight:700;color:var(--muted)}
+		.event-area{display:flex;gap:12px}
+		.log{height:180px;overflow:auto;background:rgba(0,0,0,0.15);border-radius:8px;padding:8px;font-size:14px}
+		.event-panel{flex:1}
+		.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:8px}
+		.choice-btn{width:100%;box-sizing:border-box}
+		.choice-btn{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);padding:10px;border-radius:8px;cursor:pointer;text-align:left}
+		.minigame{background:rgba(255,255,255,0.02);border-radius:8px;padding:10px;margin-top:8px}
+		.timeline-visual{height:44px;background:rgba(255,255,255,0.03);border-radius:8px;padding:6px;display:flex;align-items:center;gap:8px}
+		.timeline-line{height:6px;background:rgba(255,255,255,0.06);border-radius:6px;flex:1;position:relative}
+		.timeline-marker{position:absolute;top:-8px;width:8px;height:20px;border-radius:4px;background:var(--accent);cursor:pointer}
+		.marker-label{position:absolute;top:22px;left:-20px;font-size:11px;color:rgba(255,255,255,0.8)}
+		.keynote{background:linear-gradient(90deg,var(--accent),var(--accent-2));padding:6px;border-radius:6px;color:#061225;font-weight:700}
+		.center{display:flex;justify-content:center;align-items:center}
+		footer{font-size:12px;color:rgba(255,255,255,0.35);text-align:center;margin-top:8px}
+
+		/* Character creator modal */
+		.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:9999}
+		.modal-card{background:var(--panel);padding:18px;border-radius:10px;width:420px;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
+	    .modal-card h2{color:var(--accent);margin-bottom:8px}
+	    .modal-note{font-size:13px;color:rgba(255,255,255,0.85);margin-bottom:6px}
+		.trait-row{display:flex;justify-content:space-between;align-items:center;margin:8px 0}
+		.trait-row input[type=range]{width:60%}
+		.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+	</style>
+</head>
+<body>
+	<div class="app">
+
+	  <!-- Character Creator Modal -->
+	  <div id="charModal" class="modal-overlay">
+		<div class="modal-card">
+		  <h2>Crear Personaje</h2>
+		  <div style="margin-bottom:8px">Nombre: <input id="charName" style="width:60%" /></div>
+		  <div style="margin-bottom:6px">Nombre amigo inicial: <input id="initial_friend_name" style="width:50%" placeholder="Sam" /></div>
+		  <div style="margin-bottom:8px">Nombre rival inicial: <input id="initial_rival_name" style="width:50%" placeholder="Rival" /></div>
+		<div class="trait-row"><div>Concienzudo</div><input id="trait_conscientious" type="range" min="0" max="100" value="50"><div id="val_cons">50</div></div>
+		<div class="trait-row"><div>Extroversión</div><input id="trait_extroversion" type="range" min="0" max="100" value="50"><div id="val_ext">50</div></div>
+		<div class="trait-row"><div>Riesgo</div><input id="trait_risk" type="range" min="0" max="100" value="50"><div id="val_risk">50</div></div>
+		<div class="trait-row"><div>Ambicioso</div><input id="trait_ambitious" type="range" min="0" max="100" value="50"><div id="val_amb">50</div></div>
+		<div class="trait-row"><div>Sociable</div><input id="trait_sociable" type="range" min="0" max="100" value="50"><div id="val_soc">50</div></div>
+		<div class="trait-row"><div>Responsable</div><input id="trait_responsible" type="range" min="0" max="100" value="50"><div id="val_resp">50</div></div>
+		<div class="modal-note">Ajusta los rasgos permanentes de tu personaje. Afectarán minijuegos y eventos.</div>
+		<div style="margin-top:8px;font-weight:700">Puntos restantes: <span id="traitRemaining">150</span></div>
+		  <div class="modal-actions">
+			<button id="randomizeChar" class="secondary">Aleatorio</button>
+			<button id="cancelChar" class="secondary">Cancelar</button>
+			<button id="confirmChar">Comenzar</button>
+		  </div>
+		</div>
+
+		<!-- What-If Comparator Modal -->
+		<div id="whatIfModal" class="modal-overlay">
+			<div class="modal-card">
+				<h2>Comparador: ¿Qué habría pasado si...?</h2>
+				<div class="modal-note">Selecciona un escenario alternativo y verás cómo habrían cambiado tus atributos (no afecta la partida guardada).</div>
+				<div style="margin-top:8px" id="whatIfPresets"></div>
+				<div style="margin-top:12px"><strong>Resultado hipotético</strong><div id="whatIfResult" style="margin-top:8px"></div></div>
+				<div class="modal-actions">
+					<button id="closeWhatIf" class="secondary">Cerrar</button>
+				</div>
+			</div>
+		</div>
+	  </div>
+		<div class="sidebar">
+			<h1>Life Simulator</h1>
+			<div class="panel">
+				<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+					<div>
+						<div id="playerName">Nombre: <strong id="nameTxt">Alex</strong></div>
+						<div class="age-display">Edad: <span id="ageTxt">18</span></div>
+						<div style="margin-top:8px">Estudios: <strong id="studyTxt">Ninguno</strong></div>
+						<div style="margin-top:4px">Trabajo: <strong id="jobTxt">Ninguno</strong></div>
+					</div>
+							<div class="controls">
+								<button id="saveBtn">Guardar</button>
+								<button id="loadBtn" class="secondary">Cargar</button>
+							<button id="resetBtn" class="secondary">Reiniciar Vida</button>
+							<button id="whatIfBtn" class="secondary" disabled>¿Qué habría pasado si...?</button>
+							<button id="musicToggle" class="secondary">Música: Off</button>
+							</div>
+				</div>
+				<div class="attr" id="attributes">
+					<!-- attributes injected -->
+				</div>
+				<div style="margin-top:10px">
+					<strong>Historial de decisiones</strong>
+					<div id="history" style="margin-top:8px;max-height:120px;overflow:auto;background:rgba(0,0,0,0.12);padding:8px;border-radius:6px;font-size:13px"></div>
+				</div>
+				<div style="margin-top:10px">
+				  <strong>Personalidad</strong>
+				  <div id="traits" style="margin-top:8px;max-height:140px;overflow:auto;background:rgba(0,0,0,0.06);padding:8px;border-radius:6px;font-size:13px"></div>
+				</div>
+
+				<div style="margin-top:10px">
+				  <strong>Relaciones</strong>
+				  <div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Personas recurrentes que aparecen a lo largo de tu vida.</div>
+				  <div id="relationships" style="margin-top:8px;max-height:160px;overflow:auto;background:rgba(0,0,0,0.06);padding:8px;border-radius:6px;font-size:13px"></div>
+				  <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end"><button id="createRel" class="secondary">Crear relación</button></div>
+				</div>
+			</div>
+
+			<div class="panel" style="margin-top:12px">
+				<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+					<strong>Progreso</strong>
+					<div id="yearRange">Años: <span id="startAge">18</span> - <span id="endAge">60</span></div>
+				</div>
+				<div class="log" id="log"></div>
+			</div>
+		</div>
+
+		<div class="main">
+				<div class="panel">
+					<div style="display:flex;justify-content:space-between;align-items:center">
+						<div><strong id="stageTitle">Inicio</strong><div style="font-size:13px;color:rgba(255,255,255,0.5)" id="stageDesc">Comienza tu viaje</div></div>
+						<div class="timeline">
+							<div>Avanzar año</div>
+							<button id="advanceBtn">▶</button>
+							<div style="margin-left:12px">Edad actual: <strong id="ageBig">18</strong></div>
+						</div>
+					</div>
+					<div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Consejo: Las decisiones y minijuegos avanzan el tiempo automáticamente.</div>
+				</div>
+
+			<div class="panel event-area">
+				<div class="event-panel">
+					<div id="eventBox">
+						<h3 id="eventTitle">Sin eventos</h3>
+						<div id="eventText">Pulsa Avanzar para empezar a recibir eventos.</div>
+						<div class="choices" id="choices"></div>
+					</div>
+					<div id="minigameBox"></div>
+				</div>
+
+				<div style="width:320px">
+					<div class="panel">
+						<strong>Vida cotidiana</strong>
+						<div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Gestiona energía, sueño y estrés con decisiones diarias.</div>
+						<div id="dailyActions" style="margin-top:10px"></div>
+					</div>
+
+					<div class="panel">
+						<strong>Mini-juegos disponibles</strong>
+						<div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Cuando un evento requiere una prueba, aparecerá aquí.</div>
+						<div id="miniInfo" style="margin-top:10px"></div>
+					</div>
+
+					<div class="panel" style="margin-top:12px">
+						<strong>Línea de vida</strong>
+						<div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Hitos importantes visualizados en una línea temporal.</div>
+						<div id="timeline" class="timeline-visual" style="margin-top:10px">
+							<div id="timelineLine" class="timeline-line"></div>
+							<div style="margin-left:8px"><span id="timelineSummary" style="font-size:12px;color:rgba(255,255,255,0.8)"></span></div>
+						</div>
+					</div>
+
+					<div class="panel" style="margin-top:12px">
+						<strong>Estado final</strong>
+						<div id="endingBox" style="margin-top:8px"></div>
+					</div>
+				</div>
+			</div>
+
+			<footer class="center">Prototipo: decisiones, atributos, minijuegos y guardado local.</footer>
+		</div>
+	</div>
+
+	<script>
+	// ======= LIFE SIMULATOR - Simple prototype =======
+	class AttributeManager {
+		constructor(container) {
+			this.attrs = {
+				intelligence: 50,
+				money: 50,
+				health: 70,
+				happiness: 60,
+				reputation: 40,
+				energy: 80,
+				sleep: 80,
+				stress: 10
+			};
+			this.container = container;
+			this.render();
+		}
+		modify(changes) {
+			Object.keys(changes).forEach(k => {
+				if (this.attrs[k] === undefined) return;
+				this.attrs[k] = Math.max(0, Math.min(100, this.attrs[k] + changes[k]));
+			});
+			this.render();
+		}
+		render() {
+			this.container.innerHTML = '';
+			for (const [k,v] of Object.entries(this.attrs)){
+				const row = document.createElement('div'); row.className='attr-row';
+				const label = document.createElement('div'); label.textContent = k.charAt(0).toUpperCase()+k.slice(1);
+				const barWrap = document.createElement('div'); barWrap.className='bar';
+				const bar = document.createElement('i'); bar.style.width = v + '%'; barWrap.appendChild(bar);
+				row.appendChild(label); row.appendChild(barWrap);
+				this.container.appendChild(row);
+			}
+		}
+		get() { return {...this.attrs}; }
+	}
+
+	class EventSystem {
+		constructor(game) {
+			this.game = game;
+			this.events = this.buildEvents();
+		}
+		buildEvents(){
+			// Events can have 'requires' functions (game) => boolean and choices can set flags
+			return [
+				{id:'study',title:'Examen importante',text:'Hay un examen que puede mejorar tu carrera. ¿Estudias o copias?',choices:[
+					{text:'Estudiar (riesgo de tiempo)',effect:{intelligence:5,energy:-10,happiness:-5},flag:'studied_attempt'},
+					{text:'Copiar (riesgo reputacional)',effect:{intelligence:0,reputation:-20,happiness:5}},
+					{text:'Omitir (irse a divertirse)',effect:{happiness:15,intelligence:-10}},
+				],minigame:'exam'},
+				{id:'scholarship',title:'Beca disponible',text:'Has sido nominado para una beca. ¿Quieres aplicar?',choices:[
+					{text:'Aplicar',effect:{intelligence:10,money:10},flag:'got_scholarship'},
+					{text:'No aplicar',effect:{happiness:-2}}
+				],requires:(game)=> !!game.flags.studied_attempt && game.age<22},
+				{id:'job',title:'Entrevista de trabajo',text:'Entrevista a una oferta estable. Preparas portfolio o vas improvisando?',choices:[
+					{text:'Preparar portfolio',effect:{reputation:10,energy:-10}},
+					{text:'Improvisar',effect:{reputation:-5,energy:-5}},
+				],minigame:'interview'},
+				{id:'loan',title:'Oportunidad de negocio',text:'Te ofrecen invertir en un negocio. Arriesgas dinero?',choices:[
+					{text:'Invertir mucho',effect:{money:-20,energy:-5},risk:'high'},
+					{text:'Invertir poco',effect:{money:-8},risk:'medium'},
+					{text:'No invertir',effect:{money:0},risk:'low'},
+				],minigame:'budget'},
+				{id:'health',title:'Chequeo médico',text:'Tu salud necesita atención. Vas al doctor?',choices:[
+					{text:'Sí, curarme',effect:{health:15,money:-10,energy:-10}},
+					{text:'No, lo dejo',effect:{health:-10,happiness:5}},
+				]},
+				{id:'relationship',title:'Conversación seria',text:'Una relación necesita una decisión importante.',choices:[
+					{text:'Comprometerme',effect:{happiness:15,reputation:5,energy:-10},flag:'committed'},
+					{text:'Tomar distancia',effect:{happiness:-10,reputation:-5}},
+				],minigame:'conversation'},
+				{id:'negotiation',title:'Negociación salarial',text:'Te ofrecen un trabajo. Negocia el salario.',choices:[
+					{text:'Negociar salario',effect:{reputation:5},minigame:'negotiation',flag:'negotiated'}
+				],requires:(game)=> !!game.currentJob},
+				{id:'startup_offer',title:'Oferta de Startup',text:'Una startup busca cofundadores. ¿Te unes al proyecto arriesgado?',choices:[
+					{text:'Unirme (alto riesgo, alta recompensa)',effect:{money:-15,energy:-10},traitEffect:{ambitious:5,risk:5},flag:'joined_startup'},
+					{text:'No, seguir camino seguro',effect:{happiness:2},traitEffect:{ambitious:-2}}
+				],requires:(game)=> game.traits && game.traits.ambitious>55 && game.age<40},
+				{id:'networking',title:'Evento de networking',text:'Un evento profesional puede abrir puertas. ¿Participas?',choices:[
+					{text:'Participar y hacer contactos',effect:{reputation:8},traitEffect:{sociable:3}},
+					{text:'Evitar multitudes',effect:{energy:5},traitEffect:{sociable:-3}}
+				],requires:(game)=> game.traits && game.traits.sociable>45},
+				{id:'impulse_buy',title:'Compra impulsiva',text:'Ves una oferta y te tienta comprar algo caro.',choices:[
+					{text:'Comprar (impulsivo)',effect:{happiness:8,money:-20},traitEffect:{responsible:-5,risk:3}},
+					{text:'Resistir',effect:{happiness:-2},traitEffect:{responsible:2}}
+				],requires:(game)=> game.traits && game.traits.responsible<50},
+
+				// New: Help request that can chain into a job offer years later
+				{id:'help_request',title:'Alguien pide ayuda',text:'Un desconocido te pide ayuda con un proyecto pequeño. ¿Lo ayudas?',choices:[
+					{text:'Ayudar desinteresadamente',effect:{happiness:5},delayedEffect:{
+						desc:'Ayudaste a alguien importante',
+						delayYears: 10 + Math.floor(Math.random()*11),
+						revealEvent:{
+							id:'old_friend_offer',
+							title:'Oferta inesperada',
+							text:'Años después, la persona a la que ayudaste te contacta con una oferta laboral. ¿La aceptas?',
+							choices:[{text:'Aceptar oferta',effect:{money:25,reputation:10}},{text:'Rechazar',effect:{reputation:2}}]
+						}
+					}},
+					{text:'Cobrar por tu ayuda',effect:{money:10,happiness:-2},delayedEffect:{
+						desc:'Recibiste reconocimiento limitado',
+						delayYears: 12 + Math.floor(Math.random()*9),
+						revealEvent:{
+							id:'small_recognition',
+							title:'Reconocimiento tardío',
+							text:'Años después, alguien recuerda tu trabajo y te envía una nota y una pequeña recomendación.',
+							choices:[{text:'Agradecer',effect:{reputation:5}},{text:'Ignorar',effect:{reputation:0}}]
+						}
+					}},
+				],requires:()=> Math.random()<0.8},
+
+				// New: Risky investment with hidden outcome revealed later
+				{id:'risky_investment',title:'Inversión arriesgada',text:'Te ofrecen invertir en un producto que promete mucho. ¿Invertirás?',choices:[
+					{text:'Invertir una suma',effect:{money:-15},delayedEffect:{
+						desc:'Inversión a largo plazo',
+						delayYears: 5 + Math.floor(Math.random()*11),
+						outcomes:[
+							{prob:0.5,desc:'La inversión fue un éxito',effect:{money:40}},
+							{prob:0.5,desc:'La inversión fracasó',effect:{money:-30}}
+						]
+					}},
+					{text:'No invertir',effect:{happiness:0}}
+				],requires:()=> Math.random()<0.6},
+
+				// New: Moral dilemma examples (always trade-offs)
+				{id:'moral_dilemma_help_vs_career',title:'Dilema moral: Ayuda o carrera',text:'Tu equipo necesita apoyo para un proyecto importante, pero ayudar te hará perder tiempo de preparación para una gran entrevista. ¿Qué haces?',choices:[
+					{text:'Ayudar al equipo (sacrificar preparación)',effect:{reputation:8,energy:-15},traitEffect:{responsible:2}},
+					{text:'Preparar la entrevista (ignorar al equipo)',effect:{reputation:-10,energy:5,money:0},traitEffect:{ambitious:2}}
+				]},
+				{id:'family',title:'Decisión familiar',text:'Se presenta la opción de tener hijos. ¿Lo intentas?',choices:[
+					{text:'Intentarlo',effect:{happiness:10,energy:-15},flag:'has_child'},
+					{text:'No por ahora',effect:{happiness:-2}},
+				],requires:(game)=> game.age>25}
+			];
+		}
+		nextEvent(age) {
+			// Choose event based on age and randomness
+			// Filter by requirements
+			const avail = this.events.filter(e=>{ if(e.requires) return e.requires(this.game); return true; });
+
+			// Prioritize events according to player's hidden profile (if available)
+			try{
+				const profile = this.game && this.game.profile ? this.game.profile.id : null;
+				if(profile){
+					// mapping of profile -> preferred events
+					const mapping = {
+						'ambitious':['startup_offer','negotiation','loan'],
+						'empathetic':['help_request','relationship','family'],
+						'risky':['risky_investment','loan'],
+						'stable':['job','health'],
+						'disciplined':['study','scholarship']
+					};
+					const prefer = mapping[profile] || [];
+					for(const pid of prefer){ const e = avail.find(x=>x.id===pid); if(e && Math.random()<0.45) return e; }
+				}
+			}catch(e){ /* ignore */ }
+			// Age-priority events
+			// Trait-driven priority: ambitious players see startup offers more
+			if (age < 22) return this.find('study');
+			if (this.game && this.game.traits){
+				if(this.game.traits.ambitious>60 && Math.random()<0.4 && avail.find(e=>e.id==='startup_offer')) return this.find('startup_offer');
+				if(this.game.traits.sociable>60 && Math.random()<0.35 && avail.find(e=>e.id==='networking')) return this.find('networking');
+				if(this.game.traits.responsible<40 && Math.random()<0.25 && avail.find(e=>e.id==='impulse_buy')) return this.find('impulse_buy');
+			}
+			if (age >=22 && age <35) return this.find('job');
+			if (age >=35 && Math.random()<0.3 && avail.find(e=>e.id==='loan')) return this.find('loan');
+			if (Math.random()<0.2 && avail.find(e=>e.id==='health')) return this.find('health');
+			// pick random from available events
+			return avail[Math.floor(Math.random()*avail.length)];
+		}
+		find(id){return this.events.find(e=>e.id===id)}
+	}
+
+	class MinigameManager {
+		constructor(game){ this.game=game; }
+		start(type, onComplete){
+			// type: 'exam','interview','budget' -> simple challenges
+			const box = document.getElementById('minigameBox'); box.innerHTML='';
+			const node = document.createElement('div'); node.className='minigame';
+			box.appendChild(node);
+			if(type==='exam') this.exam(node,onComplete);
+			else if(type==='interview') this.interview(node,onComplete);
+			else if(type==='budget') this.budget(node,onComplete);
+			else if(type==='conversation') this.conversation(node,onComplete);
+			else if(type==='timemanagement') this.timeManagement(node,onComplete);
+			// Social minigames
+			else if(type==='social_convince') this.socialConvince(node,onComplete);
+			else if(type==='social_truth') this.socialTruthLie(node,onComplete);
+			else if(type==='social_timed') this.socialTimedChoice(node,onComplete);
+			// Risk minigames
+			else if(type==='risk_invest') this.riskInvest(node,onComplete);
+			else if(type==='risk_bet') this.riskBet(node,onComplete);
+			// Mental minigames
+			else if(type==='mental_memory') this.mentalMemory(node,onComplete);
+			else if(type==='mental_attention') this.mentalAttention(node,onComplete);
+			else if(type==='stress_management') this.stressManagement(node,onComplete);
+			else onComplete('none');
+		}
+		exam(node,done){
+			node.innerHTML = '<strong>Minijuego: Examen</strong><div>Escribe la palabra que aparece lo más rápido posible:</div>';
+			const word = ['FOCUS','STUDY','LEVEL','MUSIC'][Math.floor(Math.random()*4)];
+			const span = document.createElement('div'); span.style.fontSize='20px'; span.style.margin='8px 0'; span.textContent = word; node.appendChild(span);
+			const input = document.createElement('input'); input.style.width='100%'; node.appendChild(input); input.focus();
+			const start = performance.now();
+			input.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){ const time=(performance.now()-start)/1000; if(input.value.toUpperCase()===word){
+					// factor conscientious trait: higher conscientiousness lowers time thresholds
+					const cons = (this.game && this.game.traits && this.game.traits.conscientious) ? this.game.traits.conscientious : 50;
+					const dm = (this.game && this.game.difficultyModifier) ? this.game.difficultyModifier : 1;
+					let successLimit = 2.8 - (cons/200); // slightly faster for cons
+					let partialLimit = 4.5 - (cons/300);
+					// adapt by difficulty modifier (higher -> harder, reduce time window)
+					successLimit = successLimit / dm; partialLimit = partialLimit / dm;
+					const rating = time<successLimit? 'success' : time<partialLimit? 'partial':'fail'; done(rating);
+					} else done('fail'); }});
+		}
+		interview(node,done){
+			node.innerHTML = '<strong>Minijuego: Entrevista</strong><div>Haz click cuando el círculo esté VERDE (búscala rápido)</div>';
+			const circle = document.createElement('div'); circle.style.width='80px'; circle.style.height='80px'; circle.style.borderRadius='50%'; circle.style.background='red'; circle.style.margin='12px auto'; node.appendChild(circle);
+			// Adjust reaction thresholds by extroversion trait
+			const ext = (this.game && this.game.traits && this.game.traits.extroversion) ? this.game.traits.extroversion : 50;
+			const dm = (this.game && this.game.difficultyModifier) ? this.game.difficultyModifier : 1;
+			let successThresh = 400 - Math.round(ext * 2); // lower RT required if more extroverted
+			let partialThresh = 800 - Math.round(ext * 3);
+			successThresh = Math.round(successThresh / dm); partialThresh = Math.round(partialThresh / dm);
+			const delay = 1000 + Math.random()*2000; setTimeout(()=>{ circle.style.background='green'; const start = performance.now(); const handler = ()=>{ const rt=(performance.now()-start); circle.removeEventListener('click',handler); if(rt<successThresh) done('success'); else if(rt<partialThresh) done('partial'); else done('fail'); }; circle.addEventListener('click',handler); }, delay);
+		}
+		budget(node,done){
+			node.innerHTML = '<strong>Minijuego: Presupuesto</strong><div>Resuelve: suma rápidamente</div>';
+			const a=Math.floor(Math.random()*50); const b=Math.floor(Math.random()*50); const prompt = `${a} + ${b} = ?`;
+			const q = document.createElement('div'); q.textContent = prompt; q.style.margin='8px 0'; node.appendChild(q);
+			const input = document.createElement('input'); node.appendChild(input); input.focus(); const start=performance.now();
+			input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ const time=(performance.now()-start)/1000; if(Number(input.value)===a+b){
+				// responsible trait improves speed/accuracy
+				const resp = (this.game && this.game.traits && this.game.traits.responsible) ? this.game.traits.responsible : 50;
+				const successLimit = 3.5 - (resp/200); // more responsible -> faster
+				const partialLimit = 6 - (resp/250);
+				const rating = time<successLimit ? 'success' : time<partialLimit ? 'partial' : 'partial';
+				done(rating);
+			} else done('fail'); }});
+		}
+
+
+		conversation(node,done){
+			node.innerHTML = '<strong>Minijuego: Conversación clave</strong><div>Elige la respuesta que mejor maneje la situación (elige rápido para mejor resultado)</div>';
+			// sociable trait increases chance of success when choosing empathetic options
+			const soc = (this.game && this.game.traits && this.game.traits.sociable) ? this.game.traits.sociable : 50;
+			const baseBoost = (soc-50)/200; // small boost
+			const options = [
+				{t:'Escuchar y validar',score:0.9 + baseBoost},
+				{t:'Ser directo pero brusco',score:0.5 + baseBoost/2},
+				{t:'Evitar el tema',score:0.3 - Math.abs(baseBoost)}
+			];
+			options.forEach(opt=>{ const b=document.createElement('button'); b.className='choice-btn'; b.textContent=opt.t; b.addEventListener('click', ()=>{ const r = Math.random(); if(r<opt.score) done('success'); else if(r<opt.score+0.2) done('partial'); else done('fail'); }); node.appendChild(b); });
+		}
+
+		timeManagement(node,done){
+			node.innerHTML = '<strong>Minijuego: Gestión de tiempo</strong><div>Completa tareas haciendo click rápido en el botón antes de que acabe la barra.</div>';
+			const btn = document.createElement('button'); btn.textContent='Completar tarea'; btn.style.marginTop='8px'; node.appendChild(btn);
+			const bar = document.createElement('div'); bar.style.height='12px'; bar.style.background='rgba(255,255,255,0.08)'; bar.style.borderRadius='6px'; bar.style.marginTop='8px'; const inner = document.createElement('div'); inner.style.height='100%'; inner.style.width='0%'; inner.style.background='linear-gradient(90deg,#ffd1a9,#ff9aa2)'; bar.appendChild(inner); node.appendChild(bar);
+			let time=0; const interval = setInterval(()=>{ time+=100; inner.style.width = Math.min(100,(time/3000)*100)+'%'; if(time>=3000){ clearInterval(interval); done('fail'); } },100);
+			let clicks=0; btn.addEventListener('click', ()=>{ clicks++; if(clicks>=3){ clearInterval(interval); const rating = time<1500? 'success' : time<2500? 'partial':'partial'; done(rating); } });
+		}
+
+		// --- Social minigames ---
+		socialConvince(node,done){
+			node.innerHTML = '<strong>Minijuego social: Convencer</strong><div>Elige un argumento para convencer a alguien (elige rápido para mejor resultado)</div>';
+			const opts = [
+				{text:'Argumento lógico',boost:0.1},
+				{text:'Argumento emocional',boost:0.25},
+				{text:'Halago y conexión',boost:0.2}
+			];
+			const soc = (this.game && this.game.traits && this.game.traits.sociable) ? this.game.traits.sociable : 50;
+			const ext = (this.game && this.game.traits && this.game.traits.extroversion) ? this.game.traits.extroversion : 50;
+			opts.forEach(opt=>{ const b=document.createElement('button'); b.className='choice-btn'; b.textContent=opt.text; b.addEventListener('click', ()=>{ const base = 0.35 + (soc/300) + (ext/400) + opt.boost; const r=Math.random(); if(r<base) done('success'); else if(r<base+0.25) done('partial'); else done('fail'); }); node.appendChild(b); });
+		}
+
+		socialTruthLie(node,done){
+			node.innerHTML = '<strong>Minijuego social: Mentir o decir la verdad</strong><div>Decide si decir la verdad o mentir. Mentir puede traer recompensa pero riesgo reputacional.</div>';
+			const rep = (this.game && this.game.attrMgr) ? this.game.attrMgr.get().reputation : 50;
+			const respTrait = (this.game && this.game.traits && this.game.traits.responsible) ? this.game.traits.responsible : 50;
+			const truthBtn = document.createElement('button'); truthBtn.className='choice-btn'; truthBtn.textContent='Decir la verdad';
+			truthBtn.addEventListener('click', ()=>{ if(Math.random()<0.95 + (respTrait-50)/500) done('success'); else done('partial'); }); node.appendChild(truthBtn);
+			const lieBtn = document.createElement('button'); lieBtn.className='choice-btn'; lieBtn.textContent='Mentir';
+			lieBtn.addEventListener('click', ()=>{ const detect = 0.25 + (100-rep)/300 + (50-respTrait)/300; if(Math.random() < detect){ this.game.attrMgr.modify({reputation:-15}); done('fail'); } else { this.game.attrMgr.modify({reputation:5}); done('success'); } }); node.appendChild(lieBtn);
+		}
+
+		socialTimedChoice(node,done){
+			node.innerHTML = '<strong>Minijuego social: Respuestas rápidas</strong><div>Responde correctamente antes de que acabe el tiempo.</div>';
+			const q = ['¿Prioridad A o B?','¿Qué opción refleja empatía?','Selecciona la mejor respuesta.'][Math.floor(Math.random()*3)];
+			const info = document.createElement('div'); info.style.margin='8px 0'; info.textContent = q; node.appendChild(info);
+			const opts = ['A','B','C']; let timeLeft=5000; const timer = setInterval(()=>{ timeLeft-=250; if(timeLeft<=0){ clearInterval(timer); done('fail'); } },250);
+			opts.forEach((o,i)=>{ const b=document.createElement('button'); b.className='choice-btn'; b.textContent=o; b.addEventListener('click', ()=>{ clearInterval(timer); const good = Math.random()<0.6; if(good) done('success'); else done('partial'); }); node.appendChild(b); });
+		}
+
+		// --- Risk minigames ---
+		riskInvest(node,done){
+			node.innerHTML = '<strong>Minijuego riesgo: Invertir</strong><div>Elige cuánto invertir (0-100). Más riesgo = mayor recompensa pero mayor posibilidad de pérdida.</div>';
+			const slider = document.createElement('input'); slider.type='range'; slider.min=0; slider.max=100; slider.value=20; slider.style.width='100%'; node.appendChild(slider);
+			const info = document.createElement('div'); info.style.marginTop='8px'; info.textContent='Inversión: 20'; node.appendChild(info);
+			slider.addEventListener('input', ()=> info.textContent = 'Inversión: ' + slider.value);
+			const btn = document.createElement('button'); btn.textContent='Invertir'; btn.style.marginTop='8px'; btn.addEventListener('click', ()=>{
+				const amt = Number(slider.value);
+				const risk = (this.game && this.game.traits && this.game.traits.risk) ? this.game.traits.risk : 50;
+				const successProb = 0.5 - (amt/200) + (risk/300);
+				if(Math.random() < successProb){ this.game.attrMgr.modify({money: Math.min(100, Math.round(amt*1.2))}); done('success'); }
+				else { this.game.attrMgr.modify({money: -Math.round(amt)}); done('fail'); }
+			}); node.appendChild(btn);
+		}
+
+		riskBet(node,done){
+			node.innerHTML = '<strong>Minijuego riesgo: Apostar</strong><div>Apuesta una cantidad. Si ganas, multiplicador mayor; si pierdes, lo pierdes todo.</div>';
+			const slider = document.createElement('input'); slider.type='range'; slider.min=0; slider.max=100; slider.value=10; slider.style.width='100%'; node.appendChild(slider);
+			const info = document.createElement('div'); info.style.marginTop='8px'; info.textContent='Apuesta: 10'; node.appendChild(info);
+			slider.addEventListener('input', ()=> info.textContent = 'Apuesta: ' + slider.value);
+			const btn = document.createElement('button'); btn.textContent='Apostar'; btn.style.marginTop='8px'; btn.addEventListener('click', ()=>{
+				const stake = Number(slider.value);
+				const risk = (this.game && this.game.traits && this.game.traits.risk) ? this.game.traits.risk : 50;
+				const winProb = 0.4 + (risk/400) - (stake/300);
+				if(Math.random() < winProb){ this.game.attrMgr.modify({money: Math.round(stake*1.5)}); done('success'); }
+				else { this.game.attrMgr.modify({money: -Math.round(stake)}); done('fail'); }
+			}); node.appendChild(btn);
+		}
+
+		// --- Mental minigames ---
+		mentalMemory(node,done){
+			node.innerHTML = '<strong>Minijuego mental: Memoria</strong><div>Recuerda la secuencia que aparece y escríbela tras ocultarse.</div>';
+			const seqLen = 3 + Math.floor(Math.random()*3);
+			const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ12345'; let seq=''; for(let i=0;i<seqLen;i++) seq += chars[Math.floor(Math.random()*chars.length)];
+			const disp = document.createElement('div'); disp.style.fontSize='20px'; disp.style.margin='8px 0'; disp.textContent = seq; node.appendChild(disp);
+			setTimeout(()=>{ disp.textContent = '___'; const input = document.createElement('input'); node.appendChild(input); input.focus(); input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ const val = input.value.toUpperCase(); if(val === seq) done('success'); else if(val.length >= Math.ceil(seq.length*0.7)) done('partial'); else done('fail'); } }); }, 1200*seqLen);
+		}
+
+		mentalAttention(node,done){
+			node.innerHTML = '<strong>Minijuego mental: Atención</strong><div>Resuelve la operación correcta rápidamente.</div>';
+			const a = Math.floor(Math.random()*20)+1; const b = Math.floor(Math.random()*20)+1; const op = Math.random()<0.5?'+':'-'; const correct = op==='+'? a+b : a-b;
+			const q = document.createElement('div'); q.style.margin='8px 0'; q.textContent = `${a} ${op} ${b} = ?`; node.appendChild(q);
+			const input = document.createElement('input'); node.appendChild(input); input.focus(); const start=performance.now(); input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ const time=(performance.now()-start)/1000; const ans = Number(input.value); if(ans===correct && time<5) done('success'); else if(ans===correct) done('partial'); else done('fail'); }});
+		}
+
+		stressManagement(node,done){
+			node.innerHTML = '<strong>Minijuego: Gestión del estrés</strong><div>Sigue una serie de respiraciones: pulsa cuando te indique (4 respiraciones). Sé consistente.</div>';
+			const instr = document.createElement('div'); instr.style.margin='8px 0'; instr.textContent='Pulsa 4 veces, intenta mantener un ritmo constante.'; node.appendChild(instr);
+			const btn = document.createElement('button'); btn.textContent='Pulsa'; btn.style.marginTop='8px'; node.appendChild(btn);
+			let times=[]; btn.addEventListener('click', ()=>{ times.push(performance.now()); if(times.length>=4){ // evaluate rhythm
+				let diffs = []; for(let i=1;i<times.length;i++) diffs.push(times[i]-times[i-1]); const avg = diffs.reduce((a,b)=>a+b,0)/diffs.length; const variance = diffs.reduce((a,b)=>a+Math.abs(b-avg),0)/diffs.length; if(variance<350) done('success'); else if(variance<700) done('partial'); else done('fail'); }
+			});
+		}
+	}
+
+	// Negotiation minigame: adjust offer with a slider within time
+	function negotiationMinigame(node, base, onComplete){
+		node.innerHTML = '<strong>Negociación salarial</strong><div>Arrastra para pedir más salario. Suelta cuando veas que es justo. (Riesgo: perder oferta si pides demasiado)</div>';
+		const slider = document.createElement('input'); slider.type='range'; slider.min=0; slider.max=100; slider.value=40; slider.style.width='100%'; node.appendChild(slider);
+		const info = document.createElement('div'); info.style.marginTop='8px'; info.textContent = 'Oferta actual: ' + base; node.appendChild(info);
+		const btn = document.createElement('button'); btn.textContent='Solicitar'; btn.style.marginTop='8px'; node.appendChild(btn);
+		slider.addEventListener('input', ()=>{ info.textContent = 'Oferta actual: ' + Math.round(base + (slider.value-40)/2); });
+		btn.addEventListener('click', ()=>{
+			const requested = Math.round(base + (slider.value-40)/2);
+			// success if requested within 25% of base, partial if within 50%
+			if(requested <= base * 1.25) onComplete('success', requested);
+			else if(requested <= base * 1.5) onComplete('partial', requested);
+			else onComplete('fail', requested);
+		});
+	}
+
+// --- What-if comparator & audio feedback setup ---
+(function(){
+	const whatIfBtn = document.getElementById('whatIfBtn');
+	const modal = document.getElementById('whatIfModal');
+	const presetsEl = document.getElementById('whatIfPresets');
+	const resultEl = document.getElementById('whatIfResult');
+	const closeBtn = document.getElementById('closeWhatIf');
+	const musicToggle = document.getElementById('musicToggle');
+	let audioCtx, osc, gainNode, musicOn=false;
+	function setupAudio(){ try{ if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); osc = audioCtx.createOscillator(); gainNode = audioCtx.createGain(); osc.type='sine'; osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); gainNode.gain.value = 0; } }catch(e){ console.warn('Audio no disponible',e); } }
+	musicToggle && musicToggle.addEventListener('click', ()=>{
+		setupAudio(); musicOn = !musicOn; musicToggle.textContent = `Música: ${musicOn? 'On' : 'Off'}`; if(!musicOn){ if(gainNode) gainNode.gain.value = 0; } else updateMoodAudio();
+	});
+	function updateMoodAudio(){ if(!audioCtx || !osc || !gainNode || !musicOn) return; const gameInst = window.game; if(!gameInst) return; const attrs = gameInst.attrMgr.get(); const happy = attrs.happiness||50; const stress = attrs.stress||10; osc.frequency.value = 220 + (happy/100)*440 - (stress/100)*80; gainNode.gain.value = Math.max(0.02, ( (100-stress)/200 )); }
+
+	const presets = [
+		{id:'rested',name:'Habrías descansado mejor',desc:'Escenario: más descanso regular',delta:{energy:10,sleep:12,stress:-10}},
+		{id:'healthy',name:'Habrías cuidado tu salud',desc:'Escenario: priorizaste la salud',delta:{health:12,stress:-8,happiness:4}},
+		{id:'savvy',name:'Habrías ahorrado consistentemente',desc:'Escenario: ahorro moderado',delta:{money:20,happiness:-3}}
+	];
+
+	function showWhatIf(){ if(!modal) return; presetsEl.innerHTML=''; presets.forEach(p=>{ const b=document.createElement('button'); b.className='choice-btn'; b.textContent = p.name; b.title = p.desc; b.addEventListener('click', ()=> applyPreset(p)); presetsEl.appendChild(b); }); modal.style.display='flex'; }
+	function applyPreset(p){ const clone = Object.assign({}, window.game.attrMgr.get()); const out = {}; for(const k in clone) out[k]=clone[k]; for(const d in p.delta) out[d] = Math.max(0, Math.min(100, out[d] + p.delta[d])); // compute diff
+		const diffs = Object.keys(out).map(k=> `${k}: ${clone[k]} → ${out[k]}` ).join('<br>'); resultEl.innerHTML = `<div class="keynote">${p.name}</div><div style="margin-top:8px">${diffs}</div>`; }
+	whatIfBtn && whatIfBtn.addEventListener('click', showWhatIf);
+	closeBtn && closeBtn.addEventListener('click', ()=>{ if(modal) modal.style.display='none'; });
+
+	// update audio periodically
+	setInterval(()=>{ try{ updateMoodAudio(); }catch(e){} }, 800);
+})();
+
+
+	class SaveManager{
+		static save(state){ localStorage.setItem('life_sim_save',JSON.stringify(state)); }
+		static load(){ const s = localStorage.getItem('life_sim_save'); return s? JSON.parse(s):null; }
+	}
+
+	class Game {
+		constructor(){
+			this.age = 18; this.endAge = 60; this.name = 'Alex';
+			this.attrMgr = new AttributeManager(document.getElementById('attributes'));
+			this.eventSys = new EventSystem(this);
+			this.mini = new MinigameManager(this);
+			this.history = [];
+			this.study = {name:null, yearsLeft:0};
+			this.currentJob = null;
+			// Personality traits (permanent): values 0-100
+			this.traits = {
+				conscientious: 50, // affects study/minigame performance
+				extroversion: 50,   // affects interview/conversation
+				risk: 50            // affects negotiation/investment choices
+			};
+				this.traits.ambitious = 50;
+				this.traits.sociable = 50;
+				this.traits.responsible = 50;
+			this.pendingHidden = [];
+			// Daily-life trackers
+			this.stressYearsHigh = 0; // consecutive years with high stress
+			this.badChoiceStreaks = {healthNeglect:0,overspend:0,overwork:0};
+
+			// Invisible player profile (learned from actions)
+			this.hiddenProfile = {ambition:0,morality:0,risk:0,empathy:0,discipline:0,stressTendency:0};
+			this.profile = {id:null,name:null,confidence:0};
+			this.difficultyModifier = 1; // >1 harder, <1 easier, adjusted by profile
+			// Narration and irreversible tracking
+			this.irreversibleDecisions = [];
+			this._majorThisYear = false; // set when a decision causes a major life change
+			this._lastAttrsSnapshot = this.attrMgr.get();
+			// Relationships: recurring characters that evolve with the player
+			this.relationships = [];
+			this.flags = {}; // decision flags for unlocking events/choices
+			this.logEl = document.getElementById('log');
+			this.stageTitle = document.getElementById('stageTitle');
+			this.ageTxt = document.getElementById('ageTxt'); this.ageBig = document.getElementById('ageBig');
+			this.endingBox = document.getElementById('endingBox');
+			this.setup();
+			this.refreshUI();
+			this.renderRelationships && this.renderRelationships();
+		}
+		setup(){
+			document.getElementById('advanceBtn').addEventListener('click', ()=> this.advanceYear());
+			document.getElementById('saveBtn').addEventListener('click', ()=>{ SaveManager.save(this.snapshot()); this.log('Juego guardado.');});
+			document.getElementById('loadBtn').addEventListener('click', ()=>{ const s=SaveManager.load(); if(s) this.loadSnapshot(s); else this.log('No hay partida guardada.');});
+			// quick study chooser for prototype
+			const historyEl = document.getElementById('history');
+			historyEl.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.6)">Sin decisiones aún.</div>';
+			this.renderStudyOptions();
+		}
+
+		renderStudyOptions(){
+			const container = document.getElementById('miniInfo');
+			// show study selection UI
+			container.innerHTML = '';
+			const title = document.createElement('div'); title.style.fontWeight='700'; title.textContent='Elegir estudios (prototipo)'; container.appendChild(title);
+			const opts = [
+				{name:'Formación básica',years:1,effect:{intelligence:5,energy:-5}},
+				{name:'Formación profesional',years:2,effect:{intelligence:10,energy:-10}},
+				{name:'Universidad',years:4,effect:{intelligence:18,energy:-20}},
+				{name:'Abandonar estudios',years:0,effect:{happiness:5}}
+			];
+			opts.forEach(o=>{ const b=document.createElement('button'); b.className='choice-btn'; b.textContent=`${o.name} - ${o.years} años`; b.addEventListener('click',()=>{ this.chooseStudy(o); }); container.appendChild(b); });
+		}
+
+		chooseStudy(option){
+			this.study.name = option.name; this.study.yearsLeft = option.years; this.attrMgr.modify(option.effect||{});
+			document.getElementById('studyTxt').textContent = `${this.study.name} ${this.study.yearsLeft?`(${this.study.yearsLeft} años restantes)`:''}`;
+			this.log(`Iniciaste: ${this.study.name}`);
+			this.pushHistory(`Comenzó estudios: ${this.study.name}`);
+			// set a study-related flag for decision tree
+			const slug = option.name.toLowerCase().replace(/\s+/g,'_');
+			this.flags['studied_'+slug] = true;
+			this.pushHistory(`Flag activada: studied_${slug}`);
+			// small personality tweak when choosing study
+			this.traits.conscientious = Math.min(100, this.traits.conscientious + (option.years*3 || 0));
+			this.renderTraits();
+			SaveManager.save(this.snapshot());
+		}
+
+		log(txt){ const d = document.createElement('div'); d.textContent = `Edad ${this.age}: ${txt}`; this.logEl.prepend(d); }
+		refreshUI(){
+			document.getElementById('ageTxt').textContent=this.age;
+			document.getElementById('ageBig').textContent=this.age;
+			document.getElementById('nameTxt').textContent=this.name;
+			document.getElementById('studyTxt').textContent = this.study && this.study.name? `${this.study.name} ${this.study.yearsLeft?`(${this.study.yearsLeft} años restantes)`:''}` : 'Ninguno';
+			document.getElementById('jobTxt').textContent = this.currentJob? this.currentJob.title : 'Ninguno';
+			if(typeof this.renderTraits === 'function') this.renderTraits();
+			if(typeof this.renderRelationships === 'function') this.renderRelationships();
+			// render daily actions UI
+			if(typeof this.renderDailyActions === 'function') this.renderDailyActions();
+			if(typeof this.renderTimeline === 'function') this.renderTimeline();
+		}
+
+		advanceYear(){
+			if(this.age>=this.endAge){ this.finish(); return; }
+			this.age++;
+			// Passive yearly effects: job income, small energy regain
+			if(this.currentJob){ const gain = this.currentJob.annualGain || 5; this.attrMgr.modify({money:gain,energy:-this.currentJob.stress||-5}); this.log(`Ingresos del trabajo: +${gain}`); }
+			if(this.study && this.study.yearsLeft>0){ this.study.yearsLeft--; if(this.study.yearsLeft<=0){ this.log(`Completaste estudios: ${this.study.name}`); this.attrMgr.modify({intelligence:10,reputation:5}); } }
+			this.refreshUI();
+			// Update relationships yearly and check pending hidden decisions
+			this.updateRelationshipsYearly();
+			this.checkPendingHidden();
+			// Evaluate long-term consequences related to daily life
+			if(typeof this.checkLongTermConsequences === 'function') this.checkLongTermConsequences();
+			// If a major life change happened this year, annotate as key year
+			if(this._majorThisYear){
+				this.stageTitle.textContent = 'Año clave';
+				document.getElementById('stageDesc').textContent = this.generateNarration('keyYear');
+				this.pushHistory('Año clave detectado: cambios significativos.');
+				this._majorThisYear = false;
+			} else {
+				// regular adaptive narration
+				document.getElementById('stageDesc').textContent = this.generateNarration('yearStart');
+			}
+			this.log('Ha pasado un año.');
+			// refresh last attrs snapshot for next-year comparisons
+			this._lastAttrsSnapshot = this.attrMgr.get();
+			// choose event after aging
+			const ev = this.eventSys.nextEvent(this.age);
+			this.presentEvent(ev);
+			SaveManager.save(this.snapshot());
+		}
+
+		postDecisionAdvance(){
+			// Called after a decision/minigame: advance one year and apply passive effects
+			this.advanceYear();
+		}
+		presentEvent(ev){
+			this.currentEvent = ev; document.getElementById('eventTitle').textContent = ev.title; document.getElementById('eventText').textContent = ev.text;
+			// adaptive narrator for event
+			document.getElementById('stageDesc').textContent = this.generateNarration('event');
+			const choices = document.getElementById('choices'); choices.innerHTML=''; document.getElementById('minigameBox').innerHTML='';
+			ev.choices.forEach((c,idx)=>{ const btn=document.createElement('button'); btn.className='choice-btn'; btn.textContent = c.text; btn.addEventListener('click', ()=> this.resolveChoice(ev,c)); choices.appendChild(btn); });
+			// Trait-influenced extra dialogue options
+			try{
+				if(ev.id==='relationship' && this.traits && this.traits.sociable>60){
+					const c = {text:'Hablar abierta y cariñosamente', effect:{happiness:12,reputation:5}, traitEffect:{sociable:2}};
+					const btn=document.createElement('button'); btn.className='choice-btn'; btn.textContent = c.text; btn.addEventListener('click', ()=> this.resolveChoice(ev,c)); choices.appendChild(btn);
+				}
+				if(ev.id==='job' && this.traits && this.traits.ambitious>60){
+					const c = {text:'Apuntar alto y mostrar proyectos ambiciosos', effect:{reputation:12,energy:-8}, traitEffect:{ambitious:2}};
+					const btn=document.createElement('button'); btn.className='choice-btn'; btn.textContent = c.text; btn.addEventListener('click', ()=> this.resolveChoice(ev,c)); choices.appendChild(btn);
+				}
+			}catch(e){console.warn('Error creando opciones dinámicas',e)}
+			document.getElementById('miniInfo').textContent = ev.minigame?('Requiere minijuego: '+ev.minigame):'Este evento es de decisión directa.';
+			// If event is a job opportunity, present job-specific options
+			if(ev.id==='job' && ev.minigame==='interview'){
+				// Create a dynamic job offer based on study
+				const baseSalary = (this.study && this.study.name==='Universidad')? 30 : (this.study && this.study.name==='Formación profesional')?20:12;
+				const jobOffer = {title:'Empleado',annualGain:baseSalary,stress:10,req:{study:this.study?this.study.name:null}};
+				const btn = document.createElement('button'); btn.className='choice-btn'; btn.textContent=`Aceptar trabajo: ${jobOffer.title} (ingreso anual ${jobOffer.annualGain})`;
+				btn.addEventListener('click', ()=>{ this.acceptJob(jobOffer); }); choices.appendChild(btn);
+			}
+		}
+
+		acceptJob(job){ this.currentJob = job; document.getElementById('jobTxt').textContent = job.title; this.log(`Aceptaste trabajo: ${job.title}`); this.pushHistory(`Trabajar: ${job.title}`); this._majorThisYear = true; SaveManager.save(this.snapshot()); }
+			resolveChoice(event,choice){
+			this.log(`Elegiste: ${choice.text}`);
+				// mark irreversible decisions
+				if(choice && choice.irreversible){ this.irreversibleDecisions.push({age:this.age,event:event.id||event.title,choice:choice.text}); this.pushHistory('Decisión irreversible tomada: '+choice.text); this.flags['irreversible_'+(choice.flag||Date.now())]=true; }
+			// Set decision flag if this choice grants one (for decision tree)
+			if(choice && choice.flag){
+				this.flags[choice.flag] = true;
+				this.log(`Desbloqueado: ${choice.flag}`);
+				this.pushHistory(`Flag activada: ${choice.flag}`);
+			}
+			// If choice has a delayedEffect, register it and skip immediate application
+			if(choice && choice.delayedEffect){
+				// Register the delayedEffect object as a pending hidden decision.
+				// delayedEffect can include: id, desc, delayYears, effect, revealEvent, outcomes
+				this.addHiddenDecision(choice.delayedEffect);
+				setTimeout(()=> this.postDecisionAdvance(), 300);
+				return;
+			}
+			const applyOutcome = (rating, extra)=>{
+				const multiplier = (rating==='success'?1.2:rating==='partial'?1:0.6);
+				const deltas = {};
+				for(const k in choice.effect||{}) deltas[k] = Math.round((choice.effect[k]||0)*multiplier);
+				// detect major life changes: large deltas or specific flags
+				const majorKeys = ['money','health','reputation'];
+				for(const k in deltas){ if(Math.abs(deltas[k])>=20 || (majorKeys.indexOf(k)!==-1 && Math.abs(deltas[k])>=15)) this._majorThisYear = true; }
+				if(choice && choice.flag && ['joined_startup','has_child','got_scholarship'].includes(choice.flag)) this._majorThisYear = true;
+				this.attrMgr.modify(deltas);
+				this.log(`Resultado (${rating}). Cambios: ${JSON.stringify(deltas)} ${extra?('info:'+extra):''}`);
+				this.pushHistory(`${event.title} → ${choice.text} (${rating})`);
+					// Apply trait changes from the choice if any
+					if(choice && choice.traitEffect){
+						for(const tk in choice.traitEffect){
+							if(this.traits[tk]===undefined) this.traits[tk]=0;
+							this.traits[tk] = Math.max(0, Math.min(100, this.traits[tk] + choice.traitEffect[tk]));
+						}
+						this.renderTraits();
+						this.pushHistory(`Rasgos actualizados: ${JSON.stringify(choice.traitEffect)}`);
+					}
+
+							// Update hidden profile based on this decision (small deltas)
+							try{
+								const actionMap = {
+									'study':{discipline:0.6},
+									'scholarship':{ambition:0.4,discipline:0.4},
+									'job':{ambition:0.3,discipline:0.2},
+									'loan':{risk:0.5,ambition:0.2},
+									'help_request':{empathy:0.6,morality:0.4},
+									'risky_investment':{risk:0.8,ambition:0.3},
+									'moral_dilemma_help_vs_career':{morality:0.7,ambition:-0.2},
+									'family':{morality:0.5,empathy:0.4}
+								};
+								const del = actionMap[event.id] || {};
+								// Also consider traitEffect as hint for hiddenProfile
+								for(const tk in choice.traitEffect||{}){ if(tk==='ambitious' || tk==='risk' || tk==='responsible' || tk==='sociable'){
+									if(tk==='ambitious') del.ambition = (del.ambition||0) + (choice.traitEffect[tk]*0.25);
+									if(tk==='risk') del.risk = (del.risk||0) + (choice.traitEffect[tk]*0.25);
+									if(tk==='responsible') del.discipline = (del.discipline||0) + (choice.traitEffect[tk]*0.18);
+									if(tk==='sociable') del.empathy = (del.empathy||0) + (choice.traitEffect[tk]*0.15);
+								}};
+								if(Object.keys(del).length) this.applyProfileDeltas(del);
+							}catch(e){console.warn('Error actualizando perfil oculto',e)}
+
+					// Apply relationship modifications if this event targets a relation
+					if(event && event.meta && event.meta.relId && choice && choice.relMod){
+						const rel = this.relationships.find(r=>r.id===event.meta.relId);
+						if(rel){
+							for(const rk in choice.relMod){
+								const delta = Math.round((choice.relMod[rk]||0) * multiplier);
+								rel[rk] = Math.max(0, Math.min(100, (rel[rk]||0) + delta));
+							}
+							rel._lastInteracted = Date.now();
+							if(rel.affinity < 20) rel.status='broken';
+							else if(rel.affinity < 40) rel.status='toxic';
+							else if(rel.affinity < 60) rel.status='stagnant';
+							else rel.status='stable';
+							this.renderRelationships();
+							this.pushHistory(`Relación actualizada: ${rel.name} (${JSON.stringify(choice.relMod)})`);
+						}
+					}
+				if(event.id==='study' && rating==='success') this.attrMgr.modify({reputation:5});
+				this.checkEndCondition();
+				// after resolving, advance one year automatically
+				setTimeout(()=> this.postDecisionAdvance(), 300);
+			};
+
+			if((choice && choice.minigame) || event.minigame){
+				// start minigame then apply
+				if(event.minigame==='negotiation'){
+					const box = document.getElementById('minigameBox'); box.innerHTML=''; const node=document.createElement('div'); node.className='minigame'; box.appendChild(node);
+					// adjust base by risk trait: higher risk allows asking for more but increases failure
+					const base = 20 + Math.round((this.traits && this.traits.risk ? this.traits.risk : 50) / 10);
+					negotiationMinigame(node, base, (rating, requested)=> applyOutcome(rating, requested));
+				} else {
+					this.mini.start(event.minigame, (rating)=>{ applyOutcome(rating); document.getElementById('minigameBox').innerHTML=''; });
+				}
+			} else {
+				applyOutcome('none');
+			}
+		}
+		checkEndCondition(){ if(this.age>=this.endAge) this.finish(); }
+		finish(){ const a=this.attrMgr.attrs; let msg='Final: Vida balanceada.'; if(a.money>70 && a.reputation>60) msg='Final: Éxito financiero y social.'; else if(a.health<30) msg='Final: Salud frágil.'; else if(a.happiness<30) msg='Final: Vida insatisfactoria.'; this.endingBox.textContent = msg; this.log('Juego terminado: '+msg); }
+	}
+
+	// History helper and snapshot updated to include study/job
+	Game.prototype.pushHistory = function(txt){ this.history.unshift(`<div>${this.age}: ${txt}</div>`); const h=document.getElementById('history'); h.innerHTML = this.history.slice(0,50).join(''); };
+
+	Game.prototype.snapshot = function(){
+		return {
+			age:this.age,
+			name:this.name,
+			attrs:this.attrMgr.get(),
+			study:this.study,
+			currentJob:this.currentJob,
+			history:this.history,
+			flags:this.flags,
+			traits:this.traits,
+			pendingHidden:this.pendingHidden,
+			relationships:this.relationships
+			,stressYearsHigh:this.stressYearsHigh
+			,badChoiceStreaks:this.badChoiceStreaks
+			,irreversibleDecisions:this.irreversibleDecisions
+			,_lastAttrsSnapshot:this._lastAttrsSnapshot
+			,_majorThisYear:this._majorThisYear
+			,hiddenProfile:this.hiddenProfile
+			,profile:this.profile
+			,difficultyModifier:this.difficultyModifier
+		};
+	};
+
+		Game.prototype.loadSnapshot = function(s){
+			this.age = s.age || 18;
+			this.name = s.name || 'Alex';
+			if(s.attrs) this.attrMgr.attrs = Object.assign(this.attrMgr.attrs, s.attrs);
+			this.attrMgr.render();
+			this.study = s.study || {name:null,yearsLeft:0};
+			this.currentJob = s.currentJob || null;
+			this.history = s.history || [];
+			this.flags = s.flags || {};
+			this.traits = s.traits || this.traits || {conscientious:50,extroversion:50,risk:50};
+			this.pendingHidden = s.pendingHidden || [];
+			this.relationships = s.relationships || this.relationships || [];
+			this.stressYearsHigh = s.stressYearsHigh || 0;
+			this.badChoiceStreaks = s.badChoiceStreaks || {healthNeglect:0,overspend:0,overwork:0};
+			this.irreversibleDecisions = s.irreversibleDecisions || [];
+			this._lastAttrsSnapshot = s._lastAttrsSnapshot || this.attrMgr.get();
+			this._majorThisYear = s._majorThisYear || false;
+			this.hiddenProfile = s.hiddenProfile || this.hiddenProfile || {ambition:0,morality:0,risk:0,empathy:0,discipline:0,stressTendency:0};
+			this.profile = s.profile || this.profile || {id:null,name:null,confidence:0};
+			this.difficultyModifier = (typeof s.difficultyModifier !== 'undefined') ? s.difficultyModifier : (this.difficultyModifier || 1);
+			document.getElementById('studyTxt').textContent = this.study.name || 'Ninguno';
+			document.getElementById('jobTxt').textContent = this.currentJob? this.currentJob.title:'Ninguno';
+			const h = document.getElementById('history'); h.innerHTML = this.history.join('');
+			this.refreshUI();
+			this.renderTraits();
+			this.renderRelationships();
+		};
+
+		// Render personality traits in UI
+		Game.prototype.renderTraits = function(){ const el = document.getElementById('traits'); if(!el) return; el.innerHTML = ''; for(const [k,v] of Object.entries(this.traits)){ const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.marginBottom='6px'; const label=document.createElement('div'); label.textContent = k.charAt(0).toUpperCase()+k.slice(1); const val = document.createElement('div'); val.textContent = v; row.appendChild(label); row.appendChild(val); el.appendChild(row);} };
+
+		// --- Relationships system ---
+		Game.prototype.addRelationship = function(opts){
+			const id = 'rel_'+Date.now();
+			const r = Object.assign({id,name:'Persona',type:'friend',affinity:60,trust:60,conflicts:[],status:'stable',yearsKnown:0,recurring:true}, opts||{});
+			this.relationships.push(r);
+			this.pushHistory(`Nueva relación: ${r.name} (${r.type})`);
+			this.renderRelationships();
+			SaveManager.save(this.snapshot());
+		};
+
+		Game.prototype.renderRelationships = function(){
+			const el = document.getElementById('relationships'); if(!el) return; el.innerHTML='';
+			if(!this.relationships || this.relationships.length===0){ el.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.6)">Sin relaciones aún.</div>'; return; }
+			this.relationships.forEach(r=>{
+				const wrap = document.createElement('div'); wrap.style.marginBottom='8px'; wrap.style.borderBottom='1px solid rgba(255,255,255,0.03)'; wrap.style.paddingBottom='6px';
+				const title = document.createElement('div'); title.style.display='flex'; title.style.justifyContent='space-between'; title.style.marginBottom='6px';
+				const name = document.createElement('div'); name.textContent = `${r.name} (${r.type})`;
+				const status = document.createElement('div'); status.style.color='rgba(255,255,255,0.6)'; status.textContent = r.status;
+				title.appendChild(name); title.appendChild(status);
+				const bars = document.createElement('div'); bars.style.display='flex'; bars.style.flexDirection='column'; bars.style.gap='4px';
+				const aff = document.createElement('div'); aff.textContent = `Afinidad: ${r.affinity}`; const tr = document.createElement('div'); tr.textContent = `Confianza: ${r.trust}`;
+				bars.appendChild(aff); bars.appendChild(tr);
+				const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='6px'; actions.style.marginTop='6px';
+				const btnI = document.createElement('button'); btnI.className='secondary'; btnI.textContent='Interactuar'; btnI.addEventListener('click', ()=> this.interactRelationship(r.id));
+				const btnR = document.createElement('button'); btnR.className='secondary'; btnR.textContent='Resolver conflicto'; btnR.addEventListener('click', ()=> this.resolveConflict(r.id));
+				const btnN = document.createElement('button'); btnN.className='secondary'; btnN.textContent='Renombrar'; btnN.addEventListener('click', ()=>{
+					const nn = prompt('Nuevo nombre para ' + r.name + ':', r.name); if(!nn) return; r.name = nn; this.pushHistory(`Renombrada relación: ${nn}`); this.renderRelationships(); SaveManager.save(this.snapshot());
+				});
+				actions.appendChild(btnI); actions.appendChild(btnR); actions.appendChild(btnN);
+				wrap.appendChild(title); wrap.appendChild(bars); wrap.appendChild(actions);
+				el.appendChild(wrap);
+			});
+		};
+
+		Game.prototype.interactRelationship = function(id){
+			const rel = this.relationships.find(r=>r.id===id); if(!rel) return;
+			const ev = {
+				id: 'rel_'+rel.id,
+				title: `Interacción: ${rel.name}`,
+				text: `Interactúas con ${rel.name} (${rel.type}). ¿Cómo actúas?`,
+				meta: {relId: rel.id},
+				choices: [
+					{text:'Apoyar y escuchar',effect:{happiness:5},relMod:{affinity:8,trust:6}},
+					{text:'Ser práctico y ofrecer ayuda',effect:{reputation:2},relMod:{affinity:5,trust:4}},
+					{text:'Ser distante (proteges tu tiempo)',effect:{energy:5},relMod:{affinity:-6,trust:-4}}
+				]
+			};
+			this.presentEvent(ev);
+		};
+
+		Game.prototype.resolveConflict = function(id){
+			const rel = this.relationships.find(r=>r.id===id); if(!rel) return;
+			if(!rel.conflicts || rel.conflicts.length===0){ this.log(`No hay conflictos pendientes con ${rel.name}.`); this.pushHistory(`Intentaste resolver conflictos con ${rel.name}, pero no hay.`); return; }
+			// Resolve the oldest conflict
+			rel.conflicts.shift(); rel.trust = Math.min(100, rel.trust + 8); rel.affinity = Math.min(100, rel.affinity + 6);
+			this.pushHistory(`Resolviste un conflicto con ${rel.name}.`); this.renderRelationships(); SaveManager.save(this.snapshot());
+		};
+
+		Game.prototype.updateRelationshipsYearly = function(){
+			if(!this.relationships) return;
+			this.relationships.forEach(r=>{
+				r.yearsKnown = (r.yearsKnown||0) + 1;
+				// Passive drift: if not recently interacted, small decay
+				if(!r._lastInteracted){ r.affinity = Math.max(0, r.affinity - 1); r.trust = Math.max(0, r.trust - 1); }
+				// Status recalculation
+				if(r.affinity < 20) r.status = 'broken';
+				else if(r.affinity < 40) r.status = 'toxic';
+				else if(r.affinity < 60) r.status = 'stagnant';
+				else r.status = 'stable';
+				// Random chance of a relationship event (small)
+				if(Math.random() < 0.12){ this.interactRelationship(r.id); }
+			});
+			this.renderRelationships();
+		};
+
+		// Render timeline with markers from history entries
+		Game.prototype.renderTimeline = function(){
+			const elLine = document.getElementById('timelineLine'); if(!elLine) return;
+			elLine.innerHTML = '';
+			const history = this.history || [];
+			const start = 18, end = this.endAge || 60; const span = end - start;
+			// parse history entries that start with "<div>AGE:"
+			const markers = [];
+			history.forEach(h=>{
+				try{
+					// stored as '<div>AGE: text'
+					const txt = h.replace(/<[^>]+>/g,'');
+					const parts = txt.split(':');
+					const age = Number(parts[0] && parts[0].trim());
+					if(!isNaN(age)){
+						markers.push({age,txt:parts.slice(1).join(':').trim()});
+					}
+				}catch(e){ }
+			});
+			markers.forEach(m=>{
+				const pos = ((m.age - start) / span) * 100; const marker = document.createElement('div'); marker.className='timeline-marker'; marker.style.left = `calc(${pos}% - 4px)`;
+				const label = document.createElement('div'); label.className='marker-label'; label.textContent = m.age; marker.appendChild(label);
+				marker.title = m.txt || ('Año '+m.age);
+				marker.addEventListener('click', ()=> alert(`Año ${m.age}: ${m.txt}`));
+				elLine.appendChild(marker);
+			});
+			const summary = document.getElementById('timelineSummary'); if(summary) summary.textContent = `${markers.length} hitos registrados`;
+		};
+
+		// --- Adaptive narrator and key-year detection ---
+		Game.prototype.generateNarration = function(context){
+			// context: 'yearStart' | 'event' | 'keyYear'
+			const attrs = this.attrMgr.get();
+			const t = this.traits;
+			let tone = 'neutral';
+			if(t.ambitious>65) tone='driven';
+			else if(t.sociable>65) tone='warm';
+			else if(t.responsible>65) tone='steady';
+			else if(t.risk>70) tone='risky';
+
+			const parts = [];
+			if(context==='yearStart'){
+				parts.push(`Año ${this.age}.`);
+				if(tone==='driven') parts.push('Tu ambición marca el paso: buscas oportunidades grandes.');
+				if(tone==='warm') parts.push('La vida social abre puertas y enredos por igual.');
+				if(tone==='steady') parts.push('La rutina y la responsabilidad definen tus decisiones.');
+				if(tone==='risky') parts.push('Te sientes atraído por riesgos con alto potencial.');
+				if(attrs.stress>65) parts.push('El estrés es visible; necesitas descansar más.')
+				if(this.flags.chronic_stress) parts.push('Ha habido señales de desgaste acumulado.');
+			} else if(context==='event'){
+				parts.push(this.currentEvent? this.currentEvent.title : 'Un momento cualquiera.');
+				if(this.currentEvent && this.currentEvent.id==='relationship' && t.sociable>60) parts.push('Tu habilidad social puede inclinar la balanza.');
+			} else if(context==='keyYear'){
+				parts.push('Este fue el año que lo cambió todo.');
+				if(this.currentJob) parts.push(`Un trabajo como ${this.currentJob.title} cambió tu rumbo.`);
+				if(this.flags.joindir || this.flags.joined_startup) parts.push('Tu ambición tuvo una recompensa grande, para bien o mal.');
+				if(this.flags.chronic_stress) parts.push('El coste fue evidente: tu salud se vio afectada.');
+				if(this.irreversibleDecisions && this.irreversibleDecisions.length) parts.push('Tomaste decisiones de las que no hay vuelta atrás.');
+			}
+			return parts.join(' ');
+		};
+
+		// --- Daily-life actions and consequences ---
+		Game.prototype.renderDailyActions = function(){
+			const container = document.getElementById('dailyActions'); if(!container) return; container.innerHTML = '';
+			const attrs = this.attrMgr.get();
+			const stats = document.createElement('div'); stats.style.marginBottom='8px'; stats.innerHTML = `Energía: ${attrs.energy} • Sueño: ${attrs.sleep} • Estrés: ${attrs.stress}`;
+			container.appendChild(stats);
+			const btnRest = document.createElement('button'); btnRest.className='choice-btn'; btnRest.textContent='Descansar (recupera energía/sueño)'; btnRest.addEventListener('click', ()=> this.doRest());
+			const btnOverwork = document.createElement('button'); btnOverwork.className='choice-btn'; btnOverwork.textContent='Trabajar más (gana dinero, aumenta estrés)'; btnOverwork.addEventListener('click', ()=> this.doOverwork());
+			const btnSave = document.createElement('button'); btnSave.className='choice-btn'; btnSave.textContent='Ahorrar (pequeña ganancia futura)'; btnSave.addEventListener('click', ()=> this.doSave());
+			const btnSpend = document.createElement('button'); btnSpend.className='choice-btn'; btnSpend.textContent='Gastar en ocio (felicidad pero gasta dinero)'; btnSpend.addEventListener('click', ()=> this.doSpend());
+			const btnCare = document.createElement('button'); btnCare.className='choice-btn'; btnCare.textContent='Cuidar salud (gasta dinero, mejora salud/reduce estrés)'; btnCare.addEventListener('click', ()=> this.doCare());
+			const btnIgnore = document.createElement('button'); btnIgnore.className='choice-btn'; btnIgnore.textContent='Ignorar salud (ahorras dinero, salud puede bajar)'; btnIgnore.addEventListener('click', ()=> this.doIgnoreHealth());
+			[btnRest,btnOverwork,btnSave,btnSpend,btnCare,btnIgnore].forEach(b=> container.appendChild(b));
+		};
+
+		Game.prototype.doRest = function(){ this.attrMgr.modify({energy:12,sleep:10,stress:-8}); this.pushHistory('Decisión diaria: Descansar'); this.log('Descansaste: energía y sueño +, estrés -'); SaveManager.save(this.snapshot()); };
+		Game.prototype.doOverwork = function(){ this.attrMgr.modify({energy:-18,money:8,stress:12}); this.badChoiceStreaks.overwork = (this.badChoiceStreaks.overwork||0)+1; if(this.badChoiceStreaks.overwork>3) this.pushHistory('Has estado trabajando demasiado seguido'); this.log('Trabajaste más: ganancia de dinero, estrés +'); try{ this.applyProfileDeltas({ambition:0.6,stressTendency:0.5}); }catch(e){} SaveManager.save(this.snapshot()); };
+		Game.prototype.doSave = function(){ this.attrMgr.modify({money:3,happiness:-1}); this.pushHistory('Decisión diaria: Ahorrar'); this.log('Ahorraste un poco.'); try{ this.applyProfileDeltas({discipline:0.4}); }catch(e){} SaveManager.save(this.snapshot()); };
+		Game.prototype.doSpend = function(){ this.attrMgr.modify({money:-6,happiness:8,stress:-4}); this.badChoiceStreaks.overspend = (this.badChoiceStreaks.overspend||0)+1; this.pushHistory('Decisión diaria: Gastar en ocio'); this.log('Gastaste en ocio: felicidad +, dinero -'); try{ this.applyProfileDeltas({risk:0.3,ambition:0.2}); }catch(e){} SaveManager.save(this.snapshot()); };
+		Game.prototype.doCare = function(){ this.attrMgr.modify({health:8,money:-8,stress:-10}); this.badChoiceStreaks.healthNeglect = 0; this.pushHistory('Decisión diaria: Cuidarte'); this.log('Cuidaste tu salud: salud +, estrés -'); try{ this.applyProfileDeltas({morality:0.3,empathy:0.3}); }catch(e){} SaveManager.save(this.snapshot()); };
+		Game.prototype.doIgnoreHealth = function(){ this.attrMgr.modify({health:-8,money:4,stress:6}); this.badChoiceStreaks.healthNeglect = (this.badChoiceStreaks.healthNeglect||0)+1; this.pushHistory('Decisión diaria: Ignorar salud'); this.log('Ignoraste tu salud: ahorraste dinero pero salud -'); try{ this.applyProfileDeltas({discipline:-0.4,stressTendency:0.6}); }catch(e){} SaveManager.save(this.snapshot()); };
+
+		Game.prototype.checkLongTermConsequences = function(){
+			const s = this.attrMgr.get().stress;
+			if(s>=75){ this.stressYearsHigh = (this.stressYearsHigh||0) + 1; } else { this.stressYearsHigh = 0; }
+			if(this.stressYearsHigh>=3){ // chronic stress
+				this.pushHistory('Estrés crónico detectado: efecto en la salud a largo plazo');
+				this.attrMgr.modify({health:-12,happiness:-8});
+				this.flags.chronic_stress = true;
+				this.stressYearsHigh = 0; // apply once, then reset counter
+				this.log('Consecuencia: estrés crónico causado problemas de salud.');
+				SaveManager.save(this.snapshot());
+			}
+			// repeated bad choices blocking paths
+			if((this.badChoiceStreaks.healthNeglect||0)>=5){ this.flags.blocked_health_paths = true; this.pushHistory('Decisiones repetidas de descuido de salud bloquearon algunas opciones futuras.'); }
+			if((this.badChoiceStreaks.overspend||0)>=6){ this.flags.blocked_financial_paths = true; this.pushHistory('Gastar en exceso ha dejado tu historial financiero limitado.'); }
+		};
+
+		// Add a hidden/delayed decision that will apply later
+		Game.prototype.addHiddenDecision = function(entry){
+			// Accept an object with optional fields: id, desc, delayYears, effect, revealEvent, outcomes
+			if(!entry || typeof entry !== 'object') return;
+			const id = entry.id || ('hidden_'+Date.now());
+			const desc = entry.desc || entry.text || 'Decisión oculta';
+			const remainingYears = entry.delayYears || entry.years || entry.remainingYears || 1;
+			const effect = entry.effect || null;
+			const revealEvent = entry.revealEvent || null; // an event object to present when revealed
+			const outcomes = entry.outcomes || null; // array of possible outcomes {prob,desc,effect}
+			this.pendingHidden.push({id,desc,remainingYears,effect,revealEvent,outcomes});
+			this.pushHistory(`Decisión oculta tomada: ${desc} (se revelará en ${remainingYears} años)`);
+			SaveManager.save(this.snapshot());
+		};
+
+		// Apply pending hidden decisions when their timer expires
+		Game.prototype.checkPendingHidden = function(){
+			const toApply = [];
+			this.pendingHidden.forEach(ph=>{ ph.remainingYears = (ph.remainingYears || 0) - 1; if(ph.remainingYears<=0) toApply.push(ph); });
+			toApply.forEach(ph=>{
+				// If the pending entry specifies a revealEvent, present it to the player
+				if(ph.revealEvent){
+					this.log(`Se revela evento: ${ph.desc}`);
+					this.pushHistory(`Se revela evento: ${ph.desc}`);
+					// presentEvent expects a full event-like object
+					try{ this.presentEvent(ph.revealEvent); } catch(e){ console.warn('Error mostrando evento revelado',e); }
+				} else if(ph.outcomes && Array.isArray(ph.outcomes) && ph.outcomes.length){
+					// Choose an outcome based on optional probabilities
+					let total = ph.outcomes.reduce((s,o)=>s + (o.prob || 0), 0);
+					let pick;
+					if(total > 0){
+						let r = Math.random()*total; for(const o of ph.outcomes){ r -= (o.prob||0); if(r<=0){ pick=o; break; } }
+					} else {
+						pick = ph.outcomes[Math.floor(Math.random()*ph.outcomes.length)];
+					}
+					if(pick){
+						this.attrMgr.modify(pick.effect||{});
+						this.log(`Consecuencia tardía: ${pick.desc || ph.desc}`);
+						this.pushHistory(`Consecuencia tardía aplicada: ${pick.desc || ph.desc}`);
+					}
+				} else {
+					// Default: apply a stored effect (if any)
+					if(ph.effect) this.attrMgr.modify(ph.effect||{});
+					this.log(`Consecuencia tardía: ${ph.desc}`);
+					this.pushHistory(`Consecuencia tardía aplicada: ${ph.desc}`);
+				}
+				this.pendingHidden = this.pendingHidden.filter(p=>p!==ph);
+			});
+			if(toApply.length) SaveManager.save(this.snapshot());
+		};
+
+		// Apply small deltas to the invisible player profile and re-classify
+		Game.prototype.applyProfileDeltas = function(deltas){
+			if(!deltas || typeof deltas !== 'object') return;
+			this.hiddenProfile = this.hiddenProfile || {ambition:0,morality:0,risk:0,empathy:0,discipline:0,stressTendency:0};
+			for(const k in deltas){ if(typeof deltas[k] !== 'number') continue; this.hiddenProfile[k] = Math.max(-100, Math.min(100, (this.hiddenProfile[k]||0) + deltas[k])); }
+			// small persistence and update
+			this.updateProfileClassification();
+			SaveManager.save(this.snapshot());
+		};
+
+		// Simple classifier: choose dominant hidden trait and set profile id and difficulty
+		Game.prototype.updateProfileClassification = function(){
+			this.profile = this.profile || {id:null,name:null,confidence:0};
+			const hp = this.hiddenProfile || {};
+			const candidates = [
+				{key:'ambition',id:'ambitious',name:'Ambicioso'},
+				{key:'morality',id:'empathetic',name:'Empático'},
+				{key:'risk',id:'risky',name:'Arriesgado'},
+				{key:'discipline',id:'disciplined',name:'Disciplinado'},
+				{key:'empathy',id:'empathetic',name:'Empático'}
+			];
+			let best=null; let bestVal=-Infinity; for(const c of candidates){ const v = hp[c.key]||0; if(v>bestVal){ bestVal=v; best=c; } }
+			if(best){ this.profile.id = best.id; this.profile.name = best.name; this.profile.confidence = Math.min(1, Math.max(0, bestVal/100)); }
+			// difficulty modifier mapping
+			switch(this.profile.id){
+				case 'ambitious': this.difficultyModifier = 1.05; break;
+				case 'risky': this.difficultyModifier = 1.1; break;
+				case 'disciplined': this.difficultyModifier = 0.9; break;
+				case 'empathetic': this.difficultyModifier = 0.95; break;
+				default: this.difficultyModifier = 1; break;
+			}
+			// internal only: no visible history entry to keep profile hidden
+		};
+
+	const game = new Game();
+
+	// Load saved state if exists, otherwise show character creator to customize traits
+	const _saved = SaveManager.load();
+	if(_saved){
+		game.loadSnapshot(_saved);
+	} else {
+		// show creator modal
+		showCharacterCreator();
+	}
+
+	console.log('Life Simulator cargado');
+
+	// Character creator logic
+	function showCharacterCreator(){
+		const modal = document.getElementById('charModal');
+		modal.style.display = 'flex';
+		document.getElementById('charName').value = game.name || 'Alex';
+		document.getElementById('trait_conscientious').value = game.traits.conscientious || 50; document.getElementById('val_cons').textContent = document.getElementById('trait_conscientious').value;
+		document.getElementById('trait_extroversion').value = game.traits.extroversion || 50; document.getElementById('val_ext').textContent = document.getElementById('trait_extroversion').value;
+		document.getElementById('trait_risk').value = game.traits.risk || 50; document.getElementById('val_risk').textContent = document.getElementById('trait_risk').value;
+		// initialize initial relationship name inputs
+		document.getElementById('initial_friend_name').value = (game.relationships && game.relationships[0] && game.relationships[0].name) ? game.relationships[0].name : 'Sam';
+		document.getElementById('initial_rival_name').value = (game.relationships && game.relationships[1] && game.relationships[1].name) ? game.relationships[1].name : 'Rival';
+	}
+
+	function hideCharacterCreator(){ document.getElementById('charModal').style.display = 'none'; }
+
+	const TRAIT_BUDGET = 150;
+	const traitRemainingEl = document.getElementById('traitRemaining');
+	function updateTraitVals(){
+		const consEl = document.getElementById('trait_conscientious');
+		const extEl = document.getElementById('trait_extroversion');
+		const riskEl = document.getElementById('trait_risk');
+		const valConsEl = document.getElementById('val_cons');
+		const valExtEl = document.getElementById('val_ext');
+		const valRiskEl = document.getElementById('val_risk');
+		const cons = Number(consEl.value);
+		const ext = Number(extEl.value);
+		const risk = Number(riskEl.value);
+		valConsEl.textContent = cons;
+		valExtEl.textContent = ext;
+		valRiskEl.textContent = risk;
+		const remaining = TRAIT_BUDGET - (cons + ext + risk);
+		traitRemainingEl.textContent = remaining >= 0 ? remaining : 0;
+		traitRemainingEl.style.color = remaining < 0 ? '#ff7777' : '#bfefff';
+	}
+
+	document.getElementById('trait_conscientious').addEventListener('input', updateTraitVals);
+	document.getElementById('trait_extroversion').addEventListener('input', updateTraitVals);
+	document.getElementById('trait_risk').addEventListener('input', updateTraitVals);
+
+	document.getElementById('randomizeChar').addEventListener('click', ()=>{
+		document.getElementById('charName').value = ['Alex','Jordan','Casey','Taylorsi has '][Math.floor(Math.random()*4)];
+		// Randomize three trait values that sum to TRAIT_BUDGET (point-buy)
+		const r1 = Math.random(), r2 = Math.random(), r3 = Math.random();
+		const s = r1 + r2 + r3;
+		const cons = Math.floor((r1/s) * TRAIT_BUDGET);
+		const ext = Math.floor((r2/s) * TRAIT_BUDGET);
+		const risk = TRAIT_BUDGET - cons - ext;
+		document.getElementById('trait_conscientious').value = cons; document.getElementById('trait_extroversion').value = ext; document.getElementById('trait_risk').value = risk;
+		updateTraitVals();
+		// randomize initial relationship names too
+		document.getElementById('initial_friend_name').value = ['Sam','Maya','Luis','Aisha'][Math.floor(Math.random()*4)];
+		document.getElementById('initial_rival_name').value = ['Rival','Kai','Morgan','Blake'][Math.floor(Math.random()*4)];
+	});
+
+	document.getElementById('cancelChar').addEventListener('click', ()=>{ hideCharacterCreator(); });
+
+	document.getElementById('confirmChar').addEventListener('click', ()=>{
+		const name = document.getElementById('charName').value || 'Alex';
+		const cons = Number(document.getElementById('trait_conscientious').value);
+		const ext = Number(document.getElementById('trait_extroversion').value);
+		const risk = Number(document.getElementById('trait_risk').value);
+		const sum = cons + ext + risk;
+		if(sum > TRAIT_BUDGET){ alert('Has excedido el presupuesto de rasgos. Reduce algunos valores.'); return; }
+		game.name = name;
+		game.traits.conscientious = cons;
+		game.traits.extroversion = ext;
+		game.traits.risk = risk;
+		game.renderTraits();
+		game.pushHistory('Creación de personaje: ' + name);
+		game.refreshUI();
+		SaveManager.save(game.snapshot());
+		// Seed a couple of recurring relationships if none exist yet
+		if(!game.relationships || game.relationships.length===0){
+			game.addRelationship({name:'Sam',type:'friend',affinity:70,trust:65});
+			game.addRelationship({name:'Rival',type:'rival',affinity:40,trust:30});
+		}
+		hideCharacterCreator();
+	});
+
+	// Reset button: clear saved game and reload to show creator
+	document.getElementById('resetBtn').addEventListener('click', ()=>{
+		if(confirm('¿Deseas reiniciar la vida? Se borrará la partida guardada.')){
+			localStorage.removeItem('life_sim_save');
+			location.reload();
+		}
+	});
+
+	// Create a custom recurring relationship
+	document.getElementById('createRel').addEventListener('click', ()=>{
+		const name = prompt('Nombre de la persona:','Alex'); if(!name) return;
+		const type = prompt('Tipo (friend/partner/boss/rival):','friend') || 'friend';
+		game.addRelationship({name:name,type:type,affinity:60,trust:60});
+	});
+
+	// initialize trait display
+	updateTraitVals();
+	</script>
+</body>
+</html>
