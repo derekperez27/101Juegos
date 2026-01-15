@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Control The World</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#1a1a2e;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+#info{
+    font-size:18px;
+    margin:10px;
+}
+button{
+    margin:10px;
+    padding:12px 25px;
+    font-size:16px;
+    background:#444;
+    color:white;
+    border:2px solid white;
+    cursor:pointer;
+    border-radius:5px;
+}
+button:hover{
+    background:#666;
+}
+#instructions{
+    font-size:14px;
+    color:#aaa;
+    margin:10px;
+    max-width:600px;
+    margin-left:auto;
+    margin-right:auto;
+}
+</style>
+</head>
+<body>
+
+<h1>🌍 CONTROL THE WORLD 🌍</h1>
+<div id="info">
+    <span>Nivel: <strong id="level">1</strong></span> | 
+    <span id="msg">¡Protege al jugador!</span>
+</div>
+
+<div id="instructions">
+    <strong>🎮 CONTROLES:</strong> Click en plataformas AZULES para seleccionarlas | WASD o FLECHAS para moverlas | <strong>P</strong> para colocar nuevas plataformas | El jugador camina SOLO
+</div>
+
+<canvas id="c" width="800" height="600"></canvas>
+
+<button id="restart" style="display:none;">🔄 Reintentar Nivel</button>
+
+<div style="margin-top:20px;">
+    <h3>🏆 TOP 10 RÉCORDS</h3>
+    <div id="records" style="font-size:14px;"></div>
+    <button id="clearRecords" style="font-size:14px; padding:8px 15px; margin-top:10px; background:#d32f2f;">🗑️ Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const levelSpan = document.getElementById("level");
+const msg = document.getElementById("msg");
+const restartBtn = document.getElementById("restart");
+const recordsDiv = document.getElementById("records");
+const clearRecordsBtn = document.getElementById("clearRecords");
+
+let level = 1;
+let running = true;
+let gameStarted = false; // El jugador automático no se mueve hasta que presiones ESPACIO
+let availablePlatforms = 0; // Plataformas que puedes colocar
+let placingMode = false; // Modo de colocación activado
+
+/* ===== PLAYER (AUTÓNOMO) ===== */
+const player = {
+    x: 50,
+    y: 100,
+    w: 25,
+    h: 25,
+    vx: 2, // Velocidad constante hacia la derecha
+    vy: 0,
+    onGround: false,
+    dead: false
+};
+
+/* ===== PLATAFORMAS CONTROLABLES ===== */
+let platforms = [];
+let selectedPlatform = null;
+const keys = {};
+
+/* ===== OBSTÁCULOS Y METAS ===== */
+let spikes = [];
+let goal = null;
+
+/* ===== LEVEL GENERATION ===== */
+function newLevel(){
+    platforms = [];
+    spikes = [];
+    selectedPlatform = null;
+    
+    player.x = 50;
+    player.y = 500; // Sobre la plataforma inicial
+    player.vx = 2 + level * 0.2; // Más rápido cada nivel
+    player.vy = 0;
+    player.onGround = false;
+    player.dead = false;
+    running = true;
+    gameStarted = false;
+    placingMode = false;
+    
+    // Plataformas disponibles según nivel
+    availablePlatforms = Math.min(2 + Math.floor(level / 2), 6); // Mínimo 2, máximo 6
+    
+    // Suelo base
+    platforms.push({
+        x: 0,
+        y: 550,
+        w: 150,
+        h: 50,
+        movable: false,
+        color: '#555'
+    });
+    
+    // Meta (lejos a la derecha)
+    goal = {
+        x: 700,
+        y: 480,
+        w: 60,
+        h: 70
+    };
+    
+    // Plataforma de llegada
+    platforms.push({
+        x: 680,
+        y: 550,
+        w: 120,
+        h: 50,
+        movable: false,
+        color: '#555'
+    });
+    
+    // Generar nivel según dificultad
+    if(level === 1){
+        // Nivel 1: Simple - una plataforma móvil
+        platforms.push({
+            x: 300,
+            y: 450,
+            w: 120,
+            h: 20,
+            movable: true,
+            color: '#4fc3f7'
+        });
+        
+        spikes.push({ x: 200, y: 530, w: 80, h: 20 });
+    } else if(level === 2){
+        // Nivel 2: Dos plataformas
+        platforms.push({
+            x: 250,
+            y: 400,
+            w: 100,
+            h: 20,
+            movable: true,
+            color: '#4fc3f7'
+        });
+        
+        platforms.push({
+            x: 500,
+            y: 450,
+            w: 100,
+            h: 20,
+            movable: true,
+            color: '#4fc3f7'
+        });
+        
+        spikes.push({ x: 180, y: 530, w: 100, h: 20 });
+        spikes.push({ x: 350, y: 530, w: 120, h: 20 });
+    } else if(level === 3){
+        // Nivel 3: Plataformas estrechas
+        platforms.push({
+            x: 200,
+            y: 450,
+            w: 80,
+            h: 20,
+            movable: true,
+            color: '#4fc3f7'
+        });
+        
+        platforms.push({
+            x: 350,
+            y: 400,
+            w: 80,
+            h: 20,
+            movable: true,
+            color: '#4fc3f7'
+        });
+        
+        platforms.push({
+            x: 520,
+            y: 450,
+            w: 80,
+            h: 20,
+            movable: true,
+            color: '#4fc3f7'
+        });
+        
+        spikes.push({ x: 150, y: 530, w: 500, h: 20 });
+    } else {
+        // Niveles avanzados: generación procedural
+        const platformCount = 2 + level;
+        const spikeGaps = 150 - (level * 5);
+        
+        for(let i = 0; i < platformCount; i++){
+            platforms.push({
+                x: 150 + (i * 120),
+                y: 300 + Math.random() * 150,
+                w: Math.max(60, 100 - level * 5),
+                h: 20,
+                movable: true,
+                color: '#4fc3f7'
+            });
+        }
+        
+        // Pinchos aleatorios
+        for(let i = 0; i < level; i++){
+            spikes.push({
+                x: 150 + (i * spikeGaps),
+                y: 530,
+                w: 60 + Math.random() * 40,
+                h: 20
+            });
+        }
+    }
+    
+    levelSpan.textContent = level;
+    msg.textContent = `👆 CLICK en plataformas AZULES | Tecla P para colocar (${availablePlatforms} disponibles) | ESPACIO para empezar`;
+}
+
+/* ===== INPUT ===== */
+document.addEventListener("keydown", e => {
+    keys[e.key] = true;
+    
+    // Iniciar movimiento del jugador con ESPACIO
+    if(e.code === "Space" && !gameStarted && running){
+        gameStarted = true;
+        msg.textContent = "¡El jugador se mueve! ¡Guíalo a la meta!";
+    }
+    
+    // Activar modo de colocación con P
+    if(e.code === "KeyP" && availablePlatforms > 0 && running){
+        placingMode = !placingMode;
+        selectedPlatform = null;
+        if(placingMode){
+            msg.textContent = `📦 Modo colocación: Click para colocar plataforma (${availablePlatforms} disponibles) | ESC para cancelar`;
+        } else {
+            msg.textContent = gameStarted ? "¡El jugador se mueve! ¡Guíalo a la meta!" : "👆 CLICK en plataformas AZULES | Presiona ESPACIO para empezar";
+        }
+    }
+    
+    // Cancelar modo de colocación con ESC
+    if(e.code === "Escape" && placingMode){
+        placingMode = false;
+        msg.textContent = gameStarted ? "¡El jugador se mueve! ¡Guíalo a la meta!" : "👆 CLICK en plataformas AZULES | Presiona ESPACIO para empezar";
+    }
+});
+
+document.addEventListener("keyup", e => {
+    keys[e.key] = false;
+});
+
+c.addEventListener("click", e => {
+    const rect = c.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    if(placingMode){
+        // Modo colocación: crear nueva plataforma
+        if(availablePlatforms > 0){
+            // Ajustar a cuadrícula de 40px
+            const gridX = Math.floor(mouseX / 40) * 40;
+            const gridY = Math.floor(mouseY / 40) * 40;
+            
+            // Verificar que no se superponga con otras plataformas
+            const overlaps = platforms.some(p => 
+                gridX < p.x + p.w &&
+                gridX + 100 > p.x &&
+                gridY < p.y + p.h &&
+                gridY + 20 > p.y
+            );
+            
+            // Verificar que no se superponga con pinchos
+            const onSpikes = spikes.some(s => 
+                gridX < s.x + s.w &&
+                gridX + 100 > s.x &&
+                gridY < s.y + s.h &&
+                gridY + 20 > s.y
+            );
+            
+            // Verificar que no se superponga con la meta
+            const onGoal = gridX < goal.x + goal.w &&
+                          gridX + 100 > goal.x &&
+                          gridY < goal.y + goal.h &&
+                          gridY + 20 > goal.y;
+            
+            if(!overlaps && !onSpikes && !onGoal && gridY < 580){
+                platforms.push({
+                    x: gridX,
+                    y: gridY,
+                    w: 100,
+                    h: 20,
+                    movable: true,
+                    color: '#4fc3f7'
+                });
+                availablePlatforms--;
+                
+                if(availablePlatforms === 0){
+                    placingMode = false;
+                    msg.textContent = gameStarted ? "¡El jugador se mueve! ¡Guíalo a la meta!" : "👆 CLICK en plataformas AZULES | Presiona ESPACIO para empezar";
+                } else {
+                    msg.textContent = `📦 Modo colocación: Click para colocar plataforma (${availablePlatforms} disponibles) | ESC para cancelar`;
+                }
+            }
+        }
+    } else {
+        // Seleccionar plataforma
+        selectedPlatform = null;
+        platforms.forEach(p => {
+            if(p.movable && 
+               mouseX >= p.x && mouseX <= p.x + p.w &&
+               mouseY >= p.y && mouseY <= p.y + p.h){
+                selectedPlatform = p;
+            }
+        });
+    }
+});
+
+restartBtn.addEventListener("click", () => {
+    restartBtn.style.display = "none";
+    newLevel();
+});
+
+clearRecordsBtn.addEventListener("click", () => {
+    if(confirm("¿Seguro que quieres borrar todos los récords?")){
+        localStorage.removeItem('controlWorldRecords');
+        displayRecords();
+    }
+});
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+    
+    // Mover plataforma seleccionada
+    if(selectedPlatform){
+        const moveSpeed = 4;
+        if(keys["w"] || keys["ArrowUp"]) selectedPlatform.y -= moveSpeed;
+        if(keys["s"] || keys["ArrowDown"]) selectedPlatform.y += moveSpeed;
+        if(keys["a"] || keys["ArrowLeft"]) selectedPlatform.x -= moveSpeed;
+        if(keys["d"] || keys["ArrowRight"]) selectedPlatform.x += moveSpeed;
+        
+        // Límites
+        selectedPlatform.x = Math.max(0, Math.min(800 - selectedPlatform.w, selectedPlatform.x));
+        selectedPlatform.y = Math.max(0, Math.min(580, selectedPlatform.y));
+    }
+    
+    // ===== FÍSICA DEL JUGADOR (AUTÓNOMA) =====
+    const GRAVITY = 0.6;
+    const JUMP_POWER = -12;
+    
+    // Gravedad
+    player.vy += GRAVITY;
+    
+    // Movimiento horizontal automático (solo si el juego ha empezado)
+    if(gameStarted){
+        player.x += player.vx;
+    }
+    
+    // Aplicar velocidad vertical
+    player.y += player.vy;
+    
+    // Detectar suelo
+    player.onGround = false;
+    platforms.forEach(p => {
+        if(player.x + player.w > p.x &&
+           player.x < p.x + p.w &&
+           player.y + player.h >= p.y &&
+           player.y + player.h <= p.y + 10 &&
+           player.vy >= 0){
+            player.y = p.y - player.h;
+            player.vy = 0;
+            player.onGround = true;
+        }
+    });
+    
+    // IA del jugador: saltar si detecta obstáculo o plataforma elevada adelante
+    if(player.onGround && gameStarted){
+        const lookAhead = player.x + player.w + 25; // Distancia de detección
+        const playerBottom = player.y + player.h;
+        
+        let shouldJump = false;
+        
+        // Detectar pinchos adelante
+        spikes.forEach(spike => {
+            if(lookAhead >= spike.x - 10 && 
+               lookAhead <= spike.x + spike.w + 10 &&
+               playerBottom >= spike.y - 10){
+                shouldJump = true;
+            }
+        });
+        
+        // Detectar plataforma elevada adelante que requiere salto
+        platforms.forEach(p => {
+            if(lookAhead >= p.x && lookAhead <= p.x + p.w){
+                // Si la plataforma está más alta que el jugador, saltar
+                if(p.y < playerBottom - 5 && p.y > playerBottom - 100){
+                    shouldJump = true;
+                }
+            }
+        });
+        
+        // Saltar si es necesario
+        if(shouldJump){
+            player.vy = JUMP_POWER;
+            player.onGround = false;
+        }
+    }
+    
+    // Colisión con pinchos
+    spikes.forEach(spike => {
+        if(player.x + player.w > spike.x &&
+           player.x < spike.x + spike.w &&
+           player.y + player.h > spike.y &&
+           player.y < spike.y + spike.h){
+            playerDeath();
+        }
+    });
+    
+    // Caer del mundo
+    if(player.y > 600){
+        playerDeath();
+    }
+    
+    // Llegar a la meta
+    if(player.x + player.w > goal.x &&
+       player.x < goal.x + goal.w &&
+       player.y + player.h > goal.y &&
+       player.y < goal.y + goal.h){
+        levelComplete();
+    }
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0, 0, 800, 600);
+    
+    // Fondo de cuadrícula
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+    ctx.lineWidth = 1;
+    for(let i = 0; i < 800; i += 40){
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, 600);
+        ctx.stroke();
+    }
+    for(let i = 0; i < 600; i += 40){
+        ctx.beginPath();
+        ctx.moveTo(0, i);
+        ctx.lineTo(800, i);
+        ctx.stroke();
+    }
+    
+    // Contador de plataformas disponibles
+    if(availablePlatforms > 0){
+        ctx.fillStyle = "rgba(79, 195, 247, 0.8)";
+        ctx.fillRect(10, 10, 180, 40);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 16px Arial";
+        ctx.fillText(`📦 Plataformas: ${availablePlatforms}`, 20, 35);
+        
+        if(!placingMode){
+            ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+            ctx.font = "12px Arial";
+            ctx.fillText(`(Presiona P)`, 130, 35);
+        }
+    }
+    
+    // Plataformas
+    platforms.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        
+        // Borde de selección
+        if(p === selectedPlatform){
+            ctx.strokeStyle = "#ffeb3b";
+            ctx.lineWidth = 4;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = "#ffeb3b";
+            ctx.strokeRect(p.x - 3, p.y - 3, p.w + 6, p.h + 6);
+            ctx.shadowBlur = 0;
+            
+            // Indicadores de movimiento
+            ctx.fillStyle = "#ffeb3b";
+            ctx.font = "bold 14px Arial";
+            ctx.fillText("← → ↑ ↓", p.x + p.w/2 - 20, p.y - 10);
+        }
+        
+        // Borde normal para plataformas movibles
+        if(p.movable){
+            ctx.strokeStyle = p === selectedPlatform ? "#ffeb3b" : "#fff";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(p.x, p.y, p.w, p.h);
+            
+            // Indicador de que es clickeable
+            if(p !== selectedPlatform){
+                ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+                ctx.font = "10px Arial";
+                ctx.fillText("👆 CLICK", p.x + p.w/2 - 20, p.y + p.h/2 + 4);
+            }
+        }
+    });
+    
+    // Preview de plataforma en modo colocación
+    if(placingMode){
+        const rect = c.getBoundingClientRect();
+        c.onmousemove = (e) => {
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // Guardar para el draw
+            c.previewX = Math.floor(mouseX / 40) * 40;
+            c.previewY = Math.floor(mouseY / 40) * 40;
+        };
+        
+        if(c.previewX !== undefined && c.previewY !== undefined){
+            // Verificar si es posición válida
+            const gridX = c.previewX;
+            const gridY = c.previewY;
+            
+            const overlaps = platforms.some(p => 
+                gridX < p.x + p.w &&
+                gridX + 100 > p.x &&
+                gridY < p.y + p.h &&
+                gridY + 20 > p.y
+            );
+            
+            const onSpikes = spikes.some(s => 
+                gridX < s.x + s.w &&
+                gridX + 100 > s.x &&
+                gridY < s.y + s.h &&
+                gridY + 20 > s.y
+            );
+            
+            const onGoal = gridX < goal.x + goal.w &&
+                          gridX + 100 > goal.x &&
+                          gridY < goal.y + goal.h &&
+                          gridY + 20 > goal.y;
+            
+            const isValid = !overlaps && !onSpikes && !onGoal && gridY < 580;
+            
+            ctx.fillStyle = isValid ? "rgba(79, 195, 247, 0.5)" : "rgba(255, 51, 51, 0.5)";
+            ctx.fillRect(gridX, gridY, 100, 20);
+            
+            ctx.strokeStyle = isValid ? "#4fc3f7" : "#ff3333";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(gridX, gridY, 100, 20);
+            ctx.setLineDash([]);
+        }
+    } else {
+        c.onmousemove = null;
+    }
+    
+    // Pinchos
+    spikes.forEach(spike => {
+        ctx.fillStyle = "#ff3333";
+        ctx.fillRect(spike.x, spike.y, spike.w, spike.h);
+        
+        // Triángulos de pinchos
+        ctx.fillStyle = "#cc0000";
+        const spikeCount = Math.floor(spike.w / 15);
+        for(let i = 0; i < spikeCount; i++){
+            const sx = spike.x + (i * spike.w / spikeCount);
+            const sw = spike.w / spikeCount;
+            ctx.beginPath();
+            ctx.moveTo(sx, spike.y + spike.h);
+            ctx.lineTo(sx + sw/2, spike.y);
+            ctx.lineTo(sx + sw, spike.y + spike.h);
+            ctx.fill();
+        }
+    });
+    
+    // Meta
+    ctx.fillStyle = "#00ff00";
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = "#00ff00";
+    ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+    ctx.shadowBlur = 0;
+    
+    ctx.fillStyle = "#fff";
+    ctx.font = "bold 16px Arial";
+    ctx.fillText("META", goal.x + 10, goal.y + 40);
+    
+    // Mensaje antes de empezar
+    if(!gameStarted && running){
+        ctx.fillStyle = "rgba(255, 235, 59, 0.8)";
+        ctx.font = "bold 20px Arial";
+        ctx.fillText("⏸️ PAUSA - Presiona ESPACIO para empezar", 150, 50);
+        
+        ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+        ctx.font = "14px Arial";
+        ctx.fillText("Prepara las plataformas antes de que el jugador empiece a moverse", 130, 75);
+    }
+    
+    // Jugador
+    if(!player.dead){
+        ctx.fillStyle = "#ffeb3b";
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = "#ffeb3b";
+        ctx.beginPath();
+        ctx.arc(player.x + player.w/2, player.y + player.h/2, player.w/2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        
+        // Cara sonriente
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.arc(player.x + player.w/2 - 5, player.y + player.h/2 - 3, 2, 0, Math.PI * 2);
+        ctx.arc(player.x + player.w/2 + 5, player.y + player.h/2 - 3, 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(player.x + player.w/2, player.y + player.h/2 + 2, 6, 0, Math.PI);
+        ctx.stroke();
+    } else {
+        // Jugador muerto (X)
+        ctx.strokeStyle = "#ff3333";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(player.x + 5, player.y + 5);
+        ctx.lineTo(player.x + player.w - 5, player.y + player.h - 5);
+        ctx.moveTo(player.x + player.w - 5, player.y + 5);
+        ctx.lineTo(player.x + 5, player.y + player.h - 5);
+        ctx.stroke();
+    }
+}
+
+/* ===== GAME STATES ===== */
+function playerDeath(){
+    if(player.dead) return;
+    player.dead = true;
+    running = false;
+    msg.textContent = "💀 El jugador murió - ¡Inténtalo de nuevo!";
+    restartBtn.style.display = "inline-block";
+}
+
+function levelComplete(){
+    running = false;
+    msg.textContent = `🎉 ¡Nivel ${level} completado!`;
+    level++;
+    saveRecord();
+    
+    setTimeout(() => {
+        newLevel();
+    }, 1500);
+}
+
+/* ===== RECORDS ===== */
+function saveRecord(){
+    let records = JSON.parse(localStorage.getItem('controlWorldRecords') || '[]');
+    records.push({ level: level });
+    records.sort((a,b) => b.level - a.level);
+    records = records.slice(0, 10);
+    localStorage.setItem('controlWorldRecords', JSON.stringify(records));
+    displayRecords();
+}
+
+function displayRecords(){
+    let records = JSON.parse(localStorage.getItem('controlWorldRecords') || '[]');
+    if(records.length === 0){
+        recordsDiv.innerHTML = "<p style='color:#666;'>No hay récords aún</p>";
+        return;
+    }
+    
+    let html = "<table style='margin:0 auto; border-collapse:collapse;'>";
+    html += "<tr style='color:#aaa;'><th style='padding:5px;'>#</th><th style='padding:5px;'>Nivel Alcanzado</th></tr>";
+    
+    records.forEach((r, i) => {
+        const medal = i===0 ? "🥇" : i===1 ? "🥈" : i===2 ? "🥉" : (i+1);
+        html += `<tr style='border-top:1px solid #333;'>`;
+        html += `<td style='padding:5px;'>${medal}</td>`;
+        html += `<td style='padding:5px; color:#4fc3f7;'>Nivel ${r.level}</td>`;
+        html += `</tr>`;
+    });
+    
+    html += "</table>";
+    recordsDiv.innerHTML = html;
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+displayRecords();
+newLevel();
+loop();
+</script>
+
+</body>
+</html>

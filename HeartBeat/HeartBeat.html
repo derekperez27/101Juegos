@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Heartbeat</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    text-align:center;
+    font-family:Arial;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+
+#records h2 {
+    color: #ff0066;
+}
+
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #ff0066;
+}
+
+.record-rank {
+    font-weight: bold;
+    color: #ff0066;
+    margin-right: 10px;
+}
+
+.record-time {
+    color: #ffd700;
+    font-weight: bold;
+}
+
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+
+button {
+    margin: 10px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+}
+
+#restartBtn {
+    background: #4CAF50;
+    color: white;
+}
+
+#clearRecordsBtn {
+    background: #d32f2f;
+    color: white;
+    padding: 8px 15px;
+    font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<h1>❤️ HEARTBEAT</h1>
+<p>Tiempo: <span id="time">0</span>s</p>
+<p id="msg">Muévete SOLO cuando el pulso sea rojo</p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<button id="restartBtn" style="display:none;" onclick="restartGame()">Volver a Jugar</button>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button id="clearRecordsBtn" onclick="clearRecords()">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const timeSpan = document.getElementById("time");
+const msg = document.getElementById("msg");
+
+let time = 0;
+let running = true;
+let timeInterval = null;
+let pulseInterval = null;
+
+// Audio para el pulso
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+function playBeep() {
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 400; // Frecuencia del beep
+    oscillator.type = 'sine';
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.15);
+}
+
+/* ===== PLAYER ===== */
+const player = { x:200, y:200, r:8 };
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('heartbeatRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(time) {
+    const records = loadRecords();
+    records.push({
+        time: time,
+        date: new Date().toLocaleDateString()
+    });
+    // Ordenar por tiempo (mayor a menor)
+    records.sort((a, b) => b.time - a.time);
+    // Guardar solo los mejores 10
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('heartbeatRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-time">${record.time}s</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('heartbeatRecords');
+        displayRecords();
+    }
+}
+
+// Mostrar récords al cargar la página
+displayRecords();
+
+/* ===== OBSTACLES ===== */
+let obstacles = [];
+
+/* ===== HEARTBEAT ===== */
+let pulse = false;
+let pulseTimer = 0;
+let pulseSpeed = 1000;
+
+function triggerPulse(){
+    pulse = true;
+    pulseTimer = 30; // Aumentado de 15 a 30 frames (más duración)
+    playBeep(); // Reproducir sonido
+}
+
+function startPulseInterval() {
+    if (pulseInterval) clearInterval(pulseInterval);
+    pulseInterval = setInterval(() => {
+        if (running) {
+            triggerPulse();
+            // Aumentar velocidad de pulso cada 5 segundos
+            if (time % 5 === 0 && time > 0) {
+                pulseSpeed = Math.max(400, pulseSpeed - 50);
+                startPulseInterval(); // Reiniciar intervalo con nueva velocidad
+            }
+        }
+    }, pulseSpeed);
+}
+
+startPulseInterval();
+
+/* ===== CREATE OBSTACLES ===== */
+let obstacleInterval = null;
+let obstacleSpeed = 3000;
+
+function spawnObstacle(){
+    // Velocidad base que aumenta con el tiempo
+    const speedMultiplier = 1 + (time * 0.08);
+    obstacles.push({
+        x: Math.random()*400,
+        y: Math.random()*400,
+        vx: (Math.random()*2-1) * speedMultiplier,
+        vy: (Math.random()*2-1) * speedMultiplier,
+        r: 10
+    });
+}
+
+function startObstacleInterval() {
+    if (obstacleInterval) clearInterval(obstacleInterval);
+    obstacleInterval = setInterval(()=>{
+        if(running) {
+            spawnObstacle();
+            // Generar obstáculos más rápido con el tiempo
+            if (time % 10 === 0 && time > 0) {
+                obstacleSpeed = Math.max(1000, obstacleSpeed - 200);
+                startObstacleInterval();
+            }
+        }
+    }, obstacleSpeed);
+}
+
+startObstacleInterval();
+
+/* ===== INPUT ===== */
+document.addEventListener("keydown",e=>{
+    if(!running) return;
+
+    if(!pulse){
+        gameOver();
+        return;
+    }
+
+    if(e.key==="w") player.y -= 25;
+    if(e.key==="s") player.y += 25;
+    if(e.key==="a") player.x -= 25;
+    if(e.key==="d") player.x += 25;
+});
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    if(pulseTimer>0) pulseTimer--;
+    else pulse=false;
+
+    obstacles.forEach(o=>{
+        o.x += o.vx;
+        o.y += o.vy;
+
+        if(o.x<0||o.x>400) o.vx*=-1;
+        if(o.y<0||o.y>400) o.vy*=-1;
+
+        if(Math.hypot(player.x-o.x,player.y-o.y) < player.r + o.r){
+            gameOver();
+        }
+    });
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    // Fondo rojo pulsante o negro
+    if(pulse){
+        const intensity = pulseTimer / 30; // Ajustado a 30
+        ctx.fillStyle=`rgba(255,0,0,${intensity * 0.4})`; // Más intenso
+        ctx.fillRect(0, 0, 400, 400);
+    } else {
+        ctx.clearRect(0,0,400,400);
+    }
+
+    // jugador
+    ctx.fillStyle="cyan";
+    ctx.beginPath();
+    ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+    ctx.fill();
+
+    // obstáculos
+    ctx.fillStyle="#FFA500"; // Naranja para diferenciar del rojo
+    obstacles.forEach(o=>{
+        ctx.beginPath();
+        ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
+        ctx.fill();
+    });
+}
+
+/* ===== GAME OVER ===== */
+function gameOver(){
+    running=false;
+    if (timeInterval) clearInterval(timeInterval);
+    if (pulseInterval) clearInterval(pulseInterval);
+    if (obstacleInterval) clearInterval(obstacleInterval);
+    saveRecord(time);
+    document.getElementById("restartBtn").style.display = "inline-block";
+    msg.textContent="💀 FUERA DE RITMO - Tiempo: " + time + "s";
+}
+
+function restartGame() {
+    running = true;
+    time = 0;
+    pulse = false;
+    pulseTimer = 0;
+    pulseSpeed = 1000;
+    obstacleSpeed = 3000;
+    obstacles = [];
+    player.x = 200;
+    player.y = 200;
+    
+    timeSpan.textContent = 0;
+    msg.textContent = "Muévete SOLO cuando el pulso sea rojo";
+    document.getElementById("restartBtn").style.display = "none";
+    
+    startPulseInterval();
+    startObstacleInterval();
+    startTimeCounter();
+}
+
+/* ===== LOOP ===== */
+function startTimeCounter() {
+    if (timeInterval) clearInterval(timeInterval);
+    timeInterval = setInterval(()=>{
+        if(running){
+            time++;
+            timeSpan.textContent=time;
+        }
+    },1000);
+}
+
+startTimeCounter();
+
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>

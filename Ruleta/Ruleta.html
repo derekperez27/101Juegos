@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>🎰 RULETA EUROPEA</title>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #1a0000 0%, #4a0000 100%);
+    color: #fff;
+    overflow-x: hidden;
+    min-height: 100vh;
+}
+
+#configScreen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+#configScreen h1 {
+    font-size: 56px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px rgba(255,215,0,0.5);
+    color: #ffd700;
+}
+
+.bankroll-display {
+    font-size: 32px;
+    margin: 20px;
+    color: #ffd700;
+    font-weight: bold;
+    padding: 15px 30px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 15px;
+    border: 2px solid #ffd700;
+}
+
+.config-option {
+    margin: 20px;
+    background: rgba(0,0,0,0.6);
+    padding: 25px;
+    border-radius: 15px;
+    border: 2px solid #ffd700;
+}
+
+.config-option label {
+    font-size: 20px;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 10px;
+    color: #ffd700;
+}
+
+.config-option input {
+    width: 250px;
+    padding: 12px;
+    font-size: 18px;
+    border-radius: 8px;
+    border: 2px solid #333;
+    background: #222;
+    color: #fff;
+}
+
+#startBtn {
+    padding: 20px 60px;
+    font-size: 28px;
+    font-weight: bold;
+    background: linear-gradient(145deg, #ffd700, #ffed4e);
+    color: #000;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+    margin-top: 30px;
+    transition: all 0.3s;
+    box-shadow: 0 5px 15px rgba(255,215,0,0.5);
+}
+
+#startBtn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(255,215,0,0.8);
+}
+
+#gameScreen {
+    display: none;
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+#gameInfo {
+    text-align: center;
+    margin-bottom: 20px;
+    background: rgba(0,0,0,0.6);
+    padding: 20px;
+    border-radius: 15px;
+    border: 2px solid #ffd700;
+}
+
+#balance {
+    font-size: 32px;
+    color: #ffd700;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(255,215,0,0.5);
+}
+
+#totalBet {
+    font-size: 24px;
+    color: #4af;
+    margin: 10px 0;
+}
+
+#rouletteContainer {
+    display: flex;
+    justify-content: center;
+    margin: 30px 0;
+    perspective: 1000px;
+}
+
+#roulette {
+    width: 400px;
+    height: 400px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #8B4513 0%, #654321 50%, #3d2817 100%);
+    border: 20px solid #ffd700;
+    position: relative;
+    box-shadow: 0 0 50px rgba(0,0,0,0.8), inset 0 0 30px rgba(0,0,0,0.5);
+}
+
+#rouletteWheel {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    position: relative;
+    transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+}
+
+.roulette-number {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 12px;
+    border: 2px solid #ffd700;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    left: 50%;
+    top: 50%;
+    margin-left: -15px;
+    margin-top: -15px;
+}
+
+.red {
+    background: linear-gradient(145deg, #ff0000, #cc0000);
+    color: #fff;
+}
+
+.black {
+    background: linear-gradient(145deg, #333, #000);
+    color: #fff;
+}
+
+.green {
+    background: linear-gradient(145deg, #00aa00, #006600);
+    color: #fff;
+}
+
+#ball {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: radial-gradient(circle at 30% 30%, #fff, #ccc);
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    z-index: 10;
+}
+
+#result {
+    text-align: center;
+    font-size: 36px;
+    font-weight: bold;
+    margin: 20px 0;
+    min-height: 50px;
+    color: #ffd700;
+    text-shadow: 0 0 10px rgba(255,215,0,0.5);
+}
+
+#bettingTable {
+    background: linear-gradient(145deg, #0a5f0a, #0d7f0d);
+    padding: 20px;
+    border-radius: 15px;
+    border: 3px solid #ffd700;
+    margin: 20px 0;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.5);
+}
+
+.bet-section {
+    margin: 15px 0;
+}
+
+.bet-section h3 {
+    color: #ffd700;
+    margin-bottom: 10px;
+    font-size: 20px;
+}
+
+.bet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 8px;
+}
+
+.bet-button {
+    padding: 15px;
+    font-size: 16px;
+    font-weight: bold;
+    border: 2px solid #ffd700;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: rgba(0,0,0,0.4);
+    color: #fff;
+}
+
+.bet-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 15px rgba(255,215,0,0.5);
+    background: rgba(255,215,0,0.2);
+}
+
+.bet-button.active {
+    background: rgba(255,215,0,0.3);
+    border-color: #ffed4e;
+    box-shadow: 0 0 20px rgba(255,215,0,0.8);
+}
+
+.bet-button.red-bet {
+    background: rgba(200,0,0,0.3);
+}
+
+.bet-button.black-bet {
+    background: rgba(0,0,0,0.6);
+}
+
+.number-grid {
+    display: grid;
+    grid-template-rows: repeat(3, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 5px;
+    margin: 15px 0;
+}
+
+.number-bet {
+    padding: 15px 10px;
+    font-size: 16px;
+    font-weight: bold;
+    border: 2px solid #ffd700;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#chipSelector {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.chip {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 4px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+    transition: all 0.2s;
+}
+
+.chip:hover {
+    transform: scale(1.1);
+}
+
+.chip.selected {
+    border-color: #ffd700;
+    box-shadow: 0 0 20px rgba(255,215,0,0.8);
+}
+
+.chip-1 { background: #fff; color: #000; }
+.chip-5 { background: #f00; color: #fff; }
+.chip-10 { background: #00f; color: #fff; }
+.chip-25 { background: #0f0; color: #000; }
+.chip-100 { background: #000; color: #ffd700; }
+.chip-500 { background: #ff00ff; color: #fff; }
+
+#controls {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+button {
+    padding: 15px 30px;
+    font-size: 18px;
+    font-weight: bold;
+    border: 2px solid #ffd700;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+#spinBtn {
+    background: linear-gradient(145deg, #00aa00, #006600);
+    color: #fff;
+}
+
+#clearBtn {
+    background: linear-gradient(145deg, #aa0000, #660000);
+    color: #fff;
+}
+
+#exitBtn {
+    background: linear-gradient(145deg, #666, #333);
+    color: #fff;
+}
+
+button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.bet-chip {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #ffd700;
+    border: 3px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 12px;
+    color: #000;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    pointer-events: none;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 5;
+}
+
+.bet-visual {
+    position: relative;
+}
+
+.bet-visual .bet-chip-display {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: #ffd700;
+    color: #000;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: bold;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    z-index: 10;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(1440deg); }
+}
+
+@keyframes ballSpin {
+    0% { transform: translate(-50%, -50%) rotate(0deg) translateX(150px); }
+    100% { transform: translate(-50%, -50%) rotate(-1800deg) translateX(150px); }
+}
+</style>
+</head>
+<body>
+
+<!-- PANTALLA DE CONFIGURACIÓN -->
+<div id="configScreen">
+    <h1>🎰 RULETA EUROPEA 🎰</h1>
+    
+    <div class="bankroll-display">
+        💰 Bankroll Total: $<span id="bankrollDisplay">10000</span>
+    </div>
+    
+    <div class="config-option">
+        <label>Dinero para jugar (máx. tu bankroll):</label>
+        <input type="number" id="buyIn" min="100" step="100" value="1000">
+    </div>
+    
+    <button id="startBtn" onclick="startGame()">JUGAR</button>
+</div>
+
+<!-- PANTALLA DE JUEGO -->
+<div id="gameScreen">
+    <div id="gameInfo">
+        <div id="balance">Balance: $<span id="balanceAmount">1000</span></div>
+        <div id="totalBet">Apuesta Total: $<span id="totalBetAmount">0</span></div>
+    </div>
+    
+    <div id="rouletteContainer">
+        <div id="roulette">
+            <div id="rouletteWheel"></div>
+            <div id="ball"></div>
+        </div>
+    </div>
+    
+    <div id="result"></div>
+    
+    <div id="chipSelector">
+        <div class="chip chip-1 selected" onclick="selectChip(1)">$1</div>
+        <div class="chip chip-5" onclick="selectChip(5)">$5</div>
+        <div class="chip chip-10" onclick="selectChip(10)">$10</div>
+        <div class="chip chip-25" onclick="selectChip(25)">$25</div>
+        <div class="chip chip-100" onclick="selectChip(100)">$100</div>
+        <div class="chip chip-500" onclick="selectChip(500)">$500</div>
+    </div>
+    
+    <div id="bettingTable">
+        <!-- NÚMEROS INDIVIDUALES (PLENO) -->
+        <div class="bet-section">
+            <h3>📍 Números (Pleno x36)</h3>
+            <div class="number-grid" id="numberGrid"></div>
+        </div>
+        
+        <!-- APUESTAS SIMPLES -->
+        <div class="bet-section">
+            <h3>🎲 Apuestas Simples (x2)</h3>
+            <div class="bet-grid">
+                <button class="bet-button red-bet" onclick="placeBet('red', 2)">ROJO</button>
+                <button class="bet-button black-bet" onclick="placeBet('black', 2)">NEGRO</button>
+                <button class="bet-button" onclick="placeBet('even', 2)">PAR</button>
+                <button class="bet-button" onclick="placeBet('odd', 2)">IMPAR</button>
+                <button class="bet-button" onclick="placeBet('low', 2)">1-18</button>
+                <button class="bet-button" onclick="placeBet('high', 2)">19-36</button>
+            </div>
+        </div>
+        
+        <!-- DOCENAS -->
+        <div class="bet-section">
+            <h3>📊 Docenas (x3)</h3>
+            <div class="bet-grid">
+                <button class="bet-button" onclick="placeBet('dozen1', 3)">1ª DOCENA (1-12)</button>
+                <button class="bet-button" onclick="placeBet('dozen2', 3)">2ª DOCENA (13-24)</button>
+                <button class="bet-button" onclick="placeBet('dozen3', 3)">3ª DOCENA (25-36)</button>
+            </div>
+        </div>
+        
+        <!-- COLUMNAS -->
+        <div class="bet-section">
+            <h3>📈 Columnas (x3)</h3>
+            <div class="bet-grid">
+                <button class="bet-button" onclick="placeBet('col1', 3)">COLUMNA 1</button>
+                <button class="bet-button" onclick="placeBet('col2', 3)">COLUMNA 2</button>
+                <button class="bet-button" onclick="placeBet('col3', 3)">COLUMNA 3</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="controls">
+        <button id="spinBtn" onclick="spin()">🎰 GIRAR ($<span id="spinCost">0</span>)</button>
+        <button id="clearBtn" onclick="clearBets()">🗑️ LIMPIAR APUESTAS</button>
+        <button id="retireBtn" onclick="retireGame()" style="background: linear-gradient(145deg, #0066aa, #004466); color: #fff;">💰 RETIRARSE</button>
+        <button id="exitBtn" onclick="exitGame()">🚪 SALIR</button>
+    </div>
+</div>
+
+<script>
+// ========== CONFIGURACIÓN ==========
+let bankroll = 10000;
+let balance = 1000;
+let initialBuyIn = 0; // Cantidad inicial apostada al entrar
+let currentChip = 1;
+let bets = {};
+let totalBetAmount = 0;
+let isSpinning = false;
+
+// Números rojos y negros en ruleta europea
+const redNumbers = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+const blackNumbers = [2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35];
+
+// ========== INICIALIZACIÓN ==========
+window.onload = function() {
+    const saved = localStorage.getItem('rouletteBankroll');
+    if(saved) {
+        bankroll = parseInt(saved);
+    }
+    
+    // Si está en negativo, resetear a $10,000
+    if(bankroll <= 0) {
+        bankroll = 10000;
+        localStorage.setItem('rouletteBankroll', bankroll);
+    }
+    
+    document.getElementById('bankrollDisplay').textContent = bankroll;
+    
+    // Crear rueda de ruleta
+    createRouletteWheel();
+    createNumberGrid();
+};
+
+// Orden real de ruleta europea
+const rouletteOrder = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+
+function createRouletteWheel() {
+    const wheel = document.getElementById('rouletteWheel');
+    
+    rouletteOrder.forEach((num, index) => {
+        const angle = (index / rouletteOrder.length) * 360;
+        const div = document.createElement('div');
+        div.className = 'roulette-number ' + getNumberColor(num);
+        div.textContent = num;
+        div.setAttribute('data-number', num);
+        
+        // Calcular posición sin rotar el texto
+        const radius = 165;
+        const angleRad = (angle * Math.PI) / 180;
+        const x = Math.cos(angleRad) * radius;
+        const y = Math.sin(angleRad) * radius;
+        
+        div.style.transform = `translate(${x}px, ${y}px)`;
+        wheel.appendChild(div);
+    });
+}
+
+function createNumberGrid() {
+    const grid = document.getElementById('numberGrid');
+    
+    // Cero verde (ocupa las 3 filas de la primera columna)
+    const zero = document.createElement('button');
+    zero.className = 'number-bet green';
+    zero.textContent = '0';
+    zero.style.gridRow = 'span 3';
+    zero.onclick = () => placeBet('number_0', 36);
+    grid.appendChild(zero);
+    
+    // Números 1-36 organizados por columnas verticales
+    // Cada columna tiene: número alto, medio, bajo (3, 2, 1 | 6, 5, 4 | etc.)
+    for(let col = 0; col < 12; col++) {
+        const base = col * 3;
+        // Agregar de arriba a abajo: 3, 2, 1 | 6, 5, 4 | 9, 8, 7...
+        for(let row = 3; row >= 1; row--) {
+            const num = base + row;
+            const btn = document.createElement('button');
+            btn.className = 'number-bet ' + getNumberColor(num);
+            btn.textContent = num;
+            btn.onclick = () => placeBet('number_' + num, 36);
+            grid.appendChild(btn);
+        }
+    }
+}
+
+function getNumberColor(num) {
+    if(num === 0) return 'green';
+    return redNumbers.includes(num) ? 'red' : 'black';
+}
+
+// ========== GESTIÓN DE FICHAS ==========
+function selectChip(value) {
+    currentChip = value;
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+    event.target.classList.add('selected');
+}
+
+// ========== APUESTAS ==========
+function placeBet(betType, payout) {
+    if(isSpinning) return;
+    
+    if(balance < currentChip) {
+        showResult('❌ No tienes suficiente dinero', '#f00');
+        return;
+    }
+    
+    if(!bets[betType]) {
+        bets[betType] = { amount: 0, payout: payout };
+    }
+    
+    bets[betType].amount += currentChip;
+    balance -= currentChip;
+    totalBetAmount += currentChip;
+    
+    updateUI();
+    highlightBet(betType);
+}
+
+function highlightBet(betType) {
+    // Resaltar visualmente la apuesta y mostrar ficha
+    const buttons = document.querySelectorAll('.bet-button, .number-bet');
+    buttons.forEach(btn => {
+        const btnText = btn.textContent.toLowerCase();
+        const betTypeClean = betType.replace('number_', '').toLowerCase();
+        
+        let isMatch = false;
+        
+        if(betType.startsWith('number_') && btnText === betTypeClean) {
+            isMatch = true;
+        } else if(betType === 'red' && btnText.includes('rojo')) {
+            isMatch = true;
+        } else if(betType === 'black' && btnText.includes('negro')) {
+            isMatch = true;
+        } else if(betType === 'even' && btnText.includes('par')) {
+            isMatch = true;
+        } else if(betType === 'odd' && btnText.includes('impar')) {
+            isMatch = true;
+        } else if(betType === 'low' && btnText.includes('1-18')) {
+            isMatch = true;
+        } else if(betType === 'high' && btnText.includes('19-36')) {
+            isMatch = true;
+        } else if(betType === 'dozen1' && btnText.includes('1ª')) {
+            isMatch = true;
+        } else if(betType === 'dozen2' && btnText.includes('2ª')) {
+            isMatch = true;
+        } else if(betType === 'dozen3' && btnText.includes('3ª')) {
+            isMatch = true;
+        } else if(betType === 'col1' && btnText.includes('columna 1')) {
+            isMatch = true;
+        } else if(betType === 'col2' && btnText.includes('columna 2')) {
+            isMatch = true;
+        } else if(betType === 'col3' && btnText.includes('columna 3')) {
+            isMatch = true;
+        }
+        
+        if(isMatch) {
+            btn.classList.add('active');
+            btn.classList.add('bet-visual');
+            
+            // Añadir o actualizar chip visual
+            let chipDisplay = btn.querySelector('.bet-chip-display');
+            if(!chipDisplay) {
+                chipDisplay = document.createElement('div');
+                chipDisplay.className = 'bet-chip-display';
+                btn.appendChild(chipDisplay);
+            }
+            chipDisplay.textContent = '$' + bets[betType].amount;
+        }
+    });
+}
+
+function clearBets() {
+    if(isSpinning) return;
+    
+    balance += totalBetAmount;
+    bets = {};
+    totalBetAmount = 0;
+    
+    document.querySelectorAll('.bet-button, .number-bet').forEach(btn => {
+        btn.classList.remove('active');
+        btn.classList.remove('bet-visual');
+        const chipDisplay = btn.querySelector('.bet-chip-display');
+        if(chipDisplay) chipDisplay.remove();
+    });
+    
+    updateUI();
+    showResult('Apuestas limpiadas', '#ffd700');
+}
+
+// ========== GIRAR RULETA ==========
+function spin() {
+    if(isSpinning) return;
+    
+    if(Object.keys(bets).length === 0) {
+        showResult('❌ Debes hacer al menos una apuesta', '#f00');
+        return;
+    }
+    
+    if(totalBetAmount > balance + totalBetAmount) {
+        showResult('❌ No tienes suficiente dinero', '#f00');
+        return;
+    }
+    
+    isSpinning = true;
+    document.getElementById('spinBtn').disabled = true;
+    showResult('🎰 Girando...', '#ffd700');
+    
+    // Número ganador aleatorio (0-36)
+    const winningNumber = Math.floor(Math.random() * 37);
+    
+    // Encontrar posición del número en el orden de la ruleta
+    const numberIndex = rouletteOrder.indexOf(winningNumber);
+    const anglePerNumber = 360 / rouletteOrder.length;
+    
+    // Animación
+    const wheel = document.getElementById('rouletteWheel');
+    const ball = document.getElementById('ball');
+    
+    const spins = 4 + Math.random() * 2; // 4-6 vueltas
+    // Calcular rotación para que el número ganador quede arriba
+    const finalRotation = spins * 360 + numberIndex * anglePerNumber;
+    
+    wheel.style.transition = 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)';
+    wheel.style.transform = `rotate(${finalRotation}deg)`;
+    
+    ball.style.transition = 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)';
+    ball.style.transform = `translate(-50%, -50%) rotate(-${finalRotation * 5}deg) translateX(150px)`;
+    
+    setTimeout(() => {
+        resolveSpinResult(winningNumber);
+        
+        // Reset animación
+        wheel.style.transition = 'none';
+        wheel.style.transform = 'rotate(0deg)';
+        ball.style.transition = 'none';
+        ball.style.transform = 'translate(-50%, -50%)';
+        
+        setTimeout(() => {
+            wheel.style.transition = 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)';
+            ball.style.transition = 'transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99)';
+        }, 50);
+        
+        isSpinning = false;
+        document.getElementById('spinBtn').disabled = false;
+    }, 4000);
+}
+
+function resolveSpinResult(winningNumber) {
+    const color = getNumberColor(winningNumber);
+    let winnings = 0;
+    let winMessage = '';
+    
+    // Mostrar número ganador
+    const colorName = color === 'red' ? 'ROJO' : color === 'black' ? 'NEGRO' : 'VERDE';
+    showResult(`🎯 Número ganador: ${winningNumber} (${colorName})`, color === 'red' ? '#f00' : color === 'black' ? '#000' : '#0a0');
+    
+    // Verificar cada apuesta
+    for(let betType in bets) {
+        const bet = bets[betType];
+        let won = false;
+        
+        if(betType.startsWith('number_')) {
+            const betNum = parseInt(betType.split('_')[1]);
+            won = betNum === winningNumber;
+        } else if(betType === 'red') {
+            won = redNumbers.includes(winningNumber);
+        } else if(betType === 'black') {
+            won = blackNumbers.includes(winningNumber);
+        } else if(betType === 'even') {
+            won = winningNumber !== 0 && winningNumber % 2 === 0;
+        } else if(betType === 'odd') {
+            won = winningNumber !== 0 && winningNumber % 2 === 1;
+        } else if(betType === 'low') {
+            won = winningNumber >= 1 && winningNumber <= 18;
+        } else if(betType === 'high') {
+            won = winningNumber >= 19 && winningNumber <= 36;
+        } else if(betType === 'dozen1') {
+            won = winningNumber >= 1 && winningNumber <= 12;
+        } else if(betType === 'dozen2') {
+            won = winningNumber >= 13 && winningNumber <= 24;
+        } else if(betType === 'dozen3') {
+            won = winningNumber >= 25 && winningNumber <= 36;
+        } else if(betType === 'col1') {
+            won = winningNumber % 3 === 1 && winningNumber !== 0;
+        } else if(betType === 'col2') {
+            won = winningNumber % 3 === 2;
+        } else if(betType === 'col3') {
+            won = winningNumber % 3 === 0 && winningNumber !== 0;
+        }
+        
+        if(won) {
+            const prize = bet.amount * bet.payout;
+            winnings += prize;
+            winMessage += `\n✅ ${betType}: +$${prize}`;
+        }
+    }
+    
+    balance += winnings;
+    
+    // Actualizar bankroll total
+    bankroll = bankroll - totalBetAmount + winnings;
+    localStorage.setItem('rouletteBankroll', bankroll);
+    
+    if(winnings > 0) {
+        const profit = winnings - totalBetAmount;
+        setTimeout(() => {
+            showResult(`🎉 ¡GANASTE $${winnings}! (Beneficio: $${profit})`, '#0f0');
+        }, 500);
+    } else {
+        setTimeout(() => {
+            showResult(`❌ Perdiste $${totalBetAmount}`, '#f00');
+        }, 500);
+    }
+    
+    // Limpiar apuestas
+    bets = {};
+    totalBetAmount = 0;
+    document.querySelectorAll('.bet-button, .number-bet').forEach(btn => {
+        btn.classList.remove('active');
+        btn.classList.remove('bet-visual');
+        const chipDisplay = btn.querySelector('.bet-chip-display');
+        if(chipDisplay) chipDisplay.remove();
+    });
+    
+    // Si se quedó sin dinero, dar más
+    if(balance <= 0 && bankroll <= 0) {
+        bankroll = 10000;
+        balance = 1000;
+        localStorage.setItem('rouletteBankroll', bankroll);
+        setTimeout(() => {
+            showResult('💰 Te hemos dado $10,000 para seguir jugando', '#ffd700');
+        }, 2000);
+    }
+    
+    updateUI();
+}
+
+// ========== UI ==========
+function updateUI() {
+    document.getElementById('balanceAmount').textContent = balance;
+    document.getElementById('totalBetAmount').textContent = totalBetAmount;
+    document.getElementById('spinCost').textContent = totalBetAmount;
+}
+
+function showResult(msg, color = '#ffd700') {
+    const resultDiv = document.getElementById('result');
+    resultDiv.textContent = msg;
+    resultDiv.style.color = color;
+}
+
+// ========== JUEGO ==========
+function startGame() {
+    const buyIn = parseInt(document.getElementById('buyIn').value);
+    
+    if(buyIn < 100) {
+        alert('El mínimo es $100');
+        return;
+    }
+    
+    if(buyIn > bankroll) {
+        alert(`No tienes suficiente dinero. Bankroll actual: $${bankroll}`);
+        return;
+    }
+    
+    initialBuyIn = buyIn; // Guardar buy-in inicial
+    balance = buyIn;
+    bankroll -= buyIn;
+    
+    document.getElementById('configScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'block';
+    
+    updateUI();
+}
+
+function retireGame() {
+    if(isSpinning) {
+        alert('Espera a que termine el giro');
+        return;
+    }
+    
+    if(totalBetAmount > 0) {
+        alert('No puedes retirarte con apuestas activas. Limpia tus apuestas primero.');
+        return;
+    }
+    
+    // Calcular ganancia/pérdida
+    const profit = balance - initialBuyIn;
+    
+    // Devolver balance al bankroll
+    bankroll += balance;
+    localStorage.setItem('rouletteBankroll', bankroll);
+    
+    if(profit > 0) {
+        alert(`¡Te retiras con una ganancia de $${profit}!\nBankroll total: $${bankroll}`);
+    } else if(profit < 0) {
+        alert(`Te retiras con una pérdida de $${Math.abs(profit)}\nBankroll total: $${bankroll}`);
+    } else {
+        alert(`Te retiras sin ganancias ni pérdidas\nBankroll total: $${bankroll}`);
+    }
+    
+    location.reload();
+}
+
+function exitGame() {
+    if(isSpinning) {
+        alert('Espera a que termine el giro');
+        return;
+    }
+    
+    if(totalBetAmount > 0 && !confirm('Tienes apuestas activas. ¿Seguro que quieres salir? Perderás las apuestas.')) {
+        return;
+    }
+    
+    // Calcular ganancia/pérdida real
+    const profit = balance - initialBuyIn;
+    
+    if(profit >= 0) {
+        // Ganó o empató: devolver todo al bankroll
+        bankroll += balance;
+    } else {
+        // Perdió: solo pierde el buy-in inicial (ya fue restado al inicio)
+        // Si balance > 0, devolver lo que queda
+        if(balance > 0) {
+            bankroll += balance;
+        }
+        // La pérdida máxima es el initialBuyIn que ya fue restado
+    }
+    
+    localStorage.setItem('rouletteBankroll', bankroll);
+    
+    location.reload();
+}
+</script>
+
+</body>
+</html>

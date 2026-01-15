@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Escalator Hell</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+</style>
+</head>
+<body>
+
+<h1>🪜 ESCALATOR HELL</h1>
+<p>Nivel: <span id="level">1</span> | Tiempo: <span id="time">0</span>s</p>
+<p id="msg">Sube. El suelo no quiere.</p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<button id="restart" style="display:none; font-size:18px; padding:10px 20px; margin:10px; cursor:pointer;">🔄 Reintentar</button>
+
+<div style="margin-top:20px;">
+    <h3>🏆 TOP 10 RÉCORDS</h3>
+    <div id="records" style="font-size:14px;"></div>
+    <button id="clearRecords" style="font-size:14px; padding:8px 15px; margin-top:10px; cursor:pointer; background:#d32f2f; color:white; border:none; border-radius:5px;">🗑️ Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const levelSpan = document.getElementById("level");
+const timeSpan = document.getElementById("time");
+const msg = document.getElementById("msg");
+const restartBtn = document.getElementById("restart");
+const recordsDiv = document.getElementById("records");
+const clearRecordsBtn = document.getElementById("clearRecords");
+
+const ROWS = 10;
+const CELL = 40;
+const GRAVITY = 0.4;
+const JUMP_POWER = -8;
+
+let level = 1;
+let running = true;
+let time = 0;
+let startTime = Date.now();
+let animOffset = 0;
+
+/* ===== PLAYER ===== */
+const player = {
+    x: 200,
+    y: 360,
+    w: 20,
+    h: 20,
+    vy: 0,
+    onGround: false
+};
+
+/* ===== INPUT ===== */
+const keys = {};
+
+/* ===== ESCALATORS ===== */
+let belts = [];
+let obstacles = [];
+
+function newLevel(){
+    belts = [];
+    obstacles = [];
+    player.x = 200;
+    player.y = 360;
+    player.vy = 0;
+    player.onGround = false;
+
+    // Crear escaleras con velocidades variadas
+    for(let i=0;i<ROWS;i++){
+        const baseSpeed = 0.8 + level*0.25;
+        const speedVariation = Math.random() * 0.5;
+        
+        belts.push({
+            y: i*CELL,
+            dir: Math.random()<0.5?-1:1,
+            speed: baseSpeed + speedVariation
+        });
+    }
+
+    // Añadir obstáculos móviles desde nivel 3
+    if(level >= 3){
+        const obstacleCount = Math.min(1 + Math.floor(level / 3), 5);
+        for(let i=0; i<obstacleCount; i++){
+            const row = 1 + Math.floor(Math.random() * (ROWS - 2));
+            obstacles.push({
+                x: Math.random() * 350,
+                row: row,
+                w: 15,
+                h: 15,
+                speed: belts[row].speed
+            });
+        }
+    }
+
+    levelSpan.textContent = level;
+}
+
+/* ===== INPUT ===== */
+document.addEventListener("keydown",e=>{
+    if(!running) return;
+    keys[e.key] = true;
+    
+    // Saltar solo al presionar (no mantener)
+    if((e.key==="w" || e.key==="ArrowUp") && player.onGround){
+        player.vy = JUMP_POWER;
+        player.onGround = false;
+    }
+});
+
+document.addEventListener("keyup",e=>{
+    keys[e.key] = false;
+});
+
+restartBtn.addEventListener("click", () => {
+    level = 1;
+    time = 0;
+    startTime = Date.now();
+    running = true;
+    restartBtn.style.display = "none";
+    msg.textContent = "Sube. El suelo no quiere.";
+    newLevel();
+});
+
+clearRecordsBtn.addEventListener("click", () => {
+    if(confirm("¿Seguro que quieres borrar todos los récords?")){
+        localStorage.removeItem('escalatorRecords');
+        displayRecords();
+    }
+});
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    // Actualizar tiempo
+    time = ((Date.now() - startTime) / 1000).toFixed(1);
+    timeSpan.textContent = time;
+
+    // Animación de escaleras
+    animOffset += 2;
+    if(animOffset > 40) animOffset = 0;
+
+    // Movimiento horizontal continuo
+    const moveSpeed = 3.5;
+    if(keys["a"] || keys["ArrowLeft"]) player.x -= moveSpeed;
+    if(keys["d"] || keys["ArrowRight"]) player.x += moveSpeed;
+
+    // Gravedad
+    player.vy += GRAVITY;
+    player.y += player.vy;
+
+    // Detectar fila actual
+    const currentRow = Math.floor((player.y + player.h) / CELL);
+    
+    // Aterrizar en escalera
+    player.onGround = false;
+    if(currentRow >= 0 && currentRow < ROWS){
+        const beltTop = currentRow * CELL;
+        const beltBottom = beltTop + CELL;
+        
+        // Si el jugador está sobre la escalera
+        if(player.y + player.h >= beltTop && player.y + player.h <= beltBottom && player.vy >= 0){
+            player.y = beltTop - player.h;
+            player.vy = 0;
+            player.onGround = true;
+        }
+    }
+
+    // Empuje de escalera si está sobre ella
+    if(player.onGround && belts[currentRow]){
+        player.x += belts[currentRow].dir * belts[currentRow].speed;
+    }
+
+    // Mover obstáculos
+    obstacles.forEach(obs => {
+        const belt = belts[obs.row];
+        obs.x += belt.dir * obs.speed;
+        
+        // Rebotar en bordes
+        if(obs.x < 0) obs.x = 0;
+        if(obs.x > 400 - obs.w) obs.x = 400 - obs.w;
+    });
+
+    // Colisión con obstáculos
+    obstacles.forEach(obs => {
+        const obsY = obs.row * CELL + (CELL - obs.h) / 2;
+        if(player.x < obs.x + obs.w &&
+           player.x + player.w > obs.x &&
+           player.y < obsY + obs.h &&
+           player.y + player.h > obsY){
+            gameOver();
+        }
+    });
+
+    // Límites laterales
+    player.x = Math.max(0, Math.min(400-player.w, player.x));
+
+    // Caerse abajo
+    if(player.y > 400){
+        gameOver();
+    }
+
+    // Llegar arriba
+    if(player.y < -player.h){
+        level++;
+        newLevel();
+    }
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0,0,400,400);
+
+    // Escaleras con animación
+    belts.forEach((b,i)=>{
+        // Fondo de escalera
+        const gradient = ctx.createLinearGradient(0, b.y, 0, b.y + CELL);
+        gradient.addColorStop(0, b.dir>0 ? "#444" : "#333");
+        gradient.addColorStop(1, b.dir>0 ? "#333" : "#222");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, b.y, 400, CELL);
+
+        // Líneas de movimiento animadas
+        ctx.strokeStyle = "rgba(255,255,255,0.3)";
+        ctx.lineWidth = 2;
+        const lineSpacing = 20;
+        const offset = b.dir > 0 ? animOffset : -animOffset;
+        
+        for(let x = offset % lineSpacing - lineSpacing; x < 400; x += lineSpacing){
+            ctx.beginPath();
+            ctx.moveTo(x, b.y + 10);
+            ctx.lineTo(x + 10, b.y + 10);
+            ctx.moveTo(x, b.y + 20);
+            ctx.lineTo(x + 10, b.y + 20);
+            ctx.moveTo(x, b.y + 30);
+            ctx.lineTo(x + 10, b.y + 30);
+            ctx.stroke();
+        }
+
+        // Indicador de velocidad
+        ctx.fillStyle="rgba(255,255,255,0.5)";
+        ctx.font = "12px Arial";
+        ctx.fillText(b.dir>0?">>>":"<<<", 10, b.y+25);
+        
+        // Mostrar velocidad si es alta
+        if(b.speed > 2){
+            ctx.fillStyle="rgba(255,100,100,0.7)";
+            ctx.fillText("⚡", 380, b.y+25);
+        }
+    });
+
+    // Obstáculos
+    obstacles.forEach(obs => {
+        const obsY = obs.row * CELL + (CELL - obs.h) / 2;
+        ctx.fillStyle = "#ff3333";
+        ctx.fillRect(obs.x, obsY, obs.w, obs.h);
+        
+        // Brillo peligroso
+        ctx.strokeStyle = "#ff6666";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(obs.x - 2, obsY - 2, obs.w + 4, obs.h + 4);
+    });
+
+    // Meta con efecto brillante
+    const metaGradient = ctx.createLinearGradient(0, 0, 400, 0);
+    metaGradient.addColorStop(0, "#00ff00");
+    metaGradient.addColorStop(0.5, "#00ff88");
+    metaGradient.addColorStop(1, "#00ff00");
+    ctx.fillStyle = metaGradient;
+    ctx.fillRect(0,0,400,15);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 10px Arial";
+    ctx.fillText("META", 180, 11);
+
+    // Jugador con sombra
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "cyan";
+    ctx.fillStyle="cyan";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+    ctx.shadowBlur = 0;
+    
+    // Indicador de salto
+    if(!player.onGround){
+        ctx.fillStyle="rgba(255,255,255,0.5)";
+        ctx.font = "10px Arial";
+        ctx.fillText("↑", player.x + 5, player.y - 5);
+    }
+}
+
+/* ===== GAME OVER ===== */
+function gameOver(){
+    running=false;
+    msg.textContent=`💀 EL INFIERNO TE TRAGÓ — Nivel ${level}, Tiempo ${time}s`;
+    restartBtn.style.display = "inline-block";
+    saveRecord();
+}
+
+/* ===== RECORDS ===== */
+function saveRecord(){
+    let records = JSON.parse(localStorage.getItem('escalatorRecords') || '[]');
+    records.push({ level: level, time: parseFloat(time) });
+    records.sort((a,b) => {
+        if(b.level !== a.level) return b.level - a.level;
+        return a.time - b.time;
+    });
+    records = records.slice(0, 10);
+    localStorage.setItem('escalatorRecords', JSON.stringify(records));
+    displayRecords();
+}
+
+function displayRecords(){
+    let records = JSON.parse(localStorage.getItem('escalatorRecords') || '[]');
+    if(records.length === 0){
+        recordsDiv.innerHTML = "<p style='color:#666;'>No hay récords aún</p>";
+        return;
+    }
+    
+    let html = "<table style='margin:0 auto; border-collapse:collapse;'>";
+    html += "<tr style='color:#aaa;'><th style='padding:5px;'>#</th><th style='padding:5px;'>Nivel</th><th style='padding:5px;'>Tiempo</th></tr>";
+    
+    records.forEach((r, i) => {
+        const medal = i===0 ? "🥇" : i===1 ? "🥈" : i===2 ? "🥉" : (i+1);
+        html += `<tr style='border-top:1px solid #333;'>`;
+        html += `<td style='padding:5px;'>${medal}</td>`;
+        html += `<td style='padding:5px; color:#4fc3f7;'>Nivel ${r.level}</td>`;
+        html += `<td style='padding:5px; color:#ffeb3b;'>${r.time}s</td>`;
+        html += `</tr>`;
+    });
+    
+    html += "</table>";
+    recordsDiv.innerHTML = html;
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+displayRecords();
+newLevel();
+loop();
+</script>
+
+</body>
+</html>

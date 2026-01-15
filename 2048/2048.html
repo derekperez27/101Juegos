@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>2048</title>
+<style>
+body {
+    margin: 0;
+    background: #111;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
+h1 {
+    margin: 15px;
+}
+#game {
+    width: 320px;
+    height: 320px;
+    margin: 20px auto;
+    background: #444;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+}
+.cell {
+    width: 70px;
+    height: 70px;
+    background: #222;
+    border-radius: 5px;
+    font-size: 24px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.v2 { background: #eee; color: #000; }
+.v4 { background: #ddd; color: #000; }
+.v8 { background: orange; }
+.v16 { background: darkorange; }
+.v32 { background: orangered; }
+.v64 { background: red; }
+.v128 { background: gold; color: #000; }
+.v256 { background: yellow; color: #000; }
+.v512 { background: lightgreen; color: #000; }
+.v1024 { background: lime; color: #000; }
+.v2048 { background: cyan; color: #000; }
+button {
+    padding: 8px 16px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+
+#records h2 {
+    color: #ffd700;
+}
+
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #ffd700;
+}
+
+.record-rank {
+    font-weight: bold;
+    color: #ffd700;
+    margin-right: 10px;
+}
+
+.record-score {
+    color: #4CAF50;
+    font-weight: bold;
+}
+
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+</style>
+</head>
+<body>
+
+<h1>🔢 2048</h1>
+<p>Puntuación: <span id="score">0</span></p>
+<div id="game"></div>
+<button onclick="startGame()">Reiniciar</button>
+
+<div id="records">
+    <h2>🏆 Mejores Puntuaciones</h2>
+    <div id="recordsList"></div>
+    <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récords</button>
+</div>
+
+<script>
+const game = document.getElementById("game");
+const scoreSpan = document.getElementById("score");
+
+let grid = [];
+let score = 0;
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('2048Records');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(score) {
+    if (score === 0) return; // No guardar si no hay puntuación
+    
+    const records = loadRecords();
+    records.push({
+        score: score,
+        date: new Date().toLocaleDateString()
+    });
+    // Ordenar de MAYOR a MENOR puntuación
+    records.sort((a, b) => b.score - a.score);
+    // Guardar solo los mejores 10
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('2048Records', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-score">${record.score} puntos</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('2048Records');
+        displayRecords();
+    }
+}
+
+// Mostrar récords al cargar la página
+displayRecords();
+
+function startGame() {
+    grid = Array(16).fill(0);
+    score = 0;
+    scoreSpan.textContent = 0;
+    addNumber();
+    addNumber();
+    draw();
+}
+
+function addNumber() {
+    const empty = grid
+        .map((v, i) => v === 0 ? i : null)
+        .filter(v => v !== null);
+    if (empty.length === 0) return;
+    const i = empty[Math.floor(Math.random() * empty.length)];
+    grid[i] = Math.random() < 0.9 ? 2 : 4;
+}
+
+function draw() {
+    game.innerHTML = "";
+    grid.forEach(v => {
+        const cell = document.createElement("div");
+        cell.className = "cell";
+        if (v !== 0) {
+            cell.textContent = v;
+            cell.classList.add("v" + v);
+        }
+        game.appendChild(cell);
+    });
+}
+
+function slide(row) {
+    row = row.filter(v => v);
+    for (let i = 0; i < row.length - 1; i++) {
+        if (row[i] === row[i + 1]) {
+            row[i] *= 2;
+            score += row[i];
+            row[i + 1] = 0;
+        }
+    }
+    row = row.filter(v => v);
+    while (row.length < 4) row.push(0);
+    return row;
+}
+
+function move(dir) {
+    let old = [...grid];
+
+    for (let i = 0; i < 4; i++) {
+        let row = [];
+        for (let j = 0; j < 4; j++) {
+            let index =
+                dir === "left"  ? i * 4 + j :
+                dir === "right" ? i * 4 + (3 - j) :
+                dir === "up"    ? j * 4 + i :
+                                  (3 - j) * 4 + i;
+            row.push(grid[index]);
+        }
+
+        row = slide(row);
+
+        for (let j = 0; j < 4; j++) {
+            let index =
+                dir === "left"  ? i * 4 + j :
+                dir === "right" ? i * 4 + (3 - j) :
+                dir === "up"    ? j * 4 + i :
+                                  (3 - j) * 4 + i;
+            grid[index] = row[j];
+        }
+    }
+
+    if (grid.toString() !== old.toString()) {
+        addNumber();
+        draw();
+        scoreSpan.textContent = score;
+        if (isGameOver()) {
+            setTimeout(() => alert("GAME OVER\nPuntuación: " + score), 100);
+        }
+    }
+}
+
+function isGameOver() {
+    if (grid.includes(0)) return false;
+    for (let i = 0; i < 16; i++) {
+        const x = i % 4;
+        const y = Math.floor(i / 4);
+        if (x < 3 && grid[i] === grid[i + 1]) return false;
+        if (y < 3 && grid[i] === grid[i + 4]) return false;
+    }
+    // Guardar récord cuando se acaba el juego
+    saveRecord(score);
+    return true;
+}
+
+document.addEventListener("keydown", e => {
+    if (e.key === "ArrowLeft") move("left");
+    if (e.key === "ArrowRight") move("right");
+    if (e.key === "ArrowUp") move("up");
+    if (e.key === "ArrowDown") move("down");
+});
+
+startGame();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Beat Clicker</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        #game {
+            width: 400px;
+            height: 300px;
+            margin: 30px auto;
+            border: 2px solid white;
+            position: relative;
+            background: #000;
+        }
+
+        #bar {
+            position: absolute;
+            bottom: 40px;
+            left: 20px;
+            width: 360px;
+            height: 12px;
+            background: #333;
+        }
+
+        #perfect {
+            position: absolute;
+            left: 160px;
+            width: 40px;
+            height: 100%;
+            background: lime;
+        }
+
+        #good {
+            position: absolute;
+            left: 120px;
+            width: 120px;
+            height: 100%;
+            background: rgba(255,255,0,0.6);
+        }
+
+        #marker {
+            position: absolute;
+            bottom: 25px;
+            width: 6px;
+            height: 40px;
+            background: red;
+        }
+
+        #msg {
+            margin-top: 5px;
+            height: 20px;
+        }
+
+        #records {
+            margin: 20px auto;
+            max-width: 500px;
+        }
+
+        #records h2 {
+            color: #ffd700;
+        }
+
+        #recordsList {
+            background: #222;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            font-size: 18px;
+        }
+
+        .best-record {
+            background: linear-gradient(135deg, #333 0%, #222 100%);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #ffd700;
+            margin: 10px 0;
+        }
+
+        .best-record div {
+            margin: 8px 0;
+        }
+
+        .record-score {
+            color: #4CAF50;
+            font-weight: bold;
+            font-size: 24px;
+        }
+
+        .record-combo {
+            color: #ff6b6b;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        .no-records {
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🎵 Beat Clicker</h1>
+
+    <div id="game">
+        <div id="bar">
+            <div id="good"></div>
+            <div id="perfect"></div>
+        </div>
+        <div id="marker"></div>
+    </div>
+
+    <div id="msg">Haz 1 PERFECT para empezar</div>
+
+    <p>Tiempo: <span id="time">0</span> s</p>
+    <p>Puntuación: <span id="score">0</span></p>
+    <p>Combo: <span id="combo">0</span></p>
+    <p>Multiplicador: x<span id="multiplier">1.0</span></p>
+
+    <button onclick="startGame()">Empezar</button>
+
+    <div id="records">
+        <h2>🏆 Mejor Récord</h2>
+        <div id="recordsList"></div>
+        <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récord</button>
+    </div>
+
+    <script>
+        const marker = document.getElementById("marker");
+        const scoreSpan = document.getElementById("score");
+        const comboSpan = document.getElementById("combo");
+        const multiplierSpan = document.getElementById("multiplier");
+        const timeSpan = document.getElementById("time");
+        const msg = document.getElementById("msg");
+
+        let pos = 20;
+        let dir = 1;
+        let speed = 3;
+
+        let score = 0;
+        let combo = 0;
+        let multiplier = 1.0;
+        let time = 0;
+
+        let rhythmStarted = false;
+
+        let moveLoop, timeLoop;
+
+        /* ===== RÉCORDS ===== */
+        function loadRecords() {
+            const record = localStorage.getItem('beatClickerBestRecord');
+            return record ? JSON.parse(record) : null;
+        }
+
+        function saveRecord(currentScore, currentCombo, currentTime) {
+            if (currentScore === 0) return; // No guardar si no hay puntuación
+            
+            const bestRecord = loadRecords();
+            
+            // Solo guardar si es mejor que el récord actual
+            if (!bestRecord || currentScore > bestRecord.score) {
+                const newRecord = {
+                    score: currentScore,
+                    combo: currentCombo,
+                    time: currentTime,
+                    date: new Date().toLocaleDateString()
+                };
+                localStorage.setItem('beatClickerBestRecord', JSON.stringify(newRecord));
+                displayRecords();
+            }
+        }
+
+        function displayRecords() {
+            const record = loadRecords();
+            const recordsList = document.getElementById('recordsList');
+            
+            if (!record) {
+                recordsList.innerHTML = '<div class="no-records">No hay récord aún. ¡Sé el primero!</div>';
+                return;
+            }
+
+            recordsList.innerHTML = `
+                <div class="best-record">
+                    <div>🥇 <span style="color: #ffd700;">MEJOR PUNTUACIÓN</span></div>
+                    <div class="record-score">${record.score} puntos</div>
+                    <div class="record-combo">Combo Máximo: ${record.combo}</div>
+                    <div style="color: #999; font-size: 14px;">Tiempo: ${record.time}s</div>
+                    <div style="color: #666; font-size: 12px;">Fecha: ${record.date}</div>
+                </div>
+            `;
+        }
+
+        function clearRecords() {
+            if (confirm('¿Estás seguro de que quieres borrar el récord?')) {
+                localStorage.removeItem('beatClickerBestRecord');
+                displayRecords();
+            }
+        }
+
+        // Mostrar récord al cargar la página
+        displayRecords();
+
+        function playBeat() {
+            const ctx = new AudioContext();
+            const osc = ctx.createOscillator();
+            osc.frequency.value = 440;
+            osc.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.1);
+        }
+
+        function moveMarker() {
+            pos += speed * dir;
+            if (pos > 374 || pos < 20) dir *= -1;
+            marker.style.left = pos + "px";
+        }
+
+        function checkHit() {
+            playBeat();
+            const center = pos + 3;
+
+            // PERFECT
+            if (center >= 180 && center <= 220) {
+
+                pos = 200;
+                dir = Math.random() < 0.5 ? -1 : 1;
+                marker.style.left = pos + "px";
+
+                if (!rhythmStarted) {
+                    rhythmStarted = true;
+                    msg.textContent = "¡Ritmo iniciado!";
+                }
+
+                combo++;
+                multiplier += 0.1;
+                score += Math.round(10 * multiplier);
+            }
+            // GOOD
+            else if (center >= 140 && center <= 260) {
+
+                if (!rhythmStarted) {
+                    msg.textContent = "Necesitas 1 PERFECT";
+                    return;
+                }
+
+                combo++;
+                score += Math.round(5 * multiplier);
+            }
+            // MISS
+            else {
+                // Guardar récord antes de reiniciar combo
+                if (rhythmStarted && score > 0) {
+                    saveRecord(score, combo, time);
+                }
+                
+                combo = 0;
+                multiplier = 1.0;
+                msg.textContent = rhythmStarted
+                    ? "Fallo"
+                    : "Haz 1 PERFECT para empezar";
+            }
+
+            scoreSpan.textContent = score;
+            comboSpan.textContent = combo;
+            multiplierSpan.textContent = multiplier.toFixed(1);
+        }
+
+        
+
+        function startGame() {
+            pos = 20;
+            speed = 3;
+            score = 0;
+            combo = 0;
+            multiplier = 1.0;
+            time = 0;
+            rhythmStarted = false;
+
+            scoreSpan.textContent = 0;
+            comboSpan.textContent = 0;
+            multiplierSpan.textContent = "1.0";
+            timeSpan.textContent = 0;
+            msg.textContent = "Haz 1 PERFECT para empezar";
+
+            clearInterval(moveLoop);
+            clearInterval(timeLoop);
+
+            moveLoop = setInterval(moveMarker, 16);
+
+            timeLoop = setInterval(() => {
+                time++;
+                timeSpan.textContent = time;
+                speed += 0.12;
+            }, 1000);
+        }
+
+        document.addEventListener("keydown", e => {
+            if (e.code === "Space") checkHit();
+        });
+        document.addEventListener("click", checkHit);
+    </script>
+
+</body>
+</html>

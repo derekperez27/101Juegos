@@ -1,0 +1,1220 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>Rally Car - Prototipo</title>
+	<style>
+		html,body{height:100%;margin:0;background:#87ceeb;font-family:Arial,Helvetica,sans-serif}
+		#game{display:block;background:linear-gradient(#87ceeb,#d9f4ff);width:100%;height:100vh}
+		#hud{position:absolute;left:12px;top:12px;color:#111;text-shadow:0 1px 0 #fff}
+		#hud div{background:rgba(255,255,255,0.85);padding:6px 10px;border-radius:6px;margin-bottom:6px}
+		#shop{position:absolute;right:12px;top:12px;width:280px;background:rgba(255,255,255,0.95);padding:8px;border-radius:8px}
+		button{padding:6px 8px;margin-top:6px}
+		#message{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:#fff;padding:14px 18px;border-radius:8px;display:none}
+	</style>
+</head>
+<body>
+	<canvas id="game"></canvas>
+	<div id="hud">
+		<div id="score">Monedas (sesión): 0</div>
+		<div id="bank">Banco: 0</div>
+		<div id="distance">Distancia: 0 m</div>
+		<div id="fuel">Combustible: 0%</div>
+		<div id="speed">Velocidad: 0</div>
+		<div id="slope">Pendiente: 0°</div>
+	</div>
+	<div id="shop">
+		<strong>Tienda / Mejora</strong>
+		<div id="upgrades">
+			<div>Motor: <span id="up-speed-level">0</span> <button id="buy-speed">Comprar (10)</button></div>
+			<div>Suspensión: <span id="up-stability-level">0</span> <button id="buy-stability">Comprar (12)</button></div>
+			<div>Ruedas: <span id="up-jump-level">0</span> <button id="buy-jump">Comprar (8)</button></div>
+			<div>Tanque: <span id="up-fuel-level">0</span> <button id="buy-fuel">Comprar (14)</button></div>
+		</div>
+		<div style="margin-top:8px">Controles: Arriba = acelerar, Abajo = frenar, A/D = moverse lateral, Izq/Dcha = balancear, Space = salto, R = reiniciar</div>
+		<div style="font-size:12px;margin-top:6px;color:#444">Subidas empinadas requieren potencia; si no tienes potencia el coche cederá y podrá volcar.</div>
+	</div>
+	<div id="message"></div>
+
+	<script>
+	// ============================================
+	// CONFIGURACIÓN Y CONSTANTES GLOBALES
+	// ============================================
+	
+	const canvas = document.getElementById('game');
+	const ctx = canvas.getContext('2d');
+	let W = 0, H = 0;
+
+	// Constantes de física
+	const GRAVITY = 1200;              // Fuerza de gravedad (px/s²)
+	const SEGMENT_W = 24;              // Ancho de cada segmento de terreno (px)
+	const WHEEL_RADIUS = 18;           // Radio de las ruedas (px)
+	const CAR_MASS = 1.0;              // Masa del coche (relativa)
+	const ROTATIONAL_INERTIA = 0.3;    // Resistencia a rotación (menor = más ágil)
+	
+	// Estado del terreno
+	let terrain = [];
+	let offset = 0;                    // Distancia horizontal recorrida
+	let terrainSeed = Math.random();   // Semilla para generación procedural
+	
+	// Modos de desarrollo
+	let flatMode = false;              // true = terreno plano para pruebas
+	let disableImpacts = false;        // true = sin colisiones con obstáculos
+
+	// ============================================
+	// SISTEMA DE PROGRESIÓN Y PERSISTENCIA
+	// ============================================
+	
+	const bankKey = 'rally_bank_v2';
+	const upgradesKey = 'rally_upgrades_v2';
+	const recordsKey = 'rally_records_v2';
+	
+	let bank = parseInt(localStorage.getItem(bankKey)) || 0;
+	let sessionCoins = 0;
+	let bestDistance = parseInt(localStorage.getItem(recordsKey)) || 0;
+	
+	const upgrades = {
+		speed: 0,      // Motor: +50 velocidad máx, +120 aceleración por nivel
+		stability: 0,  // Suspensión: +10% estabilidad, -8% balanceo por nivel
+		jump: 0,       // Ruedas: +60 impulso de salto por nivel
+		fuel: 0        // Tanque: +40% capacidad por nivel
+	};
+	
+	function loadUpgrades() {
+		try {
+			const saved = localStorage.getItem(upgradesKey);
+			if (saved) Object.assign(upgrades, JSON.parse(saved));
+		} catch(e) { console.warn('Error cargando mejoras:', e); }
+	}
+	
+	function saveUpgrades() {
+		localStorage.setItem(upgradesKey, JSON.stringify(upgrades));
+	}
+	
+	function saveBank() {
+		localStorage.setItem(bankKey, String(bank));
+	}
+	
+	function saveRecord(distance) {
+		if (distance > bestDistance) {
+			bestDistance = distance;
+			localStorage.setItem(recordsKey, String(distance));
+		}
+	}
+	
+	loadUpgrades();
+
+	// ============================================
+	// VARIABLES DE JUEGO
+	// ============================================
+	
+	let fuel = 0;
+	let fuelMax = 100;
+	let distanceMeters = 0;
+	let running = true;
+	
+	// Partículas de efectos visuales
+	let particles = [];
+
+	
+	const car = {
+		// Posición y movimiento
+		baseX: 0,          // Posición X base en pantalla
+		offsetX: 0,        // Desplazamiento lateral (para esquivar)
+		y: 0,              // Posición Y vertical
+		vx: 0,             // Velocidad horizontal (px/s)
+		vy: 0,             // Velocidad vertical (px/s)
+		
+		// Rotación y física rotacional
+		angle: 0,          // Ángulo de inclinación (radianes)
+		av: 0,             // Velocidad angular (rad/s)
+		
+		// Dimensiones físicas
+		width: 120,
+		height: 44,
+		mass: CAR_MASS,
+		
+		// Centro de masas (relativo al centro del coche)
+		comX: -8,          // Ligeramente atrás (más estabilidad trasera)
+		comY: 4,           // Ligeramente abajo (baja el centro de gravedad)
+		
+		// Estado
+		grounded: false,   // ¿En contacto con el suelo?
+		maxOffset: 180,    // Máximo desplazamiento lateral permitido
+		wheelRot: 0        // Rotación acumulada de ruedas (radianes)
+	};
+
+
+	// ============================================
+	// MONEDAS Y OBSTÁCULOS
+	// ============================================
+	
+	let coins = [];
+	let obstacles = [];
+
+	// ============================================
+	// FUNCIONES AUXILIARES
+	// ============================================
+	
+	function rand(a, b) {
+		return a + Math.random() * (b - a);
+	}
+
+	// ============================================
+	// GENERACIÓN DE TERRENO PROCEDURAL
+	// ============================================
+	
+	/**
+	 * Genera terreno plano para pruebas
+	 */
+	function generateFlatTerrain() {
+		terrain = [];
+		const base = H * 0.65;
+		const length = 3000;
+		
+		for (let i = 0; i < length; i++) {
+			terrain.push({ x: i * SEGMENT_W, y: base });
+		}
+		
+		obstacles = [];
+		coins = [];
+		
+		// Monedas distribuidas uniformemente
+		for (let i = 30; i < length - 30; i += 18) {
+			if (Math.random() < 0.7) {
+				coins.push({ i: i, collected: false });
+			}
+		}
+	}
+	
+	/**
+	 * Genera terreno procedural con dificultad progresiva
+	 * La dificultad aumenta con la distancia mediante:
+	 * - Amplitudes más grandes (colinas más altas)
+	 * - Frecuencias más variadas (terreno más irregular)
+	 * - Mayor densidad de obstáculos
+	 */
+	function generateTerrain() {
+		// Suavizar subidas y bajadas: amplitudes reducidas y longitudes de onda mayores
+		terrain = [];
+		const base = H * 0.65;
+		const length = 6000;
+		// generar alturas con ondas de baja frecuencia y amplitud menor
+		for (let i = 0; i < length; i++) {
+			const x = i * SEGMENT_W;
+			const progressFactor = Math.min(1.0, i / 3000); // progresión más lenta
+			
+			// Amplitudes más suaves, escalan ligeramente con la distancia
+			const baseAmp1 = 60 + progressFactor * 90;   // reducida
+			const baseAmp2 = 20 + progressFactor * 50;   // reducida
+			
+			// Frecuencias mayores => pendientes más largas y suaves
+			const freq1 = 400 + Math.sin(i / 1200) * 120 * (1 + progressFactor);
+			const freq2 = 120 + Math.cos(i / 600) * 60 * (1 + progressFactor);
+			
+			const h = -Math.sin(i / freq1) * baseAmp1 - Math.sin(i / freq2) * baseAmp2;
+			
+			// Baches atenuados (más pequeños)
+			const bumpFactor = progressFactor > 0.7 ? Math.sin(i / 40) * 8 * (progressFactor - 0.7) : 0;
+			terrain.push({ x: x, y: base + h + bumpFactor });
+		}
+		
+		// Suavizado: aplicar varios pases de media móvil para eliminar picos agudos
+		for (let pass = 0; pass < 3; pass++) {
+			for (let i = 1; i < terrain.length - 1; i++) {
+				const prev = terrain[i - 1].y;
+				const cur = terrain[i].y;
+				const next = terrain[i + 1].y;
+				terrain[i].y = (prev + cur + next) / 3;
+			}
+		}
+		
+		// Distribuir obstáculos y monedas con densidad progresiva pero evitando picos
+		obstacles = [];
+		coins = [];
+		for (let i = 30; i < length - 30; i++) {
+			const progressFactor = Math.min(1.0, i / 3000);
+			const coinChance = 0.55 - progressFactor * 0.12;
+			if (i % Math.floor(rand(8, 20)) === 0 && Math.random() < coinChance) coins.push({ i: i, collected: false });
+			const obstacleChance = 0.03 + progressFactor * 0.06;
+			if (i % Math.floor(rand(12, 40)) === 0 && Math.random() < obstacleChance) {
+				const type = Math.random() < 0.5 ? 'rock' : 'ramp';
+				obstacles.push({ i: i, type: type });
+			}
+		}
+	}
+
+	// ============================================
+	// INICIALIZACIÓN Y RESIZE
+	// ============================================
+	
+	function resize() {
+		W = canvas.width = innerWidth;
+		H = canvas.height = innerHeight;
+		car.baseX = W * 0.28;
+		
+		// Regenerar terreno
+		if (flatMode) generateFlatTerrain();
+		else generateTerrain();
+		
+		car.y = H * 0.6 - car.height / 2;
+	}
+	
+	addEventListener('resize', resize);
+
+
+	// ============================================
+	// CONTROLES DE TECLADO
+	// ============================================
+	
+	const keys = {};
+	addEventListener('keydown', e => {
+		keys[e.key] = true;
+		if (e.code === 'Space') e.preventDefault();
+	});
+	addEventListener('keyup', e => {
+		keys[e.key] = false;
+	});
+
+	// ============================================
+	// FÍSICA DEL TERRENO
+	// ============================================
+	
+	/**
+	 * Calcula la altura del terreno en una posición X del mundo
+	 * Interpola linealmente entre segmentos para suavidad
+	 */
+	function groundHeightAt(worldX) {
+		const idx = Math.floor(worldX / SEGMENT_W);
+		const a = terrain[idx] || terrain[terrain.length - 1];
+		const b = terrain[idx + 1] || a;
+		const t = (worldX - a.x) / (b.x - a.x || 1);
+		return a.y * (1 - t) + b.y * t;
+	}
+	
+	/**
+	 * Calcula el ángulo de la pendiente en una posición X
+	 */
+	function getSlopeAngle(worldX) {
+		const leftY = groundHeightAt(worldX - 8);
+		const rightY = groundHeightAt(worldX + 8);
+		return Math.atan2(rightY - leftY, 16);
+	}
+
+
+	// ============================================
+	// SISTEMA DE PARTÍCULAS
+	// ============================================
+	
+	/**
+	 * Crea partículas de efectos visuales
+	 */
+	function createParticles(x, y, count, color, velocityRange) {
+		for (let i = 0; i < count; i++) {
+			particles.push({
+				x: x,
+				y: y,
+				vx: rand(-velocityRange, velocityRange),
+				vy: rand(-velocityRange * 1.5, -velocityRange * 0.5),
+				life: 1.0,
+				decay: rand(0.02, 0.04),
+				size: rand(2, 6),
+				color: color
+			});
+		}
+	}
+	
+	/**
+	 * Actualiza y dibuja partículas
+	 */
+	function updateParticles(dt) {
+		const dtSec = dt / 1000;
+		for (let i = particles.length - 1; i >= 0; i--) {
+			const p = particles[i];
+			p.x += p.vx * dtSec;
+			p.y += p.vy * dtSec;
+			p.vy += GRAVITY * 0.3 * dtSec; // Gravedad reducida para partículas
+			p.life -= p.decay;
+			
+			if (p.life <= 0) {
+				particles.splice(i, 1);
+			}
+		}
+	}
+	
+	function drawParticles() {
+		for (const p of particles) {
+			ctx.globalAlpha = p.life;
+			ctx.fillStyle = p.color;
+			ctx.fillRect(p.x - offset, p.y, p.size, p.size);
+		}
+		ctx.globalAlpha = 1.0;
+	}
+
+	// ============================================
+	// RESET Y INICIO DE PARTIDA
+	// ============================================
+	
+	function reset() {
+		sessionCoins = 0;
+		offset = 0;
+		distanceMeters = 0;
+		car.vx = 0;
+		car.vy = 0;
+		car.angle = 0;
+		car.av = 0;
+		car.offsetX = 0;
+		car.wheelRot = 0;
+		running = true;
+		particles = [];
+		
+		document.getElementById('message').style.display = 'none';
+		
+		// Regenerar terreno
+		if (flatMode) generateFlatTerrain();
+		else generateTerrain();
+		
+		// Configurar combustible según mejoras
+		fuelMax = 100 + upgrades.fuel * 40;
+		fuel = fuelMax;
+		
+		// Posicionar coche en el suelo
+		car.y = groundHeightAt(car.baseX) - car.height / 2;
+		
+		// Iniciar audio del motor
+		startEngineAudio();
+	}
+
+
+	// ============================================
+	// BUCLE PRINCIPAL DE FÍSICA
+	// ============================================
+	
+	/**
+	 * Actualiza la física del vehículo y el estado del juego
+	 * Este es el corazón del motor de física arcade
+	 */
+	function update(dt) {
+		const dtSec = dt / 1000;
+		
+		// ========================================
+		// 1. PARÁMETROS DE RENDIMIENTO DEL VEHÍCULO
+		// ========================================
+		
+		// Velocidad máxima aumenta con mejoras de motor
+		const maxSpeed = 240 + upgrades.speed * 50;
+		
+		// Aceleración base + bonus de mejoras
+		const baseAccel = 700 + upgrades.speed * 120;
+		
+		// Fuerza de frenado
+		const brakeForce = 1200;
+		
+		// Resistencia del aire (drag) - ligeramente reducido con mejoras de motor
+		const airDrag = 0.985 - Math.min(0.02, upgrades.speed * 0.002);
+		
+		// ========================================
+		// 2. ENTRADA DEL JUGADOR
+		// ========================================
+		
+		const throttle = (keys.ArrowUp || keys.w || keys.W) ? 1 : 0;
+		const braking = (keys.ArrowDown || keys.s || keys.S) ? 1 : 0;
+		
+		// Aceleración: solo si hay combustible
+		if (throttle && fuel > 0) {
+			car.vx += baseAccel * dtSec;
+			
+			// Efecto visual: partículas de escape ocasionales
+			if (Math.random() < 0.3 && car.grounded) {
+				const exhaustX = car.baseX + car.offsetX - car.width / 2;
+				const exhaustY = car.y + car.height / 2;
+				createParticles(exhaustX + offset, exhaustY, 1, 'rgba(100,100,100,0.5)', 30);
+			}
+		} else {
+			// Sin combustible: desaceleración natural
+			car.vx -= 220 * dtSec;
+		}
+		
+		// Frenado
+		if (braking) {
+			if (car.vx > 0) {
+				car.vx -= brakeForce * dtSec;
+				
+				// Efecto visual: partículas de polvo al frenar
+				if (car.grounded && Math.random() < 0.4) {
+					const wheelX = car.baseX + car.offsetX + car.width / 4;
+					const wheelY = car.y + car.height / 2;
+					createParticles(wheelX + offset, wheelY, 1, 'rgba(139,90,43,0.6)', 40);
+				}
+			} else {
+				// Retroceso limitado
+				car.vx = Math.max(car.vx - brakeForce * dtSec, -maxSpeed * 0.3);
+			}
+		}
+		
+		// Movimiento lateral (esquivar obstáculos)
+		const lateralSpeed = 260;
+		if (keys.a || keys.A) car.offsetX -= lateralSpeed * dtSec;
+		if (keys.d || keys.D) car.offsetX += lateralSpeed * dtSec;
+		
+		// Retorno suave al centro + límites laterales
+		car.offsetX *= 0.92;
+		car.offsetX = Math.max(Math.min(car.offsetX, car.maxOffset), -car.maxOffset);
+		
+		// Limitar velocidad máxima
+		if (car.vx > maxSpeed) car.vx = maxSpeed;
+		if (car.vx < -maxSpeed * 0.3) car.vx = -maxSpeed * 0.3;
+		
+		// Aplicar resistencia del aire
+		car.vx *= Math.pow(airDrag, dtSec * 60);
+		
+		// ========================================
+		// 3. FÍSICA DE PENDIENTE Y GRAVEDAD
+		// ========================================
+		
+		// Actualizar scroll del mundo
+		offset += car.vx * dtSec;
+		
+		// Calcular posición del coche en el mundo
+		const carScreenX = car.baseX + car.offsetX;
+		const worldX = offset + carScreenX;
+		const groundY = groundHeightAt(worldX);
+		
+		// Obtener ángulo de la pendiente
+		const slopeAngle = getSlopeAngle(worldX);
+		
+		// Mostrar pendiente en HUD
+		document.getElementById('slope').textContent = 
+			'Pendiente: ' + Math.round(slopeAngle * 180 / Math.PI) + '°';
+		
+		// Componente de gravedad a lo largo de la pendiente
+		const gravityAlong = GRAVITY * Math.sin(slopeAngle);
+		
+		// Factor de asistencia del acelerador (mejoras de motor ayudan en subidas)
+		const throttleAssist = throttle ? 
+			(1 + upgrades.speed * 0.25) : 
+			(0.18 + upgrades.speed * 0.06);
+		
+		// Aplicar resistencia de pendiente (subidas frenan el coche)
+		car.vx -= gravityAlong * dtSec * (1 - 0.25 * throttleAssist);
+		
+		// ========================================
+		// 4. DETECCIÓN DE SUBIDAS EMPINADAS
+		// ========================================
+		
+		const steepThreshold = 0.35; // ~20 grados — más tolerante a rampas
+		
+		if (slopeAngle > steepThreshold && car.grounded) {
+			// Calcular si el coche tiene suficiente potencia para la subida
+			const requiredPower = slopeAngle * 360;
+			const availablePower = Math.max(0, car.vx) + throttleAssist * 140;
+			
+			if (availablePower < requiredPower) {
+				// Sin potencia suficiente: el coche cede y se inclina hacia atrás
+				const powerDeficit = requiredPower - availablePower;
+				car.vx -= powerDeficit * dtSec * 0.5; // menos pérdida de velocidad
+				// La mejora de tanque reduce la tendencia a volcar (más masa baja y centro de gravedad estable)
+				const fuelStabilityFactor = 1 - Math.min(0.8, upgrades.fuel * 0.08);
+				car.av += slopeAngle * 0.25 * fuelStabilityFactor; // menor tendencia a volcar si tienes tanque mejorado
+				
+				// Efecto visual de ruedas patinando
+				if (Math.random() < 0.5) {
+					const wheelX = car.baseX + car.offsetX - car.width / 4;
+					const wheelY = car.y + car.height / 2;
+					createParticles(wheelX + offset, wheelY, 2, 'rgba(200,200,200,0.7)', 50);
+				}
+			}
+		}
+		
+		// ========================================
+		// 5. SALTO (Space)
+		// ========================================
+		
+		if ((keys[' '] || keys.Spacebar) && car.grounded) {
+			const jumpPower = 360 + upgrades.jump * 60;
+			car.vy = -jumpPower;
+			car.grounded = false;
+			
+			// Efecto visual de polvo al saltar
+			createParticles(carScreenX + offset, car.y + car.height / 2, 5, 'rgba(139,90,43,0.6)', 60);
+			
+			// Sonido de salto
+			playBeep(400, 0.08);
+		}
+		
+		// ========================================
+		// 6. FÍSICA VERTICAL (GRAVEDAD Y CAÍDA)
+		// ========================================
+		
+		car.vy += GRAVITY * dtSec;
+		car.y += car.vy * dtSec;
+		
+		// ========================================
+		// 7. CONTROL DE ROTACIÓN EN EL AIRE
+		// ========================================
+		
+		const rotationInput = 0.006; // menos sensibilidad al girar en el aire
+		const stabilityBonus = upgrades.stability * 0.08;
+		
+		if (keys.ArrowLeft) {
+			car.av -= rotationInput * (1 - stabilityBonus);
+		}
+		if (keys.ArrowRight) {
+			car.av += rotationInput * (1 - stabilityBonus);
+		}
+		
+		// ========================================
+		// 8. FÍSICA ROTACIONAL
+		// ========================================
+		
+		if (car.grounded) {
+			// En el suelo: mayor amortiguación + auto-nivelación
+			car.av *= 0.92; // amortiguación más fuerte para evitar oscilaciones
+			
+			// Fuerza de estabilización: la mejora de tanque contribuye a estabilizar el vehículo
+			const stabilizationForce = 0.06 + upgrades.stability * 0.03 + upgrades.fuel * 0.02;
+			car.av += -car.angle * stabilizationForce;
+		} else {
+			// En el aire: ligera reducción de resistencia para conservar control
+			car.av *= 0.997;
+		}
+		
+		// Aplicar velocidad angular al ángulo
+		car.angle += car.av;
+		
+		// ========================================
+		// 9. COLISIÓN CON EL SUELO
+		// ========================================
+		
+		if (car.y > groundY - car.height / 2) {
+			car.y = groundY - car.height / 2;
+			
+			// Impacto: si la velocidad vertical es alta, generar partículas
+			if (car.vy > 400) {
+				createParticles(carScreenX + offset, car.y + car.height / 2, 8, 'rgba(139,90,43,0.7)', 80);
+				playBeep(200, 0.05); // Sonido de impacto
+			}
+			
+			car.vy = 0;
+			car.grounded = true;
+			
+			// Al aterrizar, alinear ligeramente con la pendiente
+			const alignStrength = 0.15 + upgrades.stability * 0.05;
+			car.angle += (slopeAngle - car.angle) * alignStrength;
+		} else {
+			car.grounded = false;
+		}
+		
+		// ========================================
+		// 10. ROTACIÓN VISUAL DE RUEDAS
+		// ========================================
+		
+		car.wheelRot = (car.wheelRot || 0) + (car.vx / WHEEL_RADIUS) * dtSec;
+		
+		// ========================================
+		// 11. COLECCIÓN DE MONEDAS
+		// ========================================
+		
+		for (const c of coins) {
+			if (c.collected) continue;
+			
+			const coinWorldX = c.i * SEGMENT_W;
+			const coinScreenX = coinWorldX - offset;
+			const coinY = groundHeightAt(coinWorldX) - 18;
+			const dx = coinScreenX - carScreenX;
+			const dy = coinY - car.y;
+			
+			if (Math.hypot(dx, dy) < 48) {
+				c.collected = true;
+				sessionCoins++;
+				
+				// Efecto visual de recolección
+				createParticles(coinWorldX, coinY, 6, 'gold', 60);
+				
+				// Sonido de moneda
+				playBeep(1000, 0.06);
+			}
+		}
+		
+		// ========================================
+		// 12. CONDICIONES DE GAME OVER
+		// ========================================
+		
+		// Vuelco por ángulo excesivo (centro de masas)
+		const angleDeg = Math.abs(car.angle * 180 / Math.PI);
+		// El umbral de vuelco sube con la mejora de tanque: tanque mayor = más inercia baja = más tolerancia
+		const rolloverThreshold = 100 + upgrades.fuel * 8; // cada nivel de tanque añade tolerancia
+		if (angleDeg > rolloverThreshold) {
+			gameOver('¡Vuelco! Perdiste el control del vehículo');
+		}
+		
+		// Caída al vacío
+		if (car.y > H + 200) {
+			gameOver('¡Caída al vacío!');
+		}
+		
+		// ========================================
+		// 13. SISTEMA DE COMBUSTIBLE
+		// ========================================
+		
+		// Consumo base + consumo por velocidad
+		const fuelConsumptionBase = 0.5; // % por segundo en ralentí
+		const speedFactor = Math.min(1.5, Math.abs(car.vx) / 300);
+		const consumption = (throttle * fuelConsumptionBase + 0.05 * speedFactor) * dtSec;
+		
+		if (fuel > 0) {
+			fuel = Math.max(0, fuel - consumption);
+		}
+		
+		// Sin combustible: aviso visual
+		if (fuel <= 0 && fuel > -0.1) {
+			showMessage('¡Sin combustible! El motor ha muerto');
+			// Leve resistencia adicional
+			car.vx *= 0.995;
+			if (Math.abs(car.vx) < 6) car.vx = 0;
+		}
+		
+		// ========================================
+		// 14. COLISIONES CON OBSTÁCULOS
+		// ========================================
+		
+		if (!disableImpacts) {
+			for (const ob of obstacles) {
+				const obWorldX = ob.i * SEGMENT_W;
+				const obScreenX = obWorldX - offset;
+				const obY = groundHeightAt(obWorldX);
+				const dx = Math.abs(obScreenX - carScreenX);
+				
+				// Radio de colisión según tipo
+				const hitRadius = ob.type === 'rock' ? 48 : 40;
+				
+				// Permitir saltar sobre obstáculos
+				const carBottom = car.y + car.height / 2;
+				const obTop = obY - 28;
+				const canJumpOver = carBottom < obTop;
+				
+				if (dx < hitRadius && !canJumpOver && carBottom > obTop) {
+					// Impacto
+					createParticles(obWorldX, obY, 12, 'rgba(255,100,100,0.8)', 100);
+					playBeep(150, 0.1);
+					gameOver('¡Impacto con obstáculo!');
+				}
+			}
+		}
+		
+		// ========================================
+		// 15. DISTANCIA RECORRIDA
+		// ========================================
+		
+		distanceMeters = Math.max(0, Math.floor(offset / SEGMENT_W));
+		
+		// ========================================
+		// 16. ACTUALIZAR PARTÍCULAS
+		// ========================================
+		
+		updateParticles(dt);
+	}
+
+
+	// ============================================
+	// GAME OVER Y MENSAJES
+	// ============================================
+	
+	function gameOver(reason) {
+		if (!running) return;
+		running = false;
+		
+		// Guardar monedas y récord
+		bank += sessionCoins;
+		saveBank();
+		saveRecord(distanceMeters);
+		
+		// Efecto visual de crash
+		const carScreenX = car.baseX + car.offsetX;
+		createParticles(carScreenX + offset, car.y, 20, 'rgba(255,80,80,0.8)', 120);
+		
+		// Detener audio del motor
+		stopEngineAudio();
+		
+		// Mostrar mensaje
+		const msg = `${reason}\n\n` +
+			`Distancia: ${distanceMeters}m ${distanceMeters > bestDistance ? '🏆 ¡NUEVO RÉCORD!' : ''}\n` +
+			`Monedas ganadas: ${sessionCoins}\n` +
+			`Banco total: ${bank}\n\n` +
+			`Pulsa R para reiniciar`;
+		showMessage(msg);
+	}
+	
+	function showMessage(text) {
+		const m = document.getElementById('message');
+		m.textContent = text;
+		m.style.display = 'block';
+	}
+	
+	addEventListener('keydown', e => {
+		if (e.key === 'r' || e.key === 'R') {
+			reset();
+		}
+	});
+
+	// ============================================
+	// SISTEMA DE TIENDA Y MEJORAS
+	// ============================================
+	
+	function updateShopUI() {
+		document.getElementById('up-speed-level').textContent = upgrades.speed;
+		document.getElementById('up-stability-level').textContent = upgrades.stability;
+		document.getElementById('up-jump-level').textContent = upgrades.jump;
+		document.getElementById('up-fuel-level').textContent = upgrades.fuel;
+		
+		// Actualizar costos
+		document.getElementById('buy-speed').textContent = 
+			`Comprar (${10 + upgrades.speed * 8})`;
+		document.getElementById('buy-stability').textContent = 
+			`Comprar (${12 + upgrades.stability * 10})`;
+		document.getElementById('buy-jump').textContent = 
+			`Comprar (${8 + upgrades.jump * 6})`;
+		document.getElementById('buy-fuel').textContent = 
+			`Comprar (${14 + upgrades.fuel * 10})`;
+	}
+	
+	document.getElementById('buy-speed').addEventListener('click', () => {
+		const cost = 10 + upgrades.speed * 8;
+		if (bank >= cost) {
+			bank -= cost;
+			upgrades.speed++;
+			saveBank();
+			saveUpgrades();
+			updateShopUI();
+			playBeep(800, 0.05);
+		} else {
+			playBeep(200, 0.1);
+		}
+	});
+	
+	document.getElementById('buy-stability').addEventListener('click', () => {
+		const cost = 12 + upgrades.stability * 10;
+		if (bank >= cost) {
+			bank -= cost;
+			upgrades.stability++;
+			saveBank();
+			saveUpgrades();
+			updateShopUI();
+			playBeep(800, 0.05);
+		} else {
+			playBeep(200, 0.1);
+		}
+	});
+	
+	document.getElementById('buy-jump').addEventListener('click', () => {
+		const cost = 8 + upgrades.jump * 6;
+		if (bank >= cost) {
+			bank -= cost;
+			upgrades.jump++;
+			saveBank();
+			saveUpgrades();
+			updateShopUI();
+			playBeep(800, 0.05);
+		} else {
+			playBeep(200, 0.1);
+		}
+	});
+	
+	document.getElementById('buy-fuel').addEventListener('click', () => {
+		const cost = 14 + upgrades.fuel * 10;
+		if (bank >= cost) {
+			bank -= cost;
+			upgrades.fuel++;
+			saveBank();
+			saveUpgrades();
+			updateShopUI();
+			playBeep(800, 0.05);
+		} else {
+			playBeep(200, 0.1);
+		}
+	});
+	
+	updateShopUI();
+
+	// ============================================
+	// SISTEMA DE AUDIO (WebAudio API)
+	// ============================================
+	
+	let audioCtx = null;
+	let engineOsc = null;
+	let engineGain = null;
+	
+	function ensureAudio() {
+		if (!audioCtx) {
+			audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+		}
+	}
+	
+	function startEngineAudio() {
+		ensureAudio();
+		if (engineOsc) return; // Ya está iniciado
+		
+		engineOsc = audioCtx.createOscillator();
+		engineGain = audioCtx.createGain();
+		
+		engineOsc.type = 'sawtooth'; // Sonido áspero de motor
+		engineOsc.connect(engineGain);
+		engineGain.connect(audioCtx.destination);
+		engineGain.gain.value = 0.0001; // Muy bajo al inicio
+		
+		engineOsc.start();
+	}
+	
+	function stopEngineAudio() {
+		if (engineOsc) {
+			engineOsc.stop();
+			engineOsc.disconnect();
+			engineOsc = null;
+			engineGain.disconnect();
+			engineGain = null;
+		}
+	}
+	
+	function setEngineTone(freq, vol) {
+		if (!engineOsc) return;
+		engineOsc.frequency.value = freq;
+		engineGain.gain.value = vol;
+	}
+	
+	/**
+	 * Reproduce un beep corto para efectos de sonido
+	 */
+	function playBeep(freq, dur) {
+		try {
+			ensureAudio();
+			const osc = audioCtx.createOscillator();
+			const gain = audioCtx.createGain();
+			
+			osc.connect(gain);
+			gain.connect(audioCtx.destination);
+			
+			osc.type = 'sine';
+			osc.frequency.value = freq;
+			gain.gain.value = 0.08;
+			
+			osc.start();
+			setTimeout(() => {
+				gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.08);
+				setTimeout(() => osc.stop(), 90);
+			}, dur * 1000);
+		} catch(e) {
+			console.warn('Audio error:', e);
+		}
+	}
+
+
+	// ============================================
+	// SISTEMA DE RENDERIZADO
+	// ============================================
+	
+	/**
+	 * Dibuja todo el juego: fondo, terreno, obstáculos, monedas, vehículo y efectos
+	 */
+	function draw() {
+		// Limpiar canvas
+		ctx.clearRect(0, 0, W, H);
+		
+		// ========================================
+		// 1. FONDO (CIELO CON GRADIENTE)
+		// ========================================
+		
+		const skyGradient = ctx.createLinearGradient(0, 0, 0, H);
+		skyGradient.addColorStop(0, '#87ceeb');
+		skyGradient.addColorStop(1, '#d9f4ff');
+		ctx.fillStyle = skyGradient;
+		ctx.fillRect(0, 0, W, H);
+		
+		// ========================================
+		// 2. TERRENO
+		// ========================================
+		
+		ctx.beginPath();
+		ctx.moveTo(0, H);
+		
+		const visibleSegments = Math.ceil(W / SEGMENT_W) + 14;
+		for (let i = 0; i < visibleSegments; i++) {
+			const segIndex = Math.floor((offset / SEGMENT_W) + i);
+			const segment = terrain[segIndex] || terrain[terrain.length - 1];
+			const screenX = i * SEGMENT_W - (offset % SEGMENT_W);
+			ctx.lineTo(screenX, segment.y);
+		}
+		
+		ctx.lineTo(W, H);
+		ctx.closePath();
+		
+		// Gradiente de terreno (más oscuro en la base)
+		const groundGradient = ctx.createLinearGradient(0, H * 0.5, 0, H);
+		groundGradient.addColorStop(0, '#6a8f46');
+		groundGradient.addColorStop(1, '#4a6f26');
+		ctx.fillStyle = groundGradient;
+		ctx.fill();
+		
+		// Línea superior del terreno
+		ctx.beginPath();
+		ctx.moveTo(0, terrain[0].y);
+		for (let i = 0; i < visibleSegments; i++) {
+			const segIndex = Math.floor((offset / SEGMENT_W) + i);
+			const segment = terrain[segIndex] || terrain[terrain.length - 1];
+			const screenX = i * SEGMENT_W - (offset % SEGMENT_W);
+			ctx.lineTo(screenX, segment.y);
+		}
+		ctx.strokeStyle = '#5a7f36';
+		ctx.lineWidth = 2;
+		ctx.stroke();
+		
+		// ========================================
+		// 3. MONEDAS
+		// ========================================
+		
+		ctx.font = 'bold 16px Arial';
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		
+		for (const c of coins) {
+			if (c.collected) continue;
+			
+			const coinWorldX = c.i * SEGMENT_W;
+			const coinScreenX = coinWorldX - offset;
+			
+			// Culling: no dibujar monedas fuera de pantalla
+			if (coinScreenX < -40 || coinScreenX > W + 40) continue;
+			
+			const coinY = groundHeightAt(coinWorldX) - 18;
+			
+			// Animación de flotación
+			const floatOffset = Math.sin(Date.now() / 200 + c.i) * 3;
+			
+			// Círculo dorado con brillo
+			const coinGradient = ctx.createRadialGradient(coinScreenX, coinY + floatOffset, 0, coinScreenX, coinY + floatOffset, 12);
+			coinGradient.addColorStop(0, '#ffe066');
+			coinGradient.addColorStop(0.7, '#ffd700');
+			coinGradient.addColorStop(1, '#b8860b');
+			
+			ctx.fillStyle = coinGradient;
+			ctx.beginPath();
+			ctx.arc(coinScreenX, coinY + floatOffset, 10, 0, Math.PI * 2);
+			ctx.fill();
+			
+			// Borde
+			ctx.strokeStyle = '#b8860b';
+			ctx.lineWidth = 2;
+			ctx.stroke();
+			
+			// Símbolo
+			ctx.fillStyle = '#8b6914';
+			ctx.fillText('¢', coinScreenX, coinY + floatOffset);
+		}
+		
+		// ========================================
+		// 4. OBSTÁCULOS
+		// ========================================
+		
+		for (const ob of obstacles) {
+			const obWorldX = ob.i * SEGMENT_W;
+			const obScreenX = obWorldX - offset;
+			
+			// Culling
+			if (obScreenX < -60 || obScreenX > W + 60) continue;
+			
+			const obY = groundHeightAt(obWorldX);
+			
+			if (ob.type === 'rock') {
+				// Roca: triángulo gris con sombra
+				ctx.save();
+				
+				// Sombra
+				ctx.fillStyle = 'rgba(0,0,0,0.2)';
+				ctx.beginPath();
+				ctx.ellipse(obScreenX, obY + 2, 26, 8, 0, 0, Math.PI * 2);
+				ctx.fill();
+				
+				// Roca principal
+				const rockGradient = ctx.createLinearGradient(obScreenX - 24, obY - 40, obScreenX + 24, obY);
+				rockGradient.addColorStop(0, '#8e8e8e');
+				rockGradient.addColorStop(1, '#4e4e4e');
+				ctx.fillStyle = rockGradient;
+				
+				ctx.beginPath();
+				ctx.moveTo(obScreenX, obY);
+				ctx.lineTo(obScreenX - 24, obY - 40);
+				ctx.lineTo(obScreenX + 24, obY - 40);
+				ctx.closePath();
+				ctx.fill();
+				
+				// Borde oscuro
+				ctx.strokeStyle = '#2e2e2e';
+				ctx.lineWidth = 2;
+				ctx.stroke();
+				
+				ctx.restore();
+			} else if (ob.type === 'ramp') {
+				// Rampa: rectángulo marrón
+				ctx.fillStyle = '#8b5a2b';
+				ctx.fillRect(obScreenX - 12, obY - 6, 24, 6);
+				
+				// Borde
+				ctx.strokeStyle = '#5a3a1b';
+				ctx.lineWidth = 1;
+				ctx.strokeRect(obScreenX - 12, obY - 6, 24, 6);
+			}
+		}
+		
+		// ========================================
+		// 5. PARTÍCULAS DE EFECTOS
+		// ========================================
+		
+		drawParticles();
+		
+		// ========================================
+		// 6. VEHÍCULO (CON SUSPENSIÓN Y RUEDAS)
+		// ========================================
+		
+		const carScreenX = car.baseX + car.offsetX;
+		
+		// Parámetros de ruedas y suspensión
+		const wheelOffsetX = car.width * 0.28;
+		const wheelY = car.y + car.height * 0.5 - 6;
+		
+		const frontWheelX = carScreenX + wheelOffsetX;
+		const rearWheelX = carScreenX - wheelOffsetX;
+		
+		// --- RUEDAS TRASERA Y DELANTERA ---
+		
+		function drawWheel(x, y) {
+			ctx.save();
+			ctx.translate(x, y);
+			ctx.rotate(car.wheelRot || 0);
+			
+			// Neumático (negro)
+			ctx.fillStyle = '#111';
+			ctx.beginPath();
+			ctx.arc(0, 0, WHEEL_RADIUS, 0, Math.PI * 2);
+			ctx.fill();
+			
+			// Llanta (gris)
+			ctx.fillStyle = '#666';
+			ctx.beginPath();
+			ctx.arc(0, 0, WHEEL_RADIUS - 6, 0, Math.PI * 2);
+			ctx.fill();
+			
+			// Rayos de llanta (detalles)
+			ctx.strokeStyle = '#999';
+			ctx.lineWidth = 2;
+			for (let i = 0; i < 5; i++) {
+				const angle = (i / 5) * Math.PI * 2;
+				ctx.beginPath();
+				ctx.moveTo(0, 0);
+				ctx.lineTo(Math.cos(angle) * (WHEEL_RADIUS - 6), Math.sin(angle) * (WHEEL_RADIUS - 6));
+				ctx.stroke();
+			}
+			
+			ctx.restore();
+		}
+		
+		drawWheel(rearWheelX, wheelY);
+		drawWheel(frontWheelX, wheelY);
+		
+		// --- SUSPENSIÓN (RESORTES VISUALES) ---
+		
+		const chassisLeft = { x: carScreenX - car.width * 0.28, y: car.y - car.height * 0.25 };
+		const chassisRight = { x: carScreenX + car.width * 0.28, y: car.y - car.height * 0.25 };
+		
+		// Suspensión trasera
+		ctx.strokeStyle = 'rgba(200,200,255,0.7)';
+		ctx.lineWidth = 3;
+		ctx.beginPath();
+		ctx.moveTo(chassisLeft.x, chassisLeft.y);
+		ctx.lineTo(rearWheelX, wheelY - WHEEL_RADIUS);
+		ctx.stroke();
+		
+		// Suspensión delantera
+		ctx.beginPath();
+		ctx.moveTo(chassisRight.x, chassisRight.y);
+		ctx.lineTo(frontWheelX, wheelY - WHEEL_RADIUS);
+		ctx.stroke();
+		
+		// --- CHASIS DEL COCHE ---
+		
+		ctx.save();
+		ctx.translate(carScreenX, car.y);
+		ctx.rotate(car.angle);
+		
+		// Sombra del coche
+		ctx.fillStyle = 'rgba(0,0,0,0.2)';
+		ctx.fillRect(-car.width / 2 + 6, car.height / 2 - 6, car.width - 12, 8);
+		
+		// Cuerpo principal (gris oscuro)
+		ctx.fillStyle = '#2b2b2b';
+		ctx.fillRect(-car.width / 2, -car.height / 2, car.width, car.height);
+		
+		// Capó (rojo)
+		ctx.fillStyle = '#d33';
+		ctx.fillRect(-car.width / 2 + 8, -car.height / 2 + 4, car.width - 16, car.height / 2 - 2);
+		
+		// Parabrisas (azul claro)
+		ctx.fillStyle = '#bce7ff';
+		ctx.fillRect(-car.width / 2 + 18, -car.height / 2 + 6, car.width - 36, car.height / 2 - 8);
+		
+		// Alerón trasero (detalle negro)
+		ctx.fillStyle = '#111';
+		ctx.fillRect(car.width / 2 - 14, -car.height / 2 - 6, 10, 4);
+		
+		// Indicador visual de combustible (barra en el techo)
+		const fuelBarWidth = (car.width - 30) * (fuel / fuelMax);
+		const fuelColor = fuel > 30 ? '#4CAF50' : (fuel > 10 ? '#FFC107' : '#F44336');
+		ctx.fillStyle = fuelColor;
+		ctx.fillRect(-car.width / 2 + 15, -car.height / 2 - 2, fuelBarWidth, 2);
+		
+		ctx.restore();
+	}
+
+
+	// ============================================
+	// BUCLE PRINCIPAL DEL JUEGO
+	// ============================================
+	
+	let last = performance.now();
+	
+	function loop(timestamp) {
+		const dt = timestamp - last;
+		last = timestamp;
+		
+		// Actualizar física solo si el juego está corriendo
+		if (running) {
+			update(dt);
+		}
+		
+		// Renderizar siempre
+		draw();
+		
+		// Actualizar HUD
+		document.getElementById('score').textContent = 'Monedas (sesión): ' + sessionCoins;
+		document.getElementById('bank').textContent = 'Banco: ' + bank;
+		document.getElementById('speed').textContent = 'Velocidad: ' + Math.round(car.vx) + ' px/s';
+		document.getElementById('distance').textContent = 'Distancia: ' + distanceMeters + ' m ' + 
+			(bestDistance > 0 ? `(récord: ${bestDistance}m)` : '');
+		document.getElementById('fuel').textContent = 'Combustible: ' + Math.max(0, Math.round(fuel)) + '%';
+		
+		requestAnimationFrame(loop);
+	}
+
+	// ============================================
+	// INICIALIZACIÓN
+	// ============================================
+	
+	resize();
+	
+	requestAnimationFrame(() => {
+		last = performance.now();
+		reset();
+		requestAnimationFrame(loop);
+	});
+	</script>
+</body>
+</html>

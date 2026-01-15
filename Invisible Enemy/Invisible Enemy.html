@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Invisible Enemy</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+button{
+    padding:10px 20px;
+    font-size:16px;
+    margin-top:10px;
+    cursor:pointer;
+}
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+#records h2 {
+    color: #ff0000;
+}
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #ff0000;
+}
+.record-rank {
+    font-weight: bold;
+    color: #ff0000;
+    margin-right: 10px;
+}
+.record-time {
+    color: #ff6666;
+    font-weight: bold;
+}
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+#msg {
+    font-size: 20px;
+    font-weight: bold;
+    color: #ff0000;
+    min-height: 30px;
+}
+</style>
+</head>
+<body>
+
+<h1>👁️ INVISIBLE ENEMY</h1>
+<p>Sobrevive al enemigo invisible</p>
+<p>Tiempo: <span id="time">0</span>s | Velocidad enemigo: <span id="speedDisplay">1.2</span></p>
+<p id="msg"></p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<button id="restart" style="display:none">🔁 Volver a jugar</button>
+
+<div id="records">
+    <h2>🏆 Récords de Supervivencia</h2>
+    <div id="recordsList"></div>
+    <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const timeSpan = document.getElementById("time");
+const speedDisplay = document.getElementById("speedDisplay");
+const msg = document.getElementById("msg");
+const restartBtn = document.getElementById("restart");
+
+let running, time;
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('invisibleEnemyRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(time) {
+    const records = loadRecords();
+    records.push({
+        time: time,
+        date: new Date().toLocaleDateString()
+    });
+    records.sort((a, b) => b.time - a.time);
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('invisibleEnemyRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-time">${record.time}s</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('invisibleEnemyRecords');
+        displayRecords();
+    }
+}
+
+displayRecords();
+
+/* ===== PLAYER ===== */
+let player;
+
+/* ===== ENEMY (INVISIBLE) ===== */
+let enemy;
+
+/* ===== INIT ===== */
+function startGame() {
+    running = true;
+    time = 0;
+    msg.textContent = "";
+    restartBtn.style.display = "none";
+    c.style.transform = "none";
+    
+    player = {
+        x: 200,
+        y: 200,
+        size: 12,
+        speed: 3
+    };
+    
+    enemy = {
+        x: Math.random() * 400,
+        y: Math.random() * 400,
+        speed: 1.2
+    };
+    
+    speedDisplay.textContent = enemy.speed.toFixed(1);
+}
+
+/* ===== INPUT ===== */
+const keys = {};
+document.addEventListener("keydown",e=>keys[e.key]=true);
+document.addEventListener("keyup",e=>keys[e.key]=false);
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    // movimiento jugador
+    if(keys["w"]) player.y -= player.speed;
+    if(keys["s"]) player.y += player.speed;
+    if(keys["a"]) player.x -= player.speed;
+    if(keys["d"]) player.x += player.speed;
+
+    player.x = Math.max(0,Math.min(388,player.x));
+    player.y = Math.max(0,Math.min(388,player.y));
+
+    // enemigo persigue
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const dist = Math.hypot(dx,dy);
+
+    enemy.x += (dx/dist) * enemy.speed;
+    enemy.y += (dy/dist) * enemy.speed;
+
+    // colisión
+    if(dist < 12){
+        die();
+    }
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    if(!running) return;
+    
+    ctx.clearRect(0,0,400,400);
+
+    // jugador
+    ctx.fillStyle="cyan";
+    ctx.fillRect(player.x,player.y,player.size,player.size);
+
+    // NO dibujamos al enemigo - es completamente invisible
+    // Solo la vibración como pista
+
+    // vibración si está cerca (única pista)
+    const d = Math.hypot(player.x-enemy.x,player.y-enemy.y);
+    if(d < 100){
+        const intensity = Math.max(0, (100 - d) / 100);
+        const shake = intensity * 6;
+        c.style.transform = `translate(${Math.random()*shake-shake/2}px,${Math.random()*shake-shake/2}px)`;
+    }else{
+        c.style.transform = "none";
+    }
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ===== TIEMPO / DIFICULTAD ===== */
+setInterval(()=>{
+    if(!running) return;
+
+    time++;
+    timeSpan.textContent = time;
+
+    // Aumentar velocidad del enemigo cada 3 segundos
+    if(time % 3 === 0 && enemy.speed < 5){
+        enemy.speed += 0.25;
+        speedDisplay.textContent = enemy.speed.toFixed(2);
+    }
+},1000);
+
+/* ===== GAME OVER ===== */
+function die(){
+    running = false;
+    c.style.transform = "none";
+    
+    saveRecord(time);
+    
+    const records = loadRecords();
+    const isTopRecord = records.length > 0 && records[0].time === time;
+    
+    if(isTopRecord) {
+        msg.textContent = "🏆 ¡NUEVO RÉCORD! 💀 Te atrapó el enemigo invisible";
+    } else {
+        msg.textContent = "💀 Te atrapó el enemigo invisible";
+    }
+    
+    restartBtn.style.display = "inline-block";
+}
+
+/* ===== RESTART ===== */
+restartBtn.onclick = () => {
+    startGame();
+};
+
+/* ===== START ===== */
+startGame();
+loop();
+</script>
+
+</body>
+</html>

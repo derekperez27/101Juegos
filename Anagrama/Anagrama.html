@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Anagrama - Modo Infinito</title>
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        color: #fff;
+        font-family: 'Arial', sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+    }
+
+    #game {
+        text-align: center;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 40px;
+        border-radius: 15px;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    h1 {
+        font-size: 36px;
+        margin-bottom: 10px;
+        color: #FFD700;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+
+    #scores {
+        display: flex;
+        justify-content: space-around;
+        margin-bottom: 30px;
+        font-size: 18px;
+    }
+
+    .score-box {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 10px 20px;
+        border-radius: 8px;
+    }
+
+    .score-label {
+        font-size: 14px;
+        opacity: 0.8;
+        margin-bottom: 5px;
+    }
+
+    .score-value {
+        font-size: 28px;
+        font-weight: bold;
+        color: #FFD700;
+    }
+
+    #anagram-container {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 30px;
+        border-radius: 10px;
+        margin: 20px 0;
+        border: 2px solid rgba(255, 215, 0, 0.3);
+    }
+
+    #anagram {
+        font-size: 48px;
+        letter-spacing: 12px;
+        font-weight: bold;
+        color: #FFD700;
+        text-shadow: 3px 3px 6px rgba(0,0,0,0.7);
+        margin: 10px 0;
+        min-height: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #input-container {
+        margin: 25px 0;
+    }
+
+    input {
+        padding: 15px;
+        font-size: 22px;
+        width: 100%;
+        text-align: center;
+        border: 3px solid #FFD700;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.9);
+        font-weight: bold;
+        text-transform: lowercase;
+    }
+
+    input:focus {
+        outline: none;
+        border-color: #FFA500;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+    }
+
+    button {
+        margin-top: 15px;
+        padding: 15px 40px;
+        font-size: 20px;
+        font-weight: bold;
+        cursor: pointer;
+        background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+        border: none;
+        border-radius: 8px;
+        color: #000;
+        transition: all 0.3s;
+        box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+    }
+
+    button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5);
+    }
+
+    button:active {
+        transform: translateY(0);
+    }
+
+    #timer {
+        margin-top: 20px;
+        font-size: 28px;
+        font-weight: bold;
+        padding: 15px;
+        background: rgba(255, 0, 0, 0.2);
+        border-radius: 8px;
+        border: 2px solid rgba(255, 0, 0, 0.4);
+    }
+
+    #timer.warning {
+        animation: pulse 0.5s infinite;
+        background: rgba(255, 0, 0, 0.4);
+        border-color: #ff0000;
+    }
+
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+    }
+
+    #result {
+        margin-top: 20px;
+        font-size: 28px;
+        font-weight: bold;
+        min-height: 40px;
+    }
+
+    .correct {
+        color: #4CAF50;
+        animation: fadeIn 0.3s;
+    }
+
+    .incorrect {
+        color: #ff4444;
+        animation: shake 0.5s;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: scale(0.8); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+    }
+
+    #gameOver {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.9);
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+
+    #gameOver.show {
+        display: flex;
+    }
+
+    .game-over-content {
+        text-align: center;
+        padding: 40px;
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        border-radius: 15px;
+        border: 3px solid #FFD700;
+    }
+
+    .game-over-content h2 {
+        font-size: 48px;
+        color: #ff4444;
+        margin-bottom: 20px;
+    }
+
+    .final-stats {
+        margin: 30px 0;
+        font-size: 24px;
+    }
+
+    .final-stats div {
+        margin: 10px 0;
+    }
+
+    .new-record {
+        color: #FFD700;
+        font-size: 20px;
+        margin-top: 10px;
+        animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .hidden {
+        display: none;
+    }
+
+    #hint {
+        margin-top: 10px;
+        font-size: 14px;
+        opacity: 0.7;
+    }
+</style>
+</head>
+<body>
+
+<div id="game">
+    <h1>🔤 ANAGRAMA 🔤</h1>
+    
+    <div id="scores">
+        <div class="score-box">
+            <div class="score-label">PUNTUACIÓN</div>
+            <div class="score-value" id="currentScore">0</div>
+        </div>
+        <div class="score-box">
+            <div class="score-label">MEJOR</div>
+            <div class="score-value" id="highScore">0</div>
+        </div>
+    </div>
+
+    <div id="anagram-container">
+        <div id="anagram">----</div>
+        <div id="hint">Ordena las letras para formar la palabra correcta</div>
+    </div>
+
+    <div id="input-container">
+        <input type="text" id="answer" placeholder="Escribe la palabra aquí" autocomplete="off">
+    </div>
+
+    <button onclick="comprobarRespuesta()" id="checkBtn">CONFIRMAR</button>
+
+    <div id="timer">⏱️ Tiempo: 10</div>
+    <div id="result"></div>
+</div>
+
+<div id="gameOver">
+    <div class="game-over-content">
+        <h2>💀 GAME OVER 💀</h2>
+        <div class="final-stats">
+            <div>Puntuación Final: <span id="finalScore">0</span></div>
+            <div>Mejor Puntuación: <span id="finalHighScore">0</span></div>
+            <div id="newRecord" class="new-record hidden">🏆 ¡NUEVO RÉCORD! 🏆</div>
+        </div>
+        <button onclick="reiniciarJuego()">🔄 REINTENTAR</button>
+    </div>
+</div>
+
+<script>
+// ==========================================
+// CONFIGURACIÓN Y CONSTANTES
+// ==========================================
+
+// Lista de palabras para el juego
+const palabras = [
+    // Palabras cortas (4-5 letras)
+    "amor", "gato", "perro", "casa", "mesa", "silla", "libro", "papel",
+    "lapiz", "juego", "mundo", "cielo", "tierra", "agua", "fuego", "aire",
+    "noche", "dia", "luna", "sol", "mar", "rio", "lago", "monte",
+    "arbol", "flor", "hoja", "rama", "raiz", "tronco",
+    
+    // Palabras medias (6-7 letras)
+    "jardin", "cocina", "dormitorio", "ventana", "puerta", "escalera",
+    "comida", "bebida", "camino", "ciudad", "pueblo", "bosque",
+    "montaña", "playa", "desierto", "selva", "oceano", "volcan",
+    "helado", "pizza", "pasta", "arroz", "carne", "pescado",
+    "fruta", "verdura", "naranja", "manzana", "platano", "fresa",
+    
+    // Palabras largas (8+ letras)
+    "computadora", "telefono", "television", "refrigerador", "microondas",
+    "lavadora", "aspiradora", "bicicleta", "motocicleta", "automovil",
+    "helicoptero", "submarino", "elefante", "jirafa", "hipopotamo",
+    "cocodrilo", "mariposa", "dinosaurio", "universo", "galaxia",
+    "planeta", "estrella", "astronauta", "cohete", "satelite"
+];
+
+// Configuración de dificultad progresiva
+const dificultad = [
+    { hasta: 5, tiempo: 10 },
+    { hasta: 10, tiempo: 8 },
+    { hasta: 20, tiempo: 7 },
+    { hasta: 30, tiempo: 6 },
+    { hasta: Infinity, tiempo: 5 }
+];
+
+// ==========================================
+// VARIABLES DEL JUEGO
+// ==========================================
+let palabraActual = "";
+let puntuacion = 0;
+let mejorPuntuacion = parseInt(localStorage.getItem('anagramaHighScore')) || 0;
+let tiempoRestante = 10;
+let intervaloTemporizador = null;
+let juegoActivo = false;
+
+// ==========================================
+// FUNCIONES PRINCIPALES
+// ==========================================
+
+/**
+ * Mezcla las letras de una palabra asegurando que no quede igual
+ */
+function generarAnagrama(palabra) {
+    let anagrama;
+    let intentos = 0;
+    const maxIntentos = 50;
+    
+    do {
+        anagrama = palabra.split('')
+            .sort(() => Math.random() - 0.5)
+            .join('');
+        intentos++;
+    } while (anagrama === palabra && intentos < maxIntentos);
+    
+    // Si después de muchos intentos sigue igual, forzar un cambio
+    if (anagrama === palabra && palabra.length > 1) {
+        const arr = palabra.split('');
+        [arr[0], arr[1]] = [arr[1], arr[0]];
+        anagrama = arr.join('');
+    }
+    
+    return anagrama;
+}
+
+/**
+ * Obtiene el tiempo según la puntuación actual
+ */
+function obtenerTiempo() {
+    for (let nivel of dificultad) {
+        if (puntuacion < nivel.hasta) {
+            return nivel.tiempo;
+        }
+    }
+    return 5;
+}
+
+/**
+ * Inicia una nueva ronda
+ */
+function iniciarRonda() {
+    // Limpiar resultado anterior
+    document.getElementById("result").textContent = "";
+    document.getElementById("answer").value = "";
+    document.getElementById("answer").focus();
+    
+    // Seleccionar palabra aleatoria
+    palabraActual = palabras[Math.floor(Math.random() * palabras.length)];
+    
+    // Mostrar anagrama
+    const anagrama = generarAnagrama(palabraActual);
+    document.getElementById("anagram").textContent = anagrama.toUpperCase();
+    
+    // Configurar tiempo según dificultad
+    tiempoRestante = obtenerTiempo();
+    actualizarTemporizador();
+    
+    // Iniciar temporizador
+    iniciarTemporizador();
+    
+    juegoActivo = true;
+}
+
+/**
+ * Inicia el temporizador
+ */
+function iniciarTemporizador() {
+    clearInterval(intervaloTemporizador);
+    
+    intervaloTemporizador = setInterval(() => {
+        tiempoRestante--;
+        actualizarTemporizador();
+        
+        // Advertencia cuando quedan 3 segundos
+        const timerElement = document.getElementById("timer");
+        if (tiempoRestante <= 3) {
+            timerElement.classList.add("warning");
+        } else {
+            timerElement.classList.remove("warning");
+        }
+        
+        // Tiempo agotado
+        if (tiempoRestante <= 0) {
+            clearInterval(intervaloTemporizador);
+            gameOver("⏱️ Tiempo agotado");
+        }
+    }, 1000);
+}
+
+/**
+ * Actualiza la visualización del temporizador
+ */
+function actualizarTemporizador() {
+    document.getElementById("timer").textContent = `⏱️ Tiempo: ${tiempoRestante}`;
+}
+
+/**
+ * Comprueba la respuesta del jugador
+ */
+function comprobarRespuesta() {
+    if (!juegoActivo) return;
+    
+    const respuesta = document.getElementById("answer").value.toLowerCase().trim();
+    
+    if (!respuesta) return;
+    
+    const resultElement = document.getElementById("result");
+    
+    if (respuesta === palabraActual) {
+        // ¡Correcto!
+        clearInterval(intervaloTemporizador);
+        puntuacion++;
+        actualizarPuntuacion();
+        
+        resultElement.textContent = "✅ ¡CORRECTO!";
+        resultElement.className = "correct";
+        
+        // Siguiente ronda automáticamente
+        setTimeout(() => {
+            iniciarRonda();
+        }, 800);
+        
+    } else {
+        // Incorrecto
+        gameOver(`❌ Era: "${palabraActual.toUpperCase()}"`);
+    }
+}
+
+/**
+ * Actualiza la puntuación en pantalla
+ */
+function actualizarPuntuacion() {
+    document.getElementById("currentScore").textContent = puntuacion;
+    
+    // Actualizar mejor puntuación si es necesario
+    if (puntuacion > mejorPuntuacion) {
+        mejorPuntuacion = puntuacion;
+        localStorage.setItem('anagramaHighScore', mejorPuntuacion);
+        document.getElementById("highScore").textContent = mejorPuntuacion;
+    }
+}
+
+/**
+ * Termina el juego
+ */
+function gameOver(mensaje) {
+    juegoActivo = false;
+    clearInterval(intervaloTemporizador);
+    
+    const resultElement = document.getElementById("result");
+    resultElement.textContent = mensaje;
+    resultElement.className = "incorrect";
+    
+    // Mostrar pantalla de Game Over
+    setTimeout(() => {
+        mostrarGameOver();
+    }, 1500);
+}
+
+/**
+ * Muestra la pantalla de Game Over
+ */
+function mostrarGameOver() {
+    document.getElementById("finalScore").textContent = puntuacion;
+    document.getElementById("finalHighScore").textContent = mejorPuntuacion;
+    
+    // Mostrar si es nuevo récord
+    const esNuevoRecord = puntuacion === mejorPuntuacion && puntuacion > 0;
+    document.getElementById("newRecord").classList.toggle("hidden", !esNuevoRecord);
+    
+    document.getElementById("gameOver").classList.add("show");
+}
+
+/**
+ * Reinicia el juego
+ */
+function reiniciarJuego() {
+    // Ocultar pantalla de Game Over
+    document.getElementById("gameOver").classList.remove("show");
+    
+    // Resetear variables
+    puntuacion = 0;
+    document.getElementById("currentScore").textContent = puntuacion;
+    document.getElementById("highScore").textContent = mejorPuntuacion;
+    
+    // Iniciar nueva ronda
+    iniciarRonda();
+}
+
+// ==========================================
+// EVENT LISTENERS
+// ==========================================
+
+// Permitir confirmar con Enter
+document.getElementById("answer").addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+        comprobarRespuesta();
+    }
+});
+
+// Prevenir copiar/pegar
+document.getElementById("answer").addEventListener("paste", (e) => {
+    e.preventDefault();
+});
+
+// ==========================================
+// INICIALIZACIÓN
+// ==========================================
+
+// Cargar mejor puntuación
+document.getElementById("highScore").textContent = mejorPuntuacion;
+
+// Iniciar el juego automáticamente
+iniciarRonda();
+
+</script>
+
+</body>
+</html>

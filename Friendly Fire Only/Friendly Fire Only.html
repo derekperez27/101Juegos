@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Friendly Fire Only</title>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Courier New', monospace;
+    background: #0a0a0a;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+#game-container {
+    width: 100%;
+    max-width: 1000px;
+    text-align: center;
+    padding: 20px;
+}
+
+h1 {
+    font-size: 48px;
+    margin-bottom: 5px;
+    text-shadow: 0 0 20px rgba(255,100,100,0.8);
+    letter-spacing: 3px;
+}
+
+.subtitle {
+    font-size: 20px;
+    color: #ff6464;
+    margin-bottom: 20px;
+    font-style: italic;
+}
+
+#menu {
+    background: rgba(255,255,255,0.05);
+    padding: 40px;
+    border-radius: 20px;
+    border: 2px solid rgba(255,100,100,0.3);
+}
+
+#instructions {
+    text-align: left;
+    margin: 30px 0;
+    font-size: 18px;
+    line-height: 1.8;
+}
+
+#instructions h3 {
+    color: #ff6464;
+    margin: 20px 0 10px 0;
+}
+
+#instructions ul {
+    list-style: none;
+    padding-left: 20px;
+}
+
+#instructions li {
+    margin: 10px 0;
+}
+
+.warning {
+    background: rgba(255,100,100,0.2);
+    border-left: 4px solid #ff6464;
+    padding: 15px;
+    margin: 20px 0;
+    font-size: 17px;
+}
+
+#start-btn, #restart-btn {
+    background: linear-gradient(135deg, #ff6464, #ff3030);
+    border: none;
+    padding: 25px 70px;
+    font-size: 32px;
+    color: white;
+    border-radius: 15px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 30px;
+    transition: all 0.3s;
+    box-shadow: 0 8px 30px rgba(255,100,100,0.6);
+    font-family: 'Courier New', monospace;
+}
+
+#start-btn:hover, #restart-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 10px 40px rgba(255,100,100,0.8);
+}
+
+#game {
+    display: none;
+}
+
+#stats {
+    display: flex;
+    justify-content: space-around;
+    margin: 15px 0;
+    font-size: 18px;
+}
+
+.stat {
+    background: rgba(255,255,255,0.05);
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: 2px solid rgba(255,100,100,0.4);
+}
+
+#game-area {
+    background: rgba(0,0,0,0.6);
+    width: 100%;
+    height: 600px;
+    border: 3px solid #ff6464;
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+    cursor: crosshair;
+    margin: 20px 0;
+}
+
+.entity {
+    position: absolute;
+    border-radius: 50%;
+    transition: all 0.1s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.player {
+    background: #00ff88;
+    border: 3px solid #00cc66;
+    box-shadow: 0 0 25px rgba(0,255,136,0.8);
+    z-index: 10;
+}
+
+.enemy {
+    background: #ff6b6b;
+    border: 3px solid #cc0000;
+    box-shadow: 0 0 20px rgba(255,107,107,0.6);
+}
+
+.bullet {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: #ffaa00;
+    border-radius: 50%;
+    box-shadow: 0 0 15px #ffaa00;
+}
+
+#instruction-text {
+    font-size: 22px;
+    margin: 15px 0;
+    color: #ffaa00;
+}
+
+#game-over {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.95);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+#game-over-content {
+    background: linear-gradient(135deg, #1a0a0a, #0a0a0a);
+    padding: 60px;
+    border-radius: 25px;
+    border: 3px solid #ff6464;
+    text-align: center;
+    max-width: 600px;
+}
+
+#game-over h2 {
+    font-size: 56px;
+    color: #ff6464;
+    margin-bottom: 30px;
+}
+
+#death-reason {
+    font-size: 22px;
+    margin: 25px 0;
+    color: #ffaa00;
+    line-height: 1.6;
+}
+
+#final-stats {
+    font-size: 20px;
+    margin: 30px 0;
+    line-height: 1.8;
+}
+
+.hit-marker {
+    position: absolute;
+    font-size: 24px;
+    font-weight: bold;
+    pointer-events: none;
+    animation: floatUp 1s ease-out forwards;
+}
+
+@keyframes floatUp {
+    0% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-50px);
+    }
+}
+</style>
+</head>
+<body>
+
+<div id="game-container">
+    <h1>💥 FRIENDLY FIRE ONLY</h1>
+    <p class="subtitle">"Solo puedes morir por ayudar"</p>
+    
+    <div id="menu">
+        <div id="instructions">
+            <h3>📋 REGLAS</h3>
+            <ul>
+                <li>🟢 TÚ = Círculo verde</li>
+                <li>🔴 ENEMIGOS = Te disparan</li>
+                <li>💥 NO puedes disparar</li>
+                <li>⚡ Muévete para que se maten entre ellos</li>
+            </ul>
+            
+            <div class="warning">
+                <strong>⚠️ LA ESTRATEGIA:</strong><br>
+                Esquiva sus disparos. Si fallan, pueden darle a otros enemigos.<br>
+                Usa tu velocidad para posicionarte y que se eliminen entre sí.
+            </div>
+            
+            <h3>🎯 CONTROLES</h3>
+            <ul>
+                <li>🖱️ Mueve el RATÓN para moverte</li>
+                <li>Cada oleada trae MÁS enemigos</li>
+            </ul>
+        </div>
+        
+        <button id="start-btn">🎮 COMENZAR</button>
+    </div>
+    
+    <div id="game">
+        <div id="stats">
+            <div class="stat">
+                Puntuación: <span id="score">0</span>
+            </div>
+            <div class="stat">
+                Oleada: <span id="wave">1</span>
+            </div>
+            <div class="stat">
+                Enemigos: <span id="enemies-left">0</span>
+            </div>
+        </div>
+        
+        <div id="instruction-text">Mueve el ratón para esquivar</div>
+        
+        <div id="game-area"></div>
+    </div>
+    
+    <div id="game-over">
+        <div id="game-over-content">
+            <h2>💀 GAME OVER</h2>
+            <p id="death-reason"></p>
+            <div id="final-stats">
+                <p>Puntuación Final: <span id="final-score" style="color: #ff6464; font-size: 36px;">0</span></p>
+                <p>Oleadas Completadas: <span id="final-wave">0</span></p>
+                <p>Enemigos Eliminados: <span id="final-kills">0</span></p>
+            </div>
+            <button id="restart-btn">🔄 INTENTAR DE NUEVO</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const gameArea = document.getElementById('game-area');
+const playerSize = 40;
+const enemySize = 50;
+const bulletSpeed = 8;
+const playerSpeed = 12;
+
+let score = 0;
+let wave = 1;
+let totalKills = 0;
+let player = null;
+let enemies = [];
+let bullets = [];
+let mouseX = 0;
+let mouseY = 0;
+let gameActive = false;
+let gameLoopInterval = null;
+let enemyIdCounter = 0;
+
+function startGame() {
+    score = 0;
+    wave = 1;
+    totalKills = 0;
+    enemies = [];
+    bullets = [];
+    gameActive = true;
+    enemyIdCounter = 0;
+    
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('game').style.display = 'block';
+    document.getElementById('game-over').style.display = 'none';
+    
+    gameArea.innerHTML = '';
+    
+    const rect = gameArea.getBoundingClientRect();
+    player = {
+        x: rect.width / 2 - playerSize / 2,
+        y: rect.height / 2 - playerSize / 2,
+        element: document.createElement('div')
+    };
+    
+    player.element.className = 'entity player';
+    player.element.style.width = playerSize + 'px';
+    player.element.style.height = playerSize + 'px';
+    player.element.style.left = player.x + 'px';
+    player.element.style.top = player.y + 'px';
+    gameArea.appendChild(player.element);
+    
+    updateStats();
+    startWave();
+    
+    gameLoopInterval = setInterval(gameLoop, 1000 / 60);
+}
+
+function updateStats() {
+    document.getElementById('score').textContent = score;
+    document.getElementById('wave').textContent = wave;
+    document.getElementById('enemies-left').textContent = enemies.length;
+}
+
+function startWave() {
+    const numEnemies = 3 + wave * 2;
+    
+    for(let i = 0; i < numEnemies; i++) {
+        setTimeout(() => {
+            createEnemy();
+        }, i * 500);
+    }
+    
+    updateStats();
+}
+
+function createEnemy() {
+    const rect = gameArea.getBoundingClientRect();
+    
+    let x, y;
+    const side = Math.floor(Math.random() * 4);
+    
+    if(side === 0) {
+        x = Math.random() * (rect.width - enemySize);
+        y = 0;
+    } else if(side === 1) {
+        x = rect.width - enemySize;
+        y = Math.random() * (rect.height - enemySize);
+    } else if(side === 2) {
+        x = Math.random() * (rect.width - enemySize);
+        y = rect.height - enemySize;
+    } else {
+        x = 0;
+        y = Math.random() * (rect.height - enemySize);
+    }
+    
+    const enemy = {
+        id: enemyIdCounter++,
+        x: x,
+        y: y,
+        shootCooldown: Math.random() * 2000 + 1000,
+        lastShot: Date.now(),
+        element: document.createElement('div')
+    };
+    
+    enemy.element.className = 'entity enemy';
+    enemy.element.style.width = enemySize + 'px';
+    enemy.element.style.height = enemySize + 'px';
+    enemy.element.style.left = x + 'px';
+    enemy.element.style.top = y + 'px';
+    
+    gameArea.appendChild(enemy.element);
+    enemies.push(enemy);
+    
+    updateStats();
+}
+
+function gameLoop() {
+    if(!gameActive) return;
+    
+    const rect = gameArea.getBoundingClientRect();
+    
+    const dx = mouseX - (player.x + playerSize / 2);
+    const dy = mouseY - (player.y + playerSize / 2);
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if(distance > 5) {
+        player.x += (dx / distance) * playerSpeed;
+        player.y += (dy / distance) * playerSpeed;
+        
+        player.x = Math.max(0, Math.min(player.x, rect.width - playerSize));
+        player.y = Math.max(0, Math.min(player.y, rect.height - playerSize));
+        
+        player.element.style.left = player.x + 'px';
+        player.element.style.top = player.y + 'px';
+    }
+    
+    const now = Date.now();
+    enemies.forEach(enemy => {
+        if(now - enemy.lastShot > enemy.shootCooldown) {
+            enemyShoot(enemy);
+            enemy.lastShot = now;
+            enemy.shootCooldown = Math.random() * 1500 + 800;
+        }
+    });
+    
+    for(let i = bullets.length - 1; i >= 0; i--) {
+        const bullet = bullets[i];
+        bullet.x += bullet.vx;
+        bullet.y += bullet.vy;
+        
+        bullet.element.style.left = bullet.x + 'px';
+        bullet.element.style.top = bullet.y + 'px';
+        
+        if(checkBulletPlayerCollision(bullet)) {
+            gameOver('💥 <strong>Te alcanzaron.</strong><br><br>Debes ser más rápido esquivando.');
+            return;
+        }
+        
+        let hit = false;
+        for(let j = enemies.length - 1; j >= 0; j--) {
+            // Solo proteger al shooter si la bala NO ha rebotado
+            const canHit = bullet.bounces > 0 || enemies[j].id !== bullet.shooterId;
+            
+            if(canHit && checkBulletEnemyCollision(bullet, enemies[j])) {
+                const enemyX = enemies[j].x + enemySize / 2;
+                const enemyY = enemies[j].y + enemySize / 2;
+                
+                removeEnemy(j);
+                bullet.element.remove();
+                bullets.splice(i, 1);
+                
+                totalKills++;
+                score += 20;
+                showHitMarker(enemyX, enemyY, '+20 FUEGO AMIGO', '#00ff88');
+                updateStats();
+                hit = true;
+                break;
+            }
+        }
+        
+        if(hit) continue;
+        
+        // Rebote en los bordes (máximo 1 rebote)
+        let shouldRemove = false;
+        
+        if(bullet.x < 0 || bullet.x > rect.width) {
+            if(bullet.bounces < 1) {
+                bullet.vx = -bullet.vx;
+                bullet.x = bullet.x < 0 ? 0 : rect.width;
+                bullet.bounces++;
+            } else {
+                shouldRemove = true;
+            }
+        }
+        
+        if(bullet.y < 0 || bullet.y > rect.height) {
+            if(bullet.bounces < 1) {
+                bullet.vy = -bullet.vy;
+                bullet.y = bullet.y < 0 ? 0 : rect.height;
+                bullet.bounces++;
+            } else {
+                shouldRemove = true;
+            }
+        }
+        
+        if(shouldRemove) {
+            bullet.element.remove();
+            bullets.splice(i, 1);
+        }
+    }
+    
+    if(gameActive && enemies.length === 0) {
+        completeWave();
+    }
+}
+
+function enemyShoot(enemy) {
+    const enemyCenterX = enemy.x + enemySize / 2;
+    const enemyCenterY = enemy.y + enemySize / 2;
+    const playerCenterX = player.x + playerSize / 2;
+    const playerCenterY = player.y + playerSize / 2;
+    
+    const dx = playerCenterX - enemyCenterX;
+    const dy = playerCenterY - enemyCenterY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    const bullet = {
+        x: enemyCenterX,
+        y: enemyCenterY,
+        vx: (dx / distance) * bulletSpeed,
+        vy: (dy / distance) * bulletSpeed,
+        shooterId: enemy.id,
+        bounces: 0,
+        element: document.createElement('div')
+    };
+    
+    bullet.element.className = 'bullet';
+    bullet.element.style.left = bullet.x + 'px';
+    bullet.element.style.top = bullet.y + 'px';
+    
+    gameArea.appendChild(bullet.element);
+    bullets.push(bullet);
+}
+
+function checkBulletPlayerCollision(bullet) {
+    const bulletX = bullet.x;
+    const bulletY = bullet.y;
+    const playerCenterX = player.x + playerSize / 2;
+    const playerCenterY = player.y + playerSize / 2;
+    
+    const distance = Math.sqrt(
+        Math.pow(bulletX - playerCenterX, 2) + 
+        Math.pow(bulletY - playerCenterY, 2)
+    );
+    
+    return distance < playerSize / 2;
+}
+
+function checkBulletEnemyCollision(bullet, enemy) {
+    const bulletX = bullet.x;
+    const bulletY = bullet.y;
+    const enemyCenterX = enemy.x + enemySize / 2;
+    const enemyCenterY = enemy.y + enemySize / 2;
+    
+    const distance = Math.sqrt(
+        Math.pow(bulletX - enemyCenterX, 2) + 
+        Math.pow(bulletY - enemyCenterY, 2)
+    );
+    
+    return distance < enemySize / 2;
+}
+
+function removeEnemy(index) {
+    if(enemies[index]) {
+        enemies[index].element.remove();
+        enemies.splice(index, 1);
+    }
+}
+
+function showHitMarker(x, y, text, color = '#00ff88') {
+    const marker = document.createElement('div');
+    marker.className = 'hit-marker';
+    marker.textContent = text;
+    marker.style.left = x + 'px';
+    marker.style.top = y + 'px';
+    marker.style.color = color;
+    
+    gameArea.appendChild(marker);
+    setTimeout(() => marker.remove(), 1000);
+}
+
+function completeWave() {
+    gameActive = false;
+    clearInterval(gameLoopInterval);
+    
+    score += wave * 50;
+    wave++;
+    
+    bullets.forEach(b => b.element.remove());
+    bullets = [];
+    
+    document.getElementById('instruction-text').textContent = `¡Oleada ${wave - 1} completada! Preparando oleada ${wave}...`;
+    
+    setTimeout(() => {
+        gameActive = true;
+        document.getElementById('instruction-text').textContent = 'Mueve el ratón para esquivar';
+        startWave();
+        gameLoopInterval = setInterval(gameLoop, 1000 / 60);
+        updateStats();
+    }, 2500);
+}
+
+gameArea.addEventListener('mousemove', (e) => {
+    const rect = gameArea.getBoundingClientRect();
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
+});
+
+function gameOver(reason) {
+    gameActive = false;
+    clearInterval(gameLoopInterval);
+    
+    document.getElementById('death-reason').innerHTML = reason;
+    document.getElementById('final-score').textContent = score;
+    document.getElementById('final-wave').textContent = wave - 1;
+    document.getElementById('final-kills').textContent = totalKills;
+    
+    document.getElementById('game-over').style.display = 'flex';
+}
+
+document.getElementById('start-btn').onclick = startGame;
+document.getElementById('restart-btn').onclick = startGame;
+</script>
+
+</body>
+</html>

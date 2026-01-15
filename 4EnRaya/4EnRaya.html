@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>4 en Raya</title>
+
+<style>
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #1e1e1e;
+        color: white;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+
+    .game {
+        text-align: center;
+    }
+
+    .board {
+        display: grid;
+        grid-template-columns: repeat(7, 70px);
+        grid-template-rows: repeat(6, 70px);
+        gap: 5px;
+        background: #0047ab;
+        padding: 10px;
+        border-radius: 10px;
+        margin: 20px auto;
+    }
+
+    .cell {
+        width: 70px;
+        height: 70px;
+        background: #111;
+        border-radius: 50%;
+        cursor: pointer;
+    }
+
+    .red {
+        background: red;
+    }
+
+    .yellow {
+        background: yellow;
+    }
+
+    button, select {
+        padding: 8px 15px;
+        font-size: 16px;
+        margin: 5px;
+        cursor: pointer;
+    }
+
+    /* PANEL FINAL */
+    .overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.8);
+        display: none;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .panel {
+        background: #333;
+        padding: 30px;
+        border-radius: 10px;
+        text-align: center;
+    }
+</style>
+</head>
+
+<body>
+
+<div class="game">
+    <h1>4 en Raya</h1>
+
+    <select id="mode">
+        <option value="friend">Vs Amigo</option>
+        <option value="cpu">Vs Computadora</option>
+    </select>
+
+    <p id="status">Turno: 🔴</p>
+
+    <div class="board" id="board"></div>
+
+    <button onclick="resetGame()">Reiniciar</button>
+</div>
+
+<div class="overlay" id="overlay">
+    <div class="panel">
+        <h2 id="resultText"></h2>
+        <button onclick="resetGame()">Jugar otra vez</button>
+    </div>
+</div>
+
+<script>
+const ROWS = 6;
+const COLS = 7;
+let board = [];
+let currentPlayer = "red";
+let gameActive = true;
+
+const boardDiv = document.getElementById("board");
+const statusText = document.getElementById("status");
+const overlay = document.getElementById("overlay");
+const resultText = document.getElementById("resultText");
+const modeSelect = document.getElementById("mode");
+
+init();
+
+function init() {
+    board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    boardDiv.innerHTML = "";
+
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const cell = document.createElement("div");
+            cell.classList.add("cell");
+            cell.dataset.col = c;
+            cell.addEventListener("click", () => handleMove(c));
+            boardDiv.appendChild(cell);
+        }
+    }
+}
+
+function handleMove(col) {
+    if (!gameActive) return;
+
+    for (let r = ROWS - 1; r >= 0; r--) {
+        if (!board[r][col]) {
+            board[r][col] = currentPlayer;
+            updateBoard();
+            if (checkWin(r, col)) return endGame();
+            switchPlayer();
+            if (modeSelect.value === "cpu" && currentPlayer === "yellow") {
+                setTimeout(cpuMove, 500);
+            }
+            return;
+        }
+    }
+}
+
+function cpuMove() {
+    let availableCols = [];
+    for (let c = 0; c < COLS; c++) {
+        if (board[0][c] === null) availableCols.push(c);
+    }
+    const col = availableCols[Math.floor(Math.random() * availableCols.length)];
+    handleMove(col);
+}
+
+function updateBoard() {
+    const cells = document.querySelectorAll(".cell");
+    let i = 0;
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            cells[i].className = "cell";
+            if (board[r][c]) cells[i].classList.add(board[r][c]);
+            i++;
+        }
+    }
+}
+
+function switchPlayer() {
+    currentPlayer = currentPlayer === "red" ? "yellow" : "red";
+    statusText.textContent = "Turno: " + (currentPlayer === "red" ? "🔴" : "🟡");
+}
+
+function checkWin(row, col) {
+    return checkDir(row, col, 1, 0) ||
+           checkDir(row, col, 0, 1) ||
+           checkDir(row, col, 1, 1) ||
+           checkDir(row, col, 1, -1);
+}
+
+function checkDir(r, c, dr, dc) {
+    let count = 1;
+    count += countPieces(r, c, dr, dc);
+    count += countPieces(r, c, -dr, -dc);
+    return count >= 4;
+}
+
+function countPieces(r, c, dr, dc) {
+    let count = 0;
+    let color = board[r][c];
+    let i = 1;
+    while (
+        board[r + dr * i] &&
+        board[r + dr * i][c + dc * i] === color
+    ) {
+        count++;
+        i++;
+    }
+    return count;
+}
+
+function endGame() {
+    gameActive = false;
+    resultText.textContent =
+        currentPlayer === "red" ? "¡Gana 🔴!" : "¡Gana 🟡!";
+    overlay.style.display = "flex";
+}
+
+function resetGame() {
+    gameActive = true;
+    currentPlayer = "red";
+    overlay.style.display = "none";
+    statusText.textContent = "Turno: 🔴";
+    init();
+}
+</script>
+
+</body>
+</html>

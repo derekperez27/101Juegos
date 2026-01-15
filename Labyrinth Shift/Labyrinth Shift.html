@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>Labyrinth Shift</title>
+	<style>
+		html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;background:#222;color:#eee}
+		#game{display:block;background:#111;width:100%;height:100vh}
+		#ui{position:absolute;left:12px;top:12px}
+		#ui button{margin-right:6px}
+		#msg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:#fff;padding:12px 16px;border-radius:8px;display:none}
+	</style>
+</head>
+<body>
+	<canvas id="game"></canvas>
+	<div id="ui">
+		<button id="prev">◀ Nivel</button>
+		<button id="next">Nivel ▶</button>
+		<button id="restart">Reiniciar</button>
+		<span id="levelLabel">Nivel 1</span>
+	</div>
+	<div id="msg"></div>
+
+	<script>
+	const canvas = document.getElementById('game');
+	const ctx = canvas.getContext('2d');
+	let W = 0, H = 0;
+	function resize(){ W = canvas.width = innerWidth; H = canvas.height = innerHeight; draw(); }
+	addEventListener('resize', resize);
+	// Levels: 0 empty, 1 wall, 2 start, 3 exit
+	const levels = [
+		// 1 (very easy)
+		[
+			[1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,0,0,0,0,3,1],
+			[1,0,1,1,1,0,1,0,0,1],
+			[1,0,1,0,1,0,1,0,1,1],
+			[1,0,0,0,0,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1,1]
+		],
+		// 2 (easy)
+		[
+			[1,1,1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,1,0,0,0,0,0,3,1],
+			[1,0,1,0,1,0,1,1,1,0,1,1],
+			[1,0,1,0,0,0,0,0,1,0,0,1],
+			[1,0,1,1,1,1,1,0,1,1,0,1],
+			[1,0,0,0,0,0,1,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1,1,1,1]
+		],
+		// 3
+		[
+			[1,1,1,1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,0,1,0,0,0,0,0,3,1],
+			[1,0,1,1,0,1,0,1,1,1,0,0,1],
+			[1,0,0,1,0,0,0,1,0,0,0,0,1],
+			[1,1,0,1,1,1,0,1,0,1,1,0,1],
+			[1,0,0,0,0,0,0,0,0,0,1,0,1],
+			[1,1,1,1,1,1,1,1,1,1,1,1,1]
+		],
+		// 4 (twisty)
+		[
+			[1,1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,1,0,0,0,1,0,0,1],
+			[1,0,0,1,0,1,0,1,0,3,1],
+			[1,0,1,1,0,1,0,1,0,0,1],
+			[1,0,0,0,0,0,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1,1,1]
+		],
+		// 5 (rooms)
+		[
+			[1,1,1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,0,1,0,0,0,0,3,1],
+			[1,0,1,1,0,1,0,1,1,0,0,1],
+			[1,0,0,1,0,0,0,1,0,0,0,1],
+			[1,0,1,1,1,1,0,1,1,1,0,1],
+			[1,0,0,0,0,0,0,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1,1,1,1]
+		],
+		// 6 (narrow corridor)
+		[
+			[1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,0,0,0,3,1],
+			[1,1,1,1,1,1,1,1,1]
+		],
+		// 7 (spiral)
+		[
+			[1,1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,0,0,0,0,0,3,1],
+			[1,0,1,1,1,1,1,1,0,0,1],
+			[1,0,0,0,0,0,0,1,0,1,1],
+			[1,1,1,1,1,1,0,1,0,0,1],
+			[1,1,1,1,1,1,1,1,1,1,1]
+		],
+		// 8 (checker)
+		[
+			[1,1,1,1,1,1,1,1],
+			[1,2,0,1,0,1,0,3],
+			[1,0,1,0,1,0,1,0],
+			[1,0,0,0,0,0,0,0],
+			[1,1,1,1,1,1,1,1]
+		],
+		// 9 (open with islands)
+		[
+			[1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,0,0,1,0,3,1],
+			[1,0,1,1,0,0,1,0,0,1],
+			[1,0,0,1,0,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1,1]
+		],
+		// 10 (maze-like)
+		[
+			[1,1,1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,1,0,0,1,0,0,0,3,1],
+			[1,0,0,1,0,1,1,0,1,0,0,1],
+			[1,1,0,0,0,0,0,0,1,1,0,1],
+			[1,1,1,1,1,1,1,1,1,1,1,1]
+		],
+		// 11 (puzzle)
+		[
+			[1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,0,1,0,3,1],
+			[1,0,1,1,0,1,0,0,1],
+			[1,0,0,1,0,0,0,0,1],
+			[1,1,0,1,1,1,1,0,1],
+			[1,1,1,1,1,1,1,1,1]
+		],
+		// 12 (long hall)
+		[
+			[1,1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,0,0,0,0,0,3,1],
+			[1,1,1,1,1,1,1,1,1,1,1]
+		],
+		// 13 (zigzag)
+		[
+			[1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,1,0,1,0,1,0,3],
+			[1,0,0,0,0,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1,1]
+		],
+		// 14 (rooms+doors)
+		[
+			[1,1,1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,1,0,0,0,0,0,3,1],
+			[1,0,1,0,1,0,1,1,1,0,1,1],
+			[1,0,1,0,0,0,0,0,1,0,0,1],
+			[1,0,0,0,0,0,1,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1,1,1,1]
+		],
+		// 15 (small challenge)
+		[
+			[1,1,1,1,1,1,1],
+			[1,2,0,1,0,3,1],
+			[1,0,0,1,0,0,1],
+			[1,1,1,1,1,1,1]
+		],
+		// 16 (split paths)
+		[
+			[1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,0,0,0,3,1],
+			[1,0,1,1,0,1,0,0,1],
+			[1,0,0,0,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1]
+		],
+		// 17 (dead ends)
+		[
+			[1,1,1,1,1,1,1,1],
+			[1,2,0,1,0,0,3,1],
+			[1,0,1,1,1,0,0,1],
+			[1,0,0,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1]
+		],
+		// 18 (larger open)
+		[
+			[1,1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,0,0,0,0,0,3,1],
+			[1,0,0,1,1,1,1,1,0,0,1],
+			[1,0,0,0,0,0,0,1,0,0,1],
+			[1,1,1,1,1,1,1,1,1,1,1]
+		],
+		// 19 (maze with pockets)
+		[
+			[1,1,1,1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,1,0,0,0,0,0,3,1],
+			[1,0,1,0,1,0,1,1,1,0,1,1],
+			[1,0,1,0,0,0,0,0,1,0,0,1],
+			[1,0,0,0,0,0,1,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1,1,1,1]
+		],
+		// 20 (final small test)
+		[
+			[1,1,1,1,1,1,1,1,1],
+			[1,2,0,0,0,1,0,0,1],
+			[1,0,1,1,0,1,0,3,1],
+			[1,0,0,0,0,0,0,0,1],
+			[1,1,1,1,1,1,1,1,1]
+		]
+	];
+	// enemies per level (local coords in tile units) - empty for early levels, some enemies later
+	const enemiesPerLevel = [
+		[],
+		[ {type:'chaser', c:8, r:3, speed:60} ],
+		[ {type:'chaser', c:10, r:4, speed:70}, {type:'shooter', c:4, r:3, speed:30, cooldown:1500} ],
+		[],
+		[],
+		[],
+		[ {type:'chaser', c:4, r:3, speed:50} ],
+		[],
+		[ {type:'shooter', c:8, r:2, speed:30, cooldown:1200} ],
+		[],
+		[],
+		[ {type:'chaser', c:6, r:2, speed:80} ],
+		[],
+		[ {type:'shooter', c:9, r:2, speed:30, cooldown:1000}, {type:'chaser', c:3, r:3, speed:60} ],
+		[],
+		[],
+		[ {type:'chaser', c:5, r:2, speed:90} ],
+		[],
+		[],
+		[ {type:'shooter', c:6, r:2, speed:30, cooldown:900} ]
+	];
+
+	function scaleAndComplexify(origMap, levelIdx){
+		const rows = origMap.length, cols = origMap[0].length;
+		const maxExtraScale = 3; // final scale = 1 + maxExtraScale => up to 4x
+		const scale = 1 + Math.floor((levelIdx) / Math.max(1, levels.length - 1) * maxExtraScale);
+		const newRows = rows * scale, newCols = cols * scale;
+		const newMap = Array.from({length:newRows}, ()=>Array(newCols).fill(0));
+		let start = null, exit = null;
+		for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+			const v = origMap[r][c];
+			if(v===2) start = {r,c};
+			if(v===3) exit = {r,c};
+			for(let rr=0; rr<scale; rr++) for(let cc=0; cc<scale; cc++){
+				const nr = r*scale + rr, nc = c*scale + cc;
+				newMap[nr][nc] = (v===1) ? 1 : 0; // replicate walls, empty otherwise
+			}
+		}
+		// center start/exit inside their scaled block
+		if(start){ const sr = start.r*scale + Math.floor(scale/2); const sc = start.c*scale + Math.floor(scale/2); newMap[sr][sc] = 2; }
+		if(exit){ const er = exit.r*scale + Math.floor(scale/2); const ec = exit.c*scale + Math.floor(scale/2); newMap[er][ec] = 3; }
+
+		// add random extra walls to increase difficulty with level progression
+		const wallProb = Math.min(0.25, 0.02 * levelIdx); // roughly grows with level
+		for(let r=0;r<newRows;r++) for(let c=0;c<newCols;c++){
+			// don't overwrite start/exit or existing walls
+			if(newMap[r][c] === 0){
+				if(Math.random() < wallProb) newMap[r][c] = 1;
+			}
+		}
+
+		// Ensure there's always a path from start to exit. If random walls blocked it,
+		// perform a BFS (allowing traversal through walls) to find a route and clear
+		// the tiles along that route so the level remains solvable.
+		if(start && exit){
+			const sr = start.r*scale + Math.floor(scale/2);
+			const sc = start.c*scale + Math.floor(scale/2);
+			let er = exit.r*scale + Math.floor(scale/2);
+			let ec = exit.c*scale + Math.floor(scale/2);
+
+			// If the exit lies almost in a straight horizontal line from the start,
+			// relocate it further down so the player must navigate a true maze
+			// instead of moving in a straight line. We place the exit at least
+			// a fraction of the map's height below the start.
+			const minVertical = Math.max(2, Math.floor(newRows * 0.25));
+			if(Math.abs(er - sr) < minVertical){
+				// clear old exit
+				if(newMap[er] && newMap[er][ec] === 3) newMap[er][ec] = 0;
+				let placed = false;
+				for(let attempt = 0; attempt < 200 && !placed; attempt++){
+					const candidateRow = Math.min(newRows - 2, sr + minVertical + Math.floor(Math.random() * Math.max(1, newRows - sr - minVertical)));
+					const candidateCol = 1 + Math.floor(Math.random() * Math.max(1, newCols - 2));
+					if(candidateRow <= sr) continue;
+					// force the tile to be an exit (clear wall if needed)
+					newMap[candidateRow][candidateCol] = 3;
+					er = candidateRow; ec = candidateCol; placed = true;
+				}
+				if(!placed){
+					// fallback: find first row below start where we can place the exit
+					for(let rr = Math.min(newRows-2, sr + minVertical); rr < newRows-1 && !placed; rr++){
+						const cc = Math.max(1, Math.min(ec, newCols-2));
+						newMap[rr][cc] = 3; er = rr; ec = cc; placed = true; break;
+					}
+				}
+			}
+			// simple BFS allowing to traverse walls (we'll clear them afterwards)
+			const q = [];
+			const parents = new Int32Array(newRows * newCols).fill(-1);
+			q.push(sr*newCols + sc);
+			parents[sr*newCols + sc] = sr*newCols + sc;
+			let found = false;
+			for(let qi=0; qi<q.length; qi++){
+				const idx = q[qi];
+				const r = Math.floor(idx / newCols), c = idx % newCols;
+				if(r === er && c === ec){ found = true; break; }
+				const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
+				for(const d of dirs){
+					const nr = r + d[0], nc = c + d[1];
+					if(nr < 0 || nc < 0 || nr >= newRows || nc >= newCols) continue;
+					const nidx = nr*newCols + nc;
+					if(parents[nidx] !== -1) continue;
+					parents[nidx] = idx;
+					q.push(nidx);
+				}
+			}
+			if(found){
+				// carve the path: walk back from exit to start and set tiles to empty
+				let cur = er*newCols + ec;
+				while(cur !== parents[cur]){
+					const r = Math.floor(cur / newCols), c = cur % newCols;
+					newMap[r][c] = (newMap[r][c] === 1) ? 0 : newMap[r][c];
+					cur = parents[cur];
+				}
+			}
+		}
+		return newMap;
+	}
+
+	let currentLevel = 0;
+	const cellSize = 48; // size of cells when drawn
+	let map = null;
+
+	// sitioSeguro: coord de la casilla segura (no es pared) donde se respawnea el jugador
+	let sitioSeguro = { c: 0, r: 0 };
+
+	// only allow finishing the level after the player has moved the maze at least once
+	let allowExit = false;
+	// track maze position at load to detect real user movement (ignore tiny jitter)
+	let lastMazeX = 0, lastMazeY = 0;
+
+	// maze position
+	let mazeX = 0, mazeY = 0; // top-left position of maze in screen coords
+
+	// fixed player screen position (center-ish)
+	const playerX = () => W*0.5;
+	const playerY = () => H*0.5;
+
+	function loadLevel(i){
+		// clamp level index to valid range (no wrapping)
+		currentLevel = Math.max(0, Math.min(i, levels.length - 1));
+		// clone level data so we don't mutate original level definitions
+		let base = levels[currentLevel].map(row => row.slice());
+		// scale and increase complexity depending on level
+		map = scaleAndComplexify(base, currentLevel);
+		// compute maze pixel size
+		const cols = map[0].length, rows = map.length;
+		const mazeW = cols * cellSize, mazeH = rows * cellSize;
+		// find start cell (prefer explicit 2). If none, find nearest non-wall tile using spiral search.
+		let sx = -1, sy = -1;
+		for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) if(map[r][c]===2){ sx=c; sy=r; }
+		if(sx === -1){
+			// pick first non-wall as initial guess
+			for(let r=0;r<rows && sx===-1;r++) for(let c=0;c<cols;c++) if(map[r][c] !== 1){ sx = c; sy = r; break; }
+		}
+		if(sx === -1){ sx = 1; sy = 1; }
+		// If the chosen cell is a wall (defensive), search outward for the nearest non-wall tile
+		function findNearestNonWall(startX, startY){
+			const maxR = Math.max(rows, cols);
+			for(let radius=0; radius<=maxR; radius++){
+				for(let dy=-radius; dy<=radius; dy++){
+					const dx = radius - Math.abs(dy);
+					const candidates = [ [startX+dx, startY+dy], [startX-dx, startY+dy] ];
+					for(const [cx,cy] of candidates){
+						if(cx < 0 || cy < 0 || cx >= cols || cy >= rows) continue;
+						if(map[cy][cx] !== 1) return [cx,cy];
+					}
+				}
+			}
+			return [startX, startY];
+		}
+		if(map[sy] && map[sy][sx] === 1){ const found = findNearestNonWall(sx, sy); sx = found[0]; sy = found[1]; }
+		// ensure chosen spawn is a safe tile (no wall)
+		if(map[sy] && map[sy][sx] === 1){
+			const found = findNearestNonWall(sx, sy);
+			sx = found[0]; sy = found[1];
+		}
+		// record sitioSeguro for this level (column,row)
+		sitioSeguro.c = sx; sitioSeguro.r = sy;
+		// place maze so the chosen start cell is exactly under the fixed player
+		// (do not auto-center afterwards — user requires the blue start cell to be the respawn point)
+		mazeX = playerX() - (sx*cellSize + cellSize/2);
+		mazeY = playerY() - (sy*cellSize + cellSize/2);
+		// require an explicit move before allowing the level to be completed
+		allowExit = false;
+		// record base maze position to detect meaningful movement
+		lastMazeX = mazeX; lastMazeY = mazeY;
+		document.getElementById('levelLabel').textContent = 'Nivel ' + (currentLevel+1);
+		updateNavButtons();
+		hideMsg();
+		draw();
+		initEnemies();
+	}
+
+	// enemies and projectiles (local coordinates relative to maze origin)
+	let enemies = [];
+	let projectiles = [];
+
+	function initEnemies(){
+		enemies = [];
+		projectiles = [];
+		const defs = enemiesPerLevel[currentLevel] || [];
+		for(const d of defs){
+			const ex = d.c*cellSize + cellSize/2;
+			const ey = d.r*cellSize + cellSize/2;
+			enemies.push({type:d.type, x:ex, y:ey, speed:d.speed||40, cooldown:d.cooldown||2000, timer:0});
+		}
+		// add extra enemies as difficulty scales with level
+		const extra = Math.floor((currentLevel) / 4); // add one extra every 4 levels
+		for(let i=0;i<extra;i++){
+			// find a random empty tile (not wall, not start/exit)
+			let tries = 0; while(tries < 200){
+				const rr = Math.floor(Math.random() * map.length);
+				const cc = Math.floor(Math.random() * map[0].length);
+				if(map[rr][cc] === 0){
+					const ex = cc*cellSize + cellSize/2;
+					const ey = rr*cellSize + cellSize/2;
+					enemies.push({type:'chaser', x:ex, y:ey, speed:50 + currentLevel*2, timer:0});
+					break;
+				}
+				tries++;
+			}
+		}
+	}
+
+	// dragging
+	let dragging = false, lastMouse = null;
+	canvas.addEventListener('mousedown', e=>{ dragging=true; lastMouse={x:e.clientX,y:e.clientY}; });
+	addEventListener('mouseup', e=>{ dragging=false; lastMouse=null; });
+	addEventListener('mousemove', e=>{ if(!dragging) return; const dx = e.clientX - lastMouse.x; const dy = e.clientY - lastMouse.y; lastMouse={x:e.clientX,y:e.clientY}; mazeX += dx; mazeY += dy; if(!allowExit){ const moved = Math.hypot(mazeX - lastMazeX, mazeY - lastMazeY); if(moved > 4) allowExit = true; } draw(); checkExit(); });
+	// touch support
+	canvas.addEventListener('touchstart', e=>{ dragging=true; const t=e.touches[0]; lastMouse={x:t.clientX,y:t.clientY}; });
+	addEventListener('touchend', e=>{ dragging=false; lastMouse=null; });
+	addEventListener('touchmove', e=>{ if(!dragging) return; const t=e.touches[0]; const dx = t.clientX - lastMouse.x; const dy = t.clientY - lastMouse.y; lastMouse={x:t.clientX,y:t.clientY}; mazeX += dx; mazeY += dy; if(!allowExit){ const moved = Math.hypot(mazeX - lastMazeX, mazeY - lastMazeY); if(moved > 4) allowExit = true; } draw(); checkExit(); e.preventDefault(); }, {passive:false});
+
+	// check if exit is at player position
+	function checkExit(){
+		if(!map) return;
+		const rows = map.length, cols = map[0].length;
+		// check wall collision at player's position
+		const px = playerX(), py = playerY();
+		const tileC = Math.floor((px - mazeX) / cellSize);
+		const tileR = Math.floor((py - mazeY) / cellSize);
+		if(tileR >= 0 && tileR < rows && tileC >= 0 && tileC < cols){
+			if(map[tileR][tileC] === 1){
+				playerDie('Has tocado una pared');
+				return;
+			}
+		}
+
+		for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+			if(map[r][c]===3){
+				const ex = mazeX + c*cellSize + cellSize/2;
+				const ey = mazeY + r*cellSize + cellSize/2;
+				const dx = ex - playerX(); const dy = ey - playerY();
+				if(Math.hypot(dx,dy) < cellSize*0.5){ // reached exit
+					console.log('checkExit: level', currentLevel+1, 'dist=', Math.hypot(dx,dy).toFixed(1), 'allowExit=', allowExit);
+					if(allowExit){
+						console.log('checkExit: calling levelComplete()');
+						levelComplete();
+						return;
+					}
+				}
+			}
+		}
+	}
+
+	let transitioning = false;
+	function levelComplete(){
+		if(transitioning) return;
+		transitioning = true;
+		if(currentLevel < levels.length - 1){
+			const target = currentLevel + 1;
+			showMsg('¡Nivel completado! Avanzando...');
+			setTimeout(()=>{ loadLevel(target); transitioning = false; }, 700);
+		} else {
+			showMsg('¡Has completado todos los niveles!');
+			transitioning = false;
+		}
+	}
+
+	function showMsg(text){ const m=document.getElementById('msg'); m.textContent=text; m.style.display='block'; }
+	function hideMsg(){ document.getElementById('msg').style.display='none'; }
+
+	function playerDie(text){
+		showMsg(text || 'Has muerto');
+		// restart level after short delay
+		setTimeout(()=>{ loadLevel(currentLevel); }, 800);
+	}
+
+	// UI buttons
+	const nextBtn = document.getElementById('next');
+	const prevBtn = document.getElementById('prev');
+	nextBtn.addEventListener('click', ()=>{ if(currentLevel < levels.length - 1) loadLevel(currentLevel+1); });
+	prevBtn.addEventListener('click', ()=>{ if(currentLevel > 0) loadLevel(currentLevel-1); });
+	document.getElementById('restart').addEventListener('click', ()=>{ loadLevel(currentLevel); });
+
+	function updateNavButtons(){
+		nextBtn.disabled = (currentLevel >= levels.length - 1);
+		prevBtn.disabled = (currentLevel <= 0);
+	}
+
+	// drawing
+	function draw(){
+		ctx.clearRect(0,0,W,H);
+		ctx.fillStyle='#111'; ctx.fillRect(0,0,W,H);
+
+		if(!map) return;
+		const rows = map.length, cols = map[0].length;
+		// draw maze
+		for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+			const val = map[r][c];
+			const x = mazeX + c*cellSize, y = mazeY + r*cellSize;
+			if(val===1){ ctx.fillStyle='#3a3a3a'; ctx.fillRect(x,y,cellSize,cellSize); }
+			else if(val===2){ // start
+				ctx.fillStyle='#2a9d8f'; ctx.fillRect(x+4,y+4,cellSize-8,cellSize-8);
+			} else if(val===3){ // exit
+				ctx.fillStyle='#e9c46a'; ctx.fillRect(x+4,y+4,cellSize-8,cellSize-8);
+			} else { ctx.fillStyle='#111'; ctx.fillRect(x,y,cellSize,cellSize); }
+			// grid lines
+			ctx.strokeStyle='rgba(255,255,255,0.02)'; ctx.strokeRect(x,y,cellSize,cellSize);
+		}
+
+		// draw player fixed marker
+		const px = playerX(), py = playerY();
+		ctx.beginPath(); ctx.fillStyle='#fff'; ctx.arc(px,py,8,0,Math.PI*2); ctx.fill();
+		ctx.strokeStyle='#000'; ctx.lineWidth=2; ctx.stroke();
+
+		// debug: draw sitioSeguro marker (highlight start/respawn tile)
+		if(typeof sitioSeguro === 'object'){
+			const sx = sitioSeguro.c, sy = sitioSeguro.r;
+			if(map && sy >= 0 && sy < map.length && sx >= 0 && sx < map[0].length){
+				const cx = mazeX + sx*cellSize + cellSize/2;
+				const cy = mazeY + sy*cellSize + cellSize/2;
+				ctx.beginPath(); ctx.strokeStyle='rgba(0,200,180,0.9)'; ctx.lineWidth=3; ctx.rect(cx - cellSize/2 + 2, cy - cellSize/2 + 2, cellSize-4, cellSize-4); ctx.stroke();
+				ctx.beginPath(); ctx.fillStyle='rgba(0,200,180,0.12)'; ctx.fillRect(cx - cellSize/2 + 2, cy - cellSize/2 + 2, cellSize-4, cellSize-4);
+			}
+		}
+	}
+
+	// keyboard shortcuts
+	addEventListener('keydown', e=>{
+		if(e.key==='ArrowLeft'){ mazeX += 10; if(!allowExit){ const moved = Math.hypot(mazeX - lastMazeX, mazeY - lastMazeY); if(moved > 4) allowExit = true; } }
+		if(e.key==='ArrowRight'){ mazeX -= 10; if(!allowExit){ const moved = Math.hypot(mazeX - lastMazeX, mazeY - lastMazeY); if(moved > 4) allowExit = true; } }
+		if(e.key==='ArrowUp'){ mazeY += 10; if(!allowExit){ const moved = Math.hypot(mazeX - lastMazeX, mazeY - lastMazeY); if(moved > 4) allowExit = true; } }
+		if(e.key==='ArrowDown'){ mazeY -= 10; if(!allowExit){ const moved = Math.hypot(mazeX - lastMazeX, mazeY - lastMazeY); if(moved > 4) allowExit = true; } }
+		if((e.key==='n' || e.key==='N') && currentLevel < levels.length - 1) loadLevel(currentLevel+1);
+		if(e.key==='r' || e.key==='R') loadLevel(currentLevel);
+		draw(); checkExit();
+	});
+
+	// initialize sizes then start first levelai
+    
+	// --- game simulation: enemies, projectiles and main loop ---
+
+	function updateEnemies(dt){
+		const rows = map.length, cols = map[0].length;
+		for(const en of enemies){
+			// timer for shooters
+			en.timer += dt*1000;
+			const targetX = playerX() - mazeX; // local coords target
+			const targetY = playerY() - mazeY;
+			if(en.type === 'chaser'){
+				let dx = targetX - en.x, dy = targetY - en.y;
+				const d = Math.hypot(dx,dy) || 1;
+				dx /= d; dy /= d;
+				en.x += dx * en.speed * dt;
+				en.y += dy * en.speed * dt;
+				// collision with player
+				const worldX = mazeX + en.x, worldY = mazeY + en.y;
+				if(Math.hypot(worldX - playerX(), worldY - playerY()) < 18){ playerDie('Te atrapó un enemigo'); return; }
+			} else if(en.type === 'shooter'){
+				// simple shooter: stay still and fire toward player
+				if(en.timer >= en.cooldown){
+					en.timer = 0;
+					const dx = targetX - en.x, dy = targetY - en.y; const d = Math.hypot(dx,dy)||1;
+					const speed = 260;
+					projectiles.push({ x: en.x, y: en.y, vx: (dx/d)*speed, vy: (dy/d)*speed, life: 5000 });
+				}
+				const worldX = mazeX + en.x, worldY = mazeY + en.y;
+				if(Math.hypot(worldX - playerX(), worldY - playerY()) < 18){ playerDie('Te alcanzó un enemigo'); return; }
+			}
+		}
+	}
+
+	function updateProjectiles(dt){
+		for(let i = projectiles.length-1; i>=0; i--){
+			const p = projectiles[i];
+			p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt*1000;
+			// check collision with player
+			const worldX = mazeX + p.x, worldY = mazeY + p.y;
+			if(Math.hypot(worldX - playerX(), worldY - playerY()) < 12){ projectiles.splice(i,1); playerDie('Impacto enemigo'); return; }
+			// check collision with walls or outside map
+			const tc = Math.floor(p.x / cellSize), tr = Math.floor(p.y / cellSize);
+			if(tr < 0 || tr >= map.length || tc < 0 || tc >= map[0].length || map[tr][tc] === 1 || p.life <= 0){ projectiles.splice(i,1); continue; }
+		}
+	}
+
+	let lastTime = performance.now();
+	function tick(ts){
+		const dt = Math.min(0.05, (ts - lastTime)/1000); lastTime = ts;
+		if(map){ updateEnemies(dt); updateProjectiles(dt); checkExit(); }
+		draw();
+		requestAnimationFrame(tick);
+	}
+
+	// initialize sizes then start first level
+	resize();
+	loadLevel(0);
+	</script>
+</body>
+</html>
+
+//funciona sin enemigos

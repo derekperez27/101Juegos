@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>DUEL OR DIE</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+#modeSelection{
+    margin:40px auto;
+}
+#modeSelection button{
+    margin:10px;
+    padding:15px 30px;
+    font-size:18px;
+    background:#444;
+    color:white;
+    border:2px solid white;
+    cursor:pointer;
+    border-radius:5px;
+}
+#modeSelection button:hover{
+    background:#666;
+}
+#gameArea{
+    display:none;
+}
+#scoreboard{
+    font-size:24px;
+    margin:20px auto;
+    display:flex;
+    justify-content:center;
+    gap:40px;
+}
+.playerScore{
+    padding:10px 20px;
+    border:2px solid white;
+    border-radius:10px;
+    min-width:120px;
+}
+#bar{
+    width:400px;
+    height:40px;
+    margin:50px auto;
+    background:red;
+    border:3px solid white;
+    position:relative;
+    overflow:hidden;
+}
+#barFill{
+    height:100%;
+    width:0%;
+    background:lime;
+    transition:width 0.3s;
+}
+#msg{
+    font-size:22px;
+    margin-top:30px;
+    min-height:30px;
+}
+#controls{
+    margin-top:20px;
+    font-size:14px;
+    color:#aaa;
+}
+button{
+    margin:10px;
+    padding:12px 25px;
+    font-size:16px;
+    background:#444;
+    color:white;
+    border:2px solid white;
+    cursor:pointer;
+    border-radius:5px;
+}
+button:hover{
+    background:#666;
+}
+#startBtn{
+    background:#00aa00;
+    font-size:20px;
+    padding:15px 35px;
+}
+#startBtn:hover{
+    background:#00cc00;
+}
+</style>
+</head>
+<body>
+
+<h1>🔫 DUEL OR DIE 🔫</h1>
+
+<div id="modeSelection">
+    <h2>Selecciona modo de juego</h2>
+    <button onclick="selectMode('ai')">🤖 VS Máquina</button>
+    <button onclick="selectMode('player')">👥 VS Amigo</button>
+</div>
+
+<div id="gameArea">
+    <div id="scoreboard">
+        <div class="playerScore">
+            <div id="p1Name">Jugador 1</div>
+            <div id="p1Score" style="font-size:32px; color:#4fc3f7;">0</div>
+        </div>
+        <div class="playerScore">
+            <div id="p2Name">Jugador 2</div>
+            <div id="p2Score" style="font-size:32px; color:#ff6b6b;">0</div>
+        </div>
+    </div>
+
+    <div id="bar">
+        <div id="barFill"></div>
+    </div>
+    
+    <p id="msg">Presiona "Empezar" para comenzar</p>
+    
+    <div id="controls"></div>
+    
+    <button id="startBtn" onclick="start()">🎮 Empezar</button>
+    <button onclick="restartGame()">🔄 Nueva Ronda</button>
+    <button onclick="resetScore()">📊 Reiniciar Marcador</button>
+    <button onclick="backToMenu()">🏠 Menú Principal</button>
+</div>
+
+<script>
+const bar = document.getElementById("bar");
+const barFill = document.getElementById("barFill");
+const msg = document.getElementById("msg");
+const p1ScoreEl = document.getElementById("p1Score");
+const p2ScoreEl = document.getElementById("p2Score");
+const p1NameEl = document.getElementById("p1Name");
+const p2NameEl = document.getElementById("p2Name");
+const controlsEl = document.getElementById("controls");
+const modeSelection = document.getElementById("modeSelection");
+const gameArea = document.getElementById("gameArea");
+const startBtn = document.getElementById("startBtn");
+
+let state = "idle"; // idle | waiting | green | end
+let timer;
+let resultTimer;
+let gameMode = null; // 'ai' or 'player'
+let p1Score = 0;
+let p2Score = 0;
+let greenTime = 0;
+let aiReactionTime = 0;
+let p1Time = null;
+let p2Time = null;
+let winner = null;
+
+function selectMode(mode){
+    gameMode = mode;
+    modeSelection.style.display = "none";
+    gameArea.style.display = "block";
+    
+    if(mode === 'ai'){
+        p1NameEl.textContent = "👤 Tú";
+        p2NameEl.textContent = "🤖 IA";
+        controlsEl.innerHTML = "Presiona <strong>ESPACIO</strong> o <strong>CLICK</strong> para disparar";
+    } else {
+        p1NameEl.textContent = "👤 Jugador 1";
+        p2NameEl.textContent = "👤 Jugador 2";
+        controlsEl.innerHTML = "J1: <strong>A</strong> | J2: <strong>L</strong>";
+    }
+}
+
+function backToMenu(){
+    modeSelection.style.display = "block";
+    gameArea.style.display = "none";
+    resetScore();
+}
+
+function resetScore(){
+    p1Score = 0;
+    p2Score = 0;
+    updateScoreboard();
+    restartGame();
+}
+
+function updateScoreboard(){
+    p1ScoreEl.textContent = p1Score;
+    p2ScoreEl.textContent = p2Score;
+}
+
+function restartGame(){
+    clearTimeout(timer);
+    clearTimeout(resultTimer);
+    bar.style.background = "red";
+    barFill.style.width = "0%";
+    msg.textContent = "Presiona 'Empezar' para la siguiente ronda";
+    state = "idle";
+    startBtn.disabled = false;
+    p1Time = null;
+    p2Time = null;
+    winner = null;
+}
+
+function start(){
+    if(state !== "idle") return;
+    
+    clearTimeout(timer);
+    bar.style.background = "red";
+    barFill.style.width = "0%";
+    msg.textContent = "🚨 Espera el verde… ¡NO dispares!";
+    state = "waiting";
+    startBtn.disabled = true;
+    greenTime = 0;
+    p1Time = null;
+    p2Time = null;
+    winner = null;
+
+    const delay = Math.random() * 4000 + 2000; // 2-6 segundos
+
+    timer = setTimeout(()=>{
+        bar.style.background = "lime";
+        barFill.style.width = "100%";
+        msg.textContent = "🎯 ¡¡¡DISPARA!!!";
+        state = "green";
+        greenTime = Date.now();
+        
+        // IA dispara con reacción humana realista
+        if(gameMode === 'ai'){
+            aiReactionTime = Math.random() * 300 + 150; // 150-450ms
+            setTimeout(()=>{
+                if(state === "green"){
+                    aiShoot();
+                }
+            }, aiReactionTime);
+        }
+    }, delay);
+}
+
+function shootP1(){
+    if(state === "waiting"){
+        lose(1, "💀 Demasiado pronto - Perdió J1");
+    }
+    else if(state === "green" && p1Time === null){
+        p1Time = Date.now() - greenTime;
+        
+        if(winner === null){
+            winner = 1;
+            // Esperar 500ms para ver si el otro jugador también dispara
+            if(gameMode === 'player'){
+                msg.textContent = "⏱️ Registrando tiempos...";
+                resultTimer = setTimeout(() => {
+                    showResults();
+                }, 500);
+            } else {
+                // En modo IA, mostrar inmediatamente
+                showResults();
+            }
+        }
+    }
+}
+
+function shootP2(){
+    if(state === "waiting"){
+        lose(2, "💀 Demasiado pronto - Perdió J2");
+    }
+    else if(state === "green" && p2Time === null){
+        p2Time = Date.now() - greenTime;
+        
+        if(winner === null){
+            winner = 2;
+            // Esperar 500ms para ver si el otro jugador también dispara (solo en modo player)
+            if(gameMode === 'player'){
+                msg.textContent = "⏱️ Registrando tiempos...";
+                resultTimer = setTimeout(() => {
+                    showResults();
+                }, 500);
+            } else {
+                // En modo IA
+                showResults();
+            }
+        } else if(gameMode === 'player' && p1Time !== null){
+            // El J2 disparó después que J1, cancelar timer y mostrar resultados
+            clearTimeout(resultTimer);
+            showResults();
+        }
+    }
+}
+
+function aiShoot(){
+    if(state === "green" && p2Time === null){
+        p2Time = aiReactionTime;
+        if(winner === null){
+            winner = 2;
+            showResults();
+        }
+    }
+}
+
+function showResults(){
+    state = "end";
+    
+    let resultText = "";
+    let actualWinner = winner;
+    
+    if(gameMode === 'player'){
+        // Modo VS Amigo - comparar tiempos si ambos dispararon
+        if(p1Time !== null && p2Time !== null){
+            // Ambos dispararon, el más rápido gana
+            if(p1Time < p2Time){
+                actualWinner = 1;
+                resultText = `🏆 ¡Ganó J1! ${p1Time}ms vs ${p2Time}ms (Diferencia: ${(p2Time - p1Time).toFixed(0)}ms)`;
+            } else if(p2Time < p1Time){
+                actualWinner = 2;
+                resultText = `🏆 ¡Ganó J2! ${p2Time}ms vs ${p1Time}ms (Diferencia: ${(p1Time - p2Time).toFixed(0)}ms)`;
+            } else {
+                resultText = `🤝 ¡EMPATE! Ambos: ${p1Time}ms`;
+            }
+        } else if(p1Time !== null){
+            actualWinner = 1;
+            resultText = `🏆 ¡Ganó J1! (${p1Time}ms) | J2: No disparó`;
+        } else if(p2Time !== null){
+            actualWinner = 2;
+            resultText = `🏆 ¡Ganó J2! (${p2Time}ms) | J1: No disparó`;
+        }
+    } else if(gameMode === 'ai'){
+        // Modo VS IA
+        if(p1Time !== null && p2Time !== null){
+            if(p1Time < p2Time){
+                actualWinner = 1;
+                resultText = `🏆 ¡Ganaste! ${p1Time}ms vs IA: ${p2Time.toFixed(0)}ms (Diferencia: ${(p2Time - p1Time).toFixed(0)}ms)`;
+            } else {
+                actualWinner = 2;
+                resultText = `🤖 IA ganó ${p2Time.toFixed(0)}ms vs Tú: ${p1Time}ms (Diferencia: ${(p1Time - p2Time).toFixed(0)}ms)`;
+            }
+        } else if(p1Time !== null){
+            actualWinner = 1;
+            resultText = `🏆 ¡Ganaste! (${p1Time}ms) | IA habría tardado: ${aiReactionTime.toFixed(0)}ms`;
+        } else if(p2Time !== null){
+            actualWinner = 2;
+            resultText = `🤖 IA ganó (${p2Time.toFixed(0)}ms) | Tú no disparaste`;
+        }
+    }
+    
+    msg.textContent = resultText;
+    bar.style.background = "lime";
+    
+    if(actualWinner === 1){
+        p1Score++;
+    } else if(actualWinner === 2){
+        p2Score++;
+    }
+    
+    updateScoreboard();
+    startBtn.disabled = false;
+}
+
+function win(player, text){
+    // Esta función ahora solo se usa para casos especiales
+    state = "end";
+    msg.textContent = text;
+    bar.style.background = "lime";
+    
+    if(player === 1){
+        p1Score++;
+    } else {
+        p2Score++;
+    }
+    updateScoreboard();
+    startBtn.disabled = false;
+}
+
+function lose(player, text){
+    state = "end";
+    msg.textContent = text;
+    bar.style.background = "darkred";
+    
+    if(player === 1){
+        p2Score++;
+    } else {
+        p1Score++;
+    }
+    updateScoreboard();
+    startBtn.disabled = false;
+}
+
+document.addEventListener("keydown", e => {
+    if(gameMode === 'ai'){
+        if(e.code === "Space"){
+            shootP1();
+        }
+    } else if(gameMode === 'player'){
+        if(e.code === "KeyA"){
+            shootP1();
+        }
+        if(e.code === "KeyL"){
+            shootP2();
+        }
+    }
+});
+
+document.addEventListener("click", e => {
+    // Solo disparar con click en modo IA y si no es un botón
+    if(gameMode === 'ai' && !e.target.closest('button')){
+        shootP1();
+    }
+});
+</script>
+
+</body>
+</html>

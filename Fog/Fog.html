@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Fog</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+button{
+    padding:10px 20px;
+    font-size:16px;
+    margin-top:10px;
+    cursor:pointer;
+}
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+#records h2 {
+    color: #00ff00;
+}
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #00ff00;
+}
+.record-rank {
+    font-weight: bold;
+    color: #00ff00;
+    margin-right: 10px;
+}
+.record-level {
+    color: #4CAF50;
+    font-weight: bold;
+}
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+#msg {
+    font-size: 20px;
+    font-weight: bold;
+    color: #00ff00;
+    min-height: 30px;
+}
+</style>
+</head>
+<body>
+
+<h1>🌁 FOG</h1>
+<p>Nivel: <span id="level">1</span> | Visión: <span id="visionDisplay">1.5</span></p>
+<p id="msg">Explora y revela el mapa</p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<button id="restart" style="display:none">🔁 Volver a jugar</button>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const levelSpan = document.getElementById("level");
+const visionDisplay = document.getElementById("visionDisplay");
+const msg = document.getElementById("msg");
+const restartBtn = document.getElementById("restart");
+
+const SIZE = 10;
+const CELL = 40;
+
+let running = false;
+let currentLevel = 1;
+let vision = 1.5;
+let explored = new Set();
+
+let player = { x: 0, y: 9 };
+let goal = { x: 9, y: 0 };
+let walls = [];
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('fogRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(level) {
+    const records = loadRecords();
+    records.push({
+        level: level,
+        date: new Date().toLocaleDateString()
+    });
+    records.sort((a, b) => b.level - a.level);
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('fogRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-level">Nivel ${record.level}</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('fogRecords');
+        displayRecords();
+    }
+}
+
+displayRecords();
+
+/* ===== MAPA ===== */
+function hasPath(wallsSet) {
+    // BFS para verificar si existe camino de player a goal
+    const visited = new Set();
+    const queue = [{x: player.x, y: player.y}];
+    visited.add(`${player.x},${player.y}`);
+    
+    while(queue.length > 0) {
+        const pos = queue.shift();
+        
+        if(pos.x === goal.x && pos.y === goal.y) {
+            return true;
+        }
+        
+        const moves = [
+            {x: pos.x + 1, y: pos.y},
+            {x: pos.x - 1, y: pos.y},
+            {x: pos.x, y: pos.y + 1},
+            {x: pos.x, y: pos.y - 1}
+        ];
+        
+        for(let move of moves) {
+            const key = `${move.x},${move.y}`;
+            if(move.x >= 0 && move.x < SIZE && move.y >= 0 && move.y < SIZE &&
+               !visited.has(key) && !wallsSet.has(key)) {
+                visited.add(key);
+                queue.push(move);
+            }
+        }
+    }
+    
+    return false;
+}
+
+function generate(){
+    walls.length = 0;
+    
+    // Generar paredes hasta que haya un camino válido
+    let attempts = 0;
+    let valid = false;
+    const wallDensity = Math.min(0.35, 0.25 + (currentLevel * 0.01)); // Más paredes con cada nivel
+    
+    while(!valid && attempts < 100) {
+        walls.length = 0;
+        const wallsSet = new Set();
+        
+        for(let y=0;y<SIZE;y++){
+            for(let x=0;x<SIZE;x++){
+                if(Math.random()<wallDensity &&
+                   !(x===player.x && y===player.y) &&
+                   !(x===goal.x && y===goal.y)){
+                    walls.push({x,y});
+                    wallsSet.add(`${x},${y}`);
+                }
+            }
+        }
+        
+        valid = hasPath(wallsSet);
+        attempts++;
+    }
+    
+    // Si no se encuentra camino válido, crear uno simple
+    if(!valid) {
+        walls.length = 0;
+    }
+}
+
+/* ===== INIT ===== */
+function startGame() {
+    currentLevel = 1;
+    startLevel();
+}
+
+function startLevel() {
+    running = true;
+    explored = new Set();
+    msg.textContent = "Explora y revela el mapa";
+    restartBtn.style.display = "none";
+    
+    // Posiciones aleatorias pero válidas
+    player = { x: Math.floor(Math.random() * SIZE), y: Math.floor(Math.random() * SIZE) };
+    do {
+        goal = { x: Math.floor(Math.random() * SIZE), y: Math.floor(Math.random() * SIZE) };
+    } while(goal.x === player.x && goal.y === player.y);
+    
+    generate();
+    
+    // Reducir visión progresivamente
+    vision = Math.max(1.0, 1.8 - (currentLevel * 0.05));
+    
+    levelSpan.textContent = currentLevel;
+    visionDisplay.textContent = vision.toFixed(1);
+    
+    // Explorar posición inicial
+    updateExplored();
+}
+
+function updateExplored() {
+    // Añadir celdas visibles al conjunto de exploradas
+    for(let y=0; y<SIZE; y++) {
+        for(let x=0; x<SIZE; x++) {
+            const dx = x - player.x;
+            const dy = y - player.y;
+            const dist = Math.hypot(dx, dy);
+            
+            if(dist <= vision) {
+                explored.add(`${x},${y}`);
+            }
+        }
+    }
+}
+
+/* ===== INPUT ===== */
+/* ===== INPUT ===== */
+document.addEventListener("keydown",e=>{
+    if(!running) return;
+
+    let nx = player.x;
+    let ny = player.y;
+
+    if(e.key==="w") ny--;
+    if(e.key==="s") ny++;
+    if(e.key==="a") nx--;
+    if(e.key==="d") nx++;
+
+    if(nx<0||ny<0||nx>=SIZE||ny>=SIZE){
+        die("Te saliste del mapa");
+        return;
+    }
+
+    if(walls.some(w=>w.x===nx && w.y===ny)){
+        die("Chocaste en la niebla");
+        return;
+    }
+
+    player.x = nx;
+    player.y = ny;
+    
+    updateExplored();
+
+    if(player.x===goal.x && player.y===goal.y){
+        levelComplete();
+    }
+});
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0,0,400,400);
+
+    for(let y=0;y<SIZE;y++){
+        for(let x=0;x<SIZE;x++){
+            const isExplored = explored.has(`${x},${y}`);
+            
+            // Solo mostrar celdas exploradas o cuando el juego termina
+            if(isExplored || !running){
+                ctx.strokeStyle="#222";
+                ctx.strokeRect(x*CELL,y*CELL,CELL,CELL);
+
+                if(walls.some(w=>w.x===x && w.y===y)){
+                    ctx.fillStyle="#555";
+                    ctx.fillRect(x*CELL,y*CELL,CELL,CELL);
+                    // Borde de pared
+                    ctx.strokeStyle="#888";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x*CELL,y*CELL,CELL,CELL);
+                }
+
+                if(x===goal.x && y===goal.y){
+                    ctx.fillStyle="lime";
+                    ctx.fillRect(x*CELL,y*CELL,CELL,CELL);
+                }
+            }
+        }
+    }
+
+    // Jugador (siempre visible)
+    ctx.fillStyle="cyan";
+    ctx.fillRect(player.x*CELL,player.y*CELL,CELL,CELL);
+    
+    // Indicador de visión actual (sutil)
+    if(running) {
+        ctx.strokeStyle="rgba(0,255,255,0.2)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(player.x*CELL + CELL/2, player.y*CELL + CELL/2, vision*CELL, 0, Math.PI*2);
+        ctx.stroke();
+    }
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ===== END ===== */
+function levelComplete(){
+    running = false;
+    currentLevel++;
+    msg.textContent = `✅ ¡Nivel ${currentLevel - 1} completado! Siguiente...`;
+    
+    setTimeout(() => {
+        startLevel();
+    }, 1500);
+}
+
+function die(reason){
+    running = false;
+    
+    saveRecord(currentLevel - 1);
+    
+    const records = loadRecords();
+    const isTopRecord = records.length > 0 && records[0].level === currentLevel - 1;
+    
+    if(isTopRecord && currentLevel > 1) {
+        msg.textContent = `🏆 ¡NUEVO RÉCORD! Nivel ${currentLevel - 1} | ${reason}`;
+    } else {
+        msg.textContent = `💀 ${reason} | Llegaste al nivel ${currentLevel}`;
+    }
+    
+    restartBtn.style.display = "inline-block";
+}
+
+/* ===== RESTART ===== */
+restartBtn.onclick = () => {
+    startGame();
+};
+
+/* ===== START ===== */
+startGame();
+loop();
+</script>
+
+</body>
+</html>

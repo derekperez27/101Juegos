@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Easy Tutorial</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+#tutorial{
+    color:yellow;
+    font-size:18px;
+    font-weight:bold;
+}
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+#records h2 {
+    color: #00ff00;
+}
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #00ff00;
+}
+.record-rank {
+    font-weight: bold;
+    color: #00ff00;
+    margin-right: 10px;
+}
+.record-score {
+    color: #4CAF50;
+    font-weight: bold;
+}
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+button {
+    padding: 10px 20px;
+    font-size: 16px;
+    margin: 5px;
+    cursor: pointer;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+}
+button:hover {
+    background: #45a049;
+}
+.danger-btn {
+    background: #d32f2f !important;
+}
+.danger-btn:hover {
+    background: #c62828 !important;
+}
+</style>
+</head>
+<body>
+
+<h1>Easy Tutorial</h1>
+<p id="tutorial">Pulsa W para SALTAR obstáculos y pulsa S para agacharte</p>
+<p>Puntuación: <span id="score">0</span> | Velocidad: <span id="speedDisplay">6.0</span></p>
+<p id="msg" style="color:#ff4444; font-size:16px;"></p>
+<p style="color:#666; font-size:12px;">R: Reiniciar</p>
+
+<canvas id="c" width="800" height="300"></canvas>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button onclick="clearRecords()" class="danger-btn">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const tutorial = document.getElementById("tutorial");
+const scoreSpan = document.getElementById("score");
+const speedDisplay = document.getElementById("speedDisplay");
+const msg = document.getElementById("msg");
+
+let score = 0;
+let speed = 6;
+let running = false;
+let frameCount = 0;
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('fakeTutorialRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(score) {
+    const records = loadRecords();
+    records.push({
+        score: score,
+        date: new Date().toLocaleDateString()
+    });
+    records.sort((a, b) => b.score - a.score);
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('fakeTutorialRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-score">${record.score} pts</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('fakeTutorialRecords');
+        displayRecords();
+    }
+}
+
+displayRecords();
+
+/* ===== PLAYER ===== */
+const player = {
+    x: 100,
+    y: 200,
+    w: 30,
+    h: 40,
+    vy: 0,
+    jumping: false,
+    crouching: false,
+    groundY: 200
+};
+
+/* ===== OBSTACLES ===== */
+let obstacles = [];
+
+function spawnObstacle(){
+    const type = Math.random() < 0.6 ? "low" : "high";
+    obstacles.push({
+        x: 800,
+        y: type === "low" ? 210 : 185,
+        w: 25,
+        h: type === "low" ? 30 : 25,
+        type
+    });
+    
+    // Obstáculos dobles (a partir de 20 puntos)
+    if(score > 20 && Math.random() < 0.3){
+        const type2 = Math.random() < 0.5 ? "low" : "high";
+        obstacles.push({
+            x: 950,
+            y: type2 === "low" ? 210 : 185,
+            w: 25,
+            h: type2 === "low" ? 30 : 25,
+            type: type2
+        });
+    }
+    
+    // Obstáculos triples (a partir de 50 puntos)
+    if(score > 50 && Math.random() < 0.2){
+        const type3 = Math.random() < 0.5 ? "low" : "high";
+        obstacles.push({
+            x: 1100,
+            y: type3 === "low" ? 210 : 185,
+            w: 25,
+            h: type3 === "low" ? 30 : 25,
+            type: type3
+        });
+    }
+}
+
+/* ===== INPUT (CONTROLES INVERTIDOS) ===== */
+document.addEventListener("keydown", e => {
+    if(!running) {
+        if(e.key === "r" || e.key === "R" || e.key === " ") restart();
+        return;
+    }
+
+    // W dice "saltar", pero en realidad agacha
+    if((e.key === "w" || e.key === "W" || e.key === " " || e.key === "ArrowUp") && !player.jumping){
+        player.crouching = true;
+    }
+
+    // S dice "agacharse", pero en realidad salta
+    if((e.key === "s" || e.key === "S" || e.key === "ArrowDown") && !player.jumping && !player.crouching){
+        player.jumping = true;
+        player.vy = -14;
+    }
+});
+
+document.addEventListener("keyup", e => {
+    if((e.key === "w" || e.key === "W" || e.key === " " || e.key === "ArrowUp")){
+        player.crouching = false;
+    }
+});
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    frameCount++;
+
+    // salto
+    if(player.jumping){
+        player.y += player.vy;
+        player.vy += 0.8;
+        if(player.y >= player.groundY){
+            player.y = player.groundY;
+            player.jumping = false;
+            player.vy = 0;
+        }
+    }
+
+    // mover obstáculos
+    obstacles.forEach(o => o.x -= speed);
+
+    // colisiones
+    obstacles.forEach(o=>{
+        const playerW = player.crouching ? player.w : player.w;
+        const playerH = player.crouching ? 20 : player.h;
+        const playerY = player.crouching ? player.y + 20 : player.y;
+
+        if(o.x < player.x + playerW &&
+           o.x + o.w > player.x &&
+           o.y < playerY + playerH &&
+           o.y + o.h > playerY){
+            die();
+        }
+    });
+
+    // eliminar y puntuar
+    obstacles = obstacles.filter(o => {
+        if(o.x + o.w < 0) {
+            score++;
+            scoreSpan.textContent = score;
+            return false;
+        }
+        return true;
+    });
+
+    // aumentar dificultad más rápido
+    if(score > 0 && score % 3 === 0 && frameCount % 60 === 0){
+        if(speed < 20) {
+            speed += 0.4;
+            speedDisplay.textContent = speed.toFixed(1);
+        }
+    }
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0, 0, 800, 300);
+
+    // Suelo
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 240);
+    ctx.lineTo(800, 240);
+    ctx.stroke();
+
+    // Líneas decorativas del suelo
+    ctx.strokeStyle = "#333";
+    for(let i = 0; i < 20; i++){
+        const x = (frameCount * speed * 0.5 + i * 50) % 800;
+        ctx.beginPath();
+        ctx.moveTo(x, 245);
+        ctx.lineTo(x + 20, 245);
+        ctx.stroke();
+    }
+
+    // jugador
+    ctx.fillStyle = "cyan";
+    const h = player.crouching ? 20 : player.h;
+    const y = player.crouching ? player.y + 20 : player.y;
+    ctx.fillRect(player.x, y, player.w, h);
+
+    // obstáculos
+    obstacles.forEach(o=>{
+        ctx.fillStyle = o.type === "low" ? "red" : "orange";
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+    });
+
+    // Nubes decorativas
+    ctx.fillStyle = "#222";
+    for(let i = 0; i < 3; i++){
+        const x = (frameCount * 0.3 + i * 300) % 900 - 100;
+        ctx.fillRect(x, 30 + i * 30, 60, 20);
+        ctx.fillRect(x + 15, 20 + i * 30, 30, 20);
+    }
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ===== SPAWN Y MENSAJES ===== */
+let spawnTimer;
+
+function startGame(){
+    spawnTimer = setInterval(()=>{
+        if(running) spawnObstacle();
+    }, 1200);
+    
+    // Mensaje engañoso del tutorial
+    setTimeout(() => {
+        if(running) tutorial.textContent = "Recuerda: W salta, S agacha. Simple.";
+    }, 5000);
+}
+
+
+/* ===== GAME OVER ===== */
+function die(){
+    running = false;
+    
+    saveRecord(score);
+    
+    const records = loadRecords();
+    const isTopRecord = records.length > 0 && records[0].score === score;
+    
+    tutorial.textContent = "Los controles estaban AL REVÉS";
+    
+    if(isTopRecord){
+        msg.innerHTML = "🏆 ¡NUEVO RÉCORD! 💀 GAME OVER";
+    } else {
+        msg.innerHTML = "💀 GAME OVER - Puntuación: " + score;
+    }
+    
+    clearInterval(spawnTimer);
+}
+
+/* ===== REINICIO ===== */
+function restart(){
+    score = 0;
+    speed = 6;
+    frameCount = 0;
+    obstacles = [];
+    running = true;
+    
+    player.x = 100;
+    player.y = 200;
+    player.vy = 0;
+    player.jumping = false;
+    player.crouching = false;
+    
+    scoreSpan.textContent = 0;
+    speedDisplay.textContent = "6.0";
+    tutorial.textContent = "Pulsa W para SALTAR obstáculos";
+    msg.innerHTML = "";
+    
+    clearInterval(spawnTimer);
+    startGame();
+}
+
+loop();
+</script>
+
+</body>
+</html>

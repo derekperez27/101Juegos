@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Buscaminas</title>
+
+<style>
+body {
+    margin: 0;
+    background: #1e1e1e;
+    color: white;
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.game {
+    text-align: center;
+}
+
+.board {
+    display: grid;
+    margin: 15px auto;
+    background: #888;
+    padding: 5px;
+}
+
+.cell {
+    width: 30px;
+    height: 30px;
+    background: #ccc;
+    border: 1px solid #999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+}
+
+.cell.open {
+    background: #eee;
+    cursor: default;
+}
+
+.cell.mine {
+    background: red;
+}
+
+.cell.flag {
+    background: orange;
+}
+
+button, select {
+    padding: 6px 12px;
+    margin: 5px;
+    font-size: 16px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="game">
+    <h1>💣 Buscaminas</h1>
+
+    <select id="difficulty">
+        <option value="easy">Fácil (100)</option>
+        <option value="hard">Difícil (200)</option>
+    </select>
+
+    <button onclick="startGame()">Reiniciar</button>
+
+    <div class="board" id="board"></div>
+</div>
+
+<script>
+let rows, cols, mines;
+let board = [];
+let gameOver = false;
+let firstClick = true;
+
+const boardDiv = document.getElementById("board");
+const difficulty = document.getElementById("difficulty");
+
+startGame();
+
+function startGame() {
+    gameOver = false;
+    firstClick = true;
+    board = [];
+    boardDiv.innerHTML = "";
+
+    if (difficulty.value === "easy") {
+        rows = 10; cols = 10; mines = 15;
+    } else {
+        rows = 10; cols = 20; mines = 40;
+    }
+
+    boardDiv.style.gridTemplateColumns = `repeat(${cols}, 30px)`;
+
+    for (let r = 0; r < rows; r++) {
+        board[r] = [];
+        for (let c = 0; c < cols; c++) {
+            const cell = document.createElement("div");
+            cell.className = "cell";
+            cell.oncontextmenu = e => {
+                e.preventDefault();
+                toggleFlag(r, c);
+            };
+            cell.onclick = () => openCell(r, c);
+            boardDiv.appendChild(cell);
+
+            board[r][c] = {
+                mine: false,
+                open: false,
+                flag: false,
+                count: 0,
+                el: cell
+            };
+        }
+    }
+
+    // No colocamos minas hasta el primer clic
+}
+
+function placeMines(avoidRow, avoidCol) {
+    // Crear lista de celdas a evitar (la clickeada y sus vecinos)
+    const avoidCells = new Set();
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            let nr = avoidRow + dr, nc = avoidCol + dc;
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+                avoidCells.add(`${nr},${nc}`);
+            }
+        }
+    }
+
+    let placed = 0;
+    while (placed < mines) {
+        let r = Math.floor(Math.random() * rows);
+        let c = Math.floor(Math.random() * cols);
+        
+        // No colocar mina si ya tiene una o está en zona prohibida
+        if (!board[r][c].mine && !avoidCells.has(`${r},${c}`)) {
+            board[r][c].mine = true;
+            placed++;
+        }
+    }
+}
+
+function calculateNumbers() {
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (board[r][c].mine) continue;
+            let count = 0;
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    let nr = r + dr, nc = c + dc;
+                    if (board[nr]?.[nc]?.mine) count++;
+                }
+            }
+            board[r][c].count = count;
+        }
+    }
+}
+
+function toggleFlag(r, c) {
+    if (gameOver) return;
+    const cell = board[r][c];
+    if (cell.open) return;
+    cell.flag = !cell.flag;
+    cell.el.classList.toggle("flag", cell.flag);
+    cell.el.textContent = cell.flag ? "🚩" : "";
+}
+
+function openCell(r, c) {
+    if (gameOver) return;
+    const cell = board[r][c];
+    if (cell.open || cell.flag) return;
+
+    // Si es el primer clic, colocar minas evitando esta celda y sus vecinos
+    if (firstClick) {
+        firstClick = false;
+        placeMines(r, c);
+        calculateNumbers();
+    }
+
+    cell.open = true;
+    cell.el.classList.add("open");
+
+    if (cell.mine) {
+        cell.el.textContent = "💣";
+        cell.el.classList.add("mine");
+        revealMines();
+        alert("💥 Has perdido");
+        gameOver = true;
+        return;
+    }
+
+    if (cell.count > 0) {
+        cell.el.textContent = cell.count;
+    } else {
+        for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+                let nr = r + dr, nc = c + dc;
+                if (board[nr]?.[nc]) openCell(nr, nc);
+            }
+        }
+    }
+
+    checkWin();
+}
+
+function revealMines() {
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (board[r][c].mine) {
+                board[r][c].el.textContent = "💣";
+            }
+        }
+    }
+}
+
+function checkWin() {
+    let opened = 0;
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            if (board[r][c].open) opened++;
+        }
+    }
+
+    if (opened === rows * cols - mines) {
+        alert("🏆 ¡Has ganado!");
+        gameOver = true;
+    }
+}
+</script>
+
+</body>
+</html>

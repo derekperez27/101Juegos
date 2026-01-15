@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Delay World</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+
+#records h2 {
+    color: #ffaa00;
+}
+
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #ffaa00;
+}
+
+.record-rank {
+    font-weight: bold;
+    color: #ffaa00;
+    margin-right: 10px;
+}
+
+.record-level {
+    color: #ffd700;
+    font-weight: bold;
+}
+
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+
+button {
+    margin: 10px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+}
+
+#restartBtn {
+    background: #4CAF50;
+    color: white;
+}
+
+#clearRecordsBtn {
+    background: #d32f2f;
+    color: white;
+    padding: 8px 15px;
+    font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<h1>⏱️ DELAY WORLD</h1>
+<p>Nivel: <span id="level">1</span> | Movimientos en cola: <span id="queueCount">0</span></p>
+<p id="msg">Tus movimientos tienen retraso - Planifica con cuidado</p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<button id="restartBtn" style="display:none;" onclick="restartGame()">Volver a Jugar</button>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button id="clearRecordsBtn" onclick="clearRecords()">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const levelSpan = document.getElementById("level");
+const queueCountSpan = document.getElementById("queueCount");
+const msg = document.getElementById("msg");
+
+let level = 1;
+let running = true;
+
+const player = { x:200, y:350, r:8 };
+let goal = {};
+let obstacles = [];
+let queue = [];
+let movingObstacles = []; // Obstáculos móviles
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('delayWorldRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(level) {
+    const records = loadRecords();
+    records.push({
+        level: level,
+        date: new Date().toLocaleDateString()
+    });
+    // Ordenar por nivel (mayor a menor)
+    records.sort((a, b) => b.level - a.level);
+    // Guardar solo los mejores 10
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('delayWorldRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-level">Nivel ${record.level}</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('delayWorldRecords');
+        displayRecords();
+    }
+}
+
+// Mostrar récords al cargar la página
+displayRecords();
+
+function newLevel(){
+    obstacles = [];
+    movingObstacles = [];
+    queue = [];
+    player.x = 200;
+    player.y = 350;
+
+    goal = { x: Math.random()*300+50, y:Math.random()*60+20, r:12 };
+
+    // Obstáculos fijos (más pequeños en niveles altos)
+    const fixedCount = Math.min(level + 2, 8);
+    for(let i=0;i<fixedCount;i++){
+        obstacles.push({
+            x: Math.random()*320+40,
+            y: Math.random()*240+80,
+            r: Math.max(12 - level * 0.3, 6)
+        });
+    }
+    
+    // Obstáculos móviles (desde nivel 3)
+    if(level >= 3) {
+        const movingCount = Math.floor((level - 2) / 2);
+        for(let i=0;i<movingCount;i++){
+            movingObstacles.push({
+                x: Math.random()*320+40,
+                y: Math.random()*240+80,
+                vx: (Math.random() * 2 - 1) * 0.8,
+                vy: (Math.random() * 2 - 1) * 0.8,
+                r: 10
+            });
+        }
+    }
+
+    levelSpan.textContent = level;
+    queueCountSpan.textContent = 0;
+}
+
+/* INPUT CON DELAY */
+document.addEventListener("keydown",e=>{
+    if(!running) return;
+
+    let dx=0, dy=0;
+    if(e.key==="w" || e.key==="ArrowUp") dy=-25;
+    if(e.key==="s" || e.key==="ArrowDown") dy=25;
+    if(e.key==="a" || e.key==="ArrowLeft") dx=-25;
+    if(e.key==="d" || e.key==="ArrowRight") dx=25;
+
+    if(dx||dy){
+        // Retraso más corto y dinámico: 300ms base + 30ms por nivel
+        const delay = 300 + (level * 30);
+        queue.push({
+            dx, dy,
+            time: Date.now() + delay
+        });
+        queueCountSpan.textContent = queue.length;
+    }
+});
+
+function update(){
+    if(!running) return;
+
+    const now = Date.now();
+    if(queue.length && queue[0].time <= now){
+        const m = queue.shift();
+        player.x += m.dx;
+        player.y += m.dy;
+        queueCountSpan.textContent = queue.length;
+        
+        // Mantener jugador en pantalla
+        player.x = Math.max(player.r, Math.min(400 - player.r, player.x));
+        player.y = Math.max(player.r, Math.min(400 - player.r, player.y));
+    }
+    
+    // Actualizar obstáculos móviles
+    movingObstacles.forEach(o => {
+        o.x += o.vx;
+        o.y += o.vy;
+        
+        if(o.x < o.r || o.x > 400 - o.r) o.vx *= -1;
+        if(o.y < o.r || o.y > 400 - o.r) o.vy *= -1;
+    });
+
+    // colisiones con obstáculos fijos
+    obstacles.forEach(o=>{
+        if(Math.hypot(player.x-o.x,player.y-o.y) < player.r+o.r){
+            gameOver();
+        }
+    });
+    
+    // colisiones con obstáculos móviles
+    movingObstacles.forEach(o=>{
+        if(Math.hypot(player.x-o.x,player.y-o.y) < player.r+o.r){
+            gameOver();
+        }
+    });
+
+    if(Math.hypot(player.x-goal.x,player.y-goal.y) < player.r+goal.r){
+        level++;
+        newLevel();
+    }
+}
+
+function draw(){
+    ctx.clearRect(0,0,400,400);
+    
+    // Visualizar movimientos pendientes como fantasmas
+    if(queue.length > 0) {
+        let ghostX = player.x;
+        let ghostY = player.y;
+        queue.forEach((move, index) => {
+            ghostX += move.dx;
+            ghostY += move.dy;
+            const opacity = Math.max(0.1, 0.4 - index * 0.1);
+            ctx.fillStyle = `rgba(0, 255, 255, ${opacity})`;
+            ctx.beginPath();
+            ctx.arc(ghostX, ghostY, player.r, 0, Math.PI*2);
+            ctx.fill();
+        });
+    }
+
+    // meta
+    ctx.fillStyle="#00ff00";
+    ctx.beginPath();
+    ctx.arc(goal.x,goal.y,goal.r,0,Math.PI*2);
+    ctx.fill();
+    
+    // Borde de meta
+    ctx.strokeStyle = "#00ff00";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(goal.x, goal.y, goal.r + 3, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.lineWidth = 1;
+
+    // obstáculos fijos
+    ctx.fillStyle="#ff4444";
+    obstacles.forEach(o=>{
+        ctx.beginPath();
+        ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
+        ctx.fill();
+    });
+    
+    // obstáculos móviles
+    ctx.fillStyle="#ff8800";
+    movingObstacles.forEach(o=>{
+        ctx.beginPath();
+        ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
+        ctx.fill();
+    });
+
+    // jugador
+    ctx.fillStyle="cyan";
+    ctx.beginPath();
+    ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+    ctx.fill();
+}
+
+function gameOver(){
+    running=false;
+    saveRecord(level);
+    document.getElementById("restartBtn").style.display = "inline-block";
+    msg.textContent="💀 EL RETRASO TE MATÓ - Nivel alcanzado: " + level;
+}
+
+function restartGame() {
+    running = true;
+    level = 1;
+    queue = [];
+    obstacles = [];
+    movingObstacles = [];
+    player.x = 200;
+    player.y = 350;
+    
+    levelSpan.textContent = 1;
+    queueCountSpan.textContent = 0;
+    msg.textContent = "Tus movimientos tienen retraso - Planifica con cuidado";
+    document.getElementById("restartBtn").style.display = "none";
+    
+    newLevel();
+}
+
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+newLevel();
+loop();
+</script>
+
+</body>
+</html>

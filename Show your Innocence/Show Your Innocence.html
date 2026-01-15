@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Show Your Innocence - Escape Room</title>
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: 'Courier New', monospace;
+        background: #0a0a0a;
+        color: #d0d0d0;
+        overflow-x: hidden;
+    }
+
+    /* Efecto de parpadeo sutil */
+    @keyframes flicker {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.95; }
+    }
+
+    body::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: repeating-linear-gradient(
+            0deg,
+            rgba(0, 0, 0, 0.15) 0px,
+            rgba(0, 0, 0, 0) 1px,
+            rgba(0, 0, 0, 0) 2px
+        );
+        pointer-events: none;
+        z-index: 9999;
+        animation: flicker 0.15s infinite;
+    }
+
+    /* Barra superior con temporizador */
+    #top-bar {
+        position: fixed;
+        top: 0;
+        width: 100%;
+        background: #000;
+        padding: 15px 30px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 100;
+        border-bottom: 3px solid #ff0000;
+        box-shadow: 0 5px 20px rgba(255, 0, 0, 0.3);
+    }
+
+    #timer {
+        font-size: 32px;
+        font-weight: bold;
+        color: #ff0000;
+        letter-spacing: 3px;
+        text-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+        font-family: 'Courier New', monospace;
+    }
+
+    #timer.warning {
+        animation: pulse-red 1s infinite;
+    }
+
+    @keyframes pulse-red {
+        0%, 100% { color: #ff0000; transform: scale(1); }
+        50% { color: #ff4444; transform: scale(1.1); }
+    }
+
+    #progress {
+        font-size: 16px;
+        color: #888;
+    }
+
+    #hint-count {
+        font-size: 14px;
+        color: #666;
+        cursor: pointer;
+    }
+
+    #hint-count:hover {
+        color: #999;
+    }
+
+    
+    #game {
+        padding: 100px 40px 40px;
+        max-width: 900px;
+        margin: auto;
+        min-height: 100vh;
+    }
+
+    .screen {
+        display: none;
+        animation: fadeIn 0.5s;
+    }
+
+    .screen.active {
+        display: block;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    h1 {
+        font-size: 42px;
+        color: #ff0000;
+        margin-bottom: 20px;
+        text-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+    }
+
+    h2 {
+        font-size: 28px;
+        color: #d0d0d0;
+        margin: 30px 0 15px;
+        border-bottom: 2px solid #333;
+        padding-bottom: 10px;
+    }
+
+    p {
+        line-height: 1.8;
+        margin: 15px 0;
+        font-size: 16px;
+    }
+
+    /* Botones */
+    button {
+        padding: 12px 30px;
+        margin: 10px 5px;
+        background: #1a1a1a;
+        color: #fff;
+        border: 2px solid #444;
+        cursor: pointer;
+        font-family: 'Courier New', monospace;
+        font-size: 16px;
+        transition: all 0.3s;
+        text-transform: uppercase;
+    }
+
+    button:hover {
+        background: #2a2a2a;
+        border-color: #666;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    }
+
+    button:active {
+        transform: translateY(0);
+    }
+
+    button.primary {
+        background: #8b0000;
+        border-color: #ff0000;
+    }
+
+    button.primary:hover {
+        background: #a00000;
+    }
+
+   
+    input, textarea {
+        padding: 12px;
+        background: #0a0a0a;
+        color: #fff;
+        border: 2px solid #333;
+        font-family: 'Courier New', monospace;
+        font-size: 16px;
+        width: 100%;
+        max-width: 400px;
+        margin: 10px 0;
+        transition: border-color 0.3s;
+    }
+
+    input:focus, textarea:focus {
+        outline: none;
+        border-color: #666;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+    }
+
+   
+    .feedback {
+        margin: 15px 0;
+        padding: 15px;
+        border-radius: 5px;
+        font-weight: bold;
+        animation: slideIn 0.3s;
+    }
+
+    @keyframes slideIn {
+        from { opacity: 0; transform: translateX(-20px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+
+    .error {
+        background: rgba(255, 0, 0, 0.1);
+        color: #ff4444;
+        border: 1px solid #ff0000;
+    }
+
+    .success {
+        background: rgba(0, 255, 0, 0.1);
+        color: #44ff44;
+        border: 1px solid #00ff00;
+    }
+
+    .penalty {
+        background: rgba(255, 100, 0, 0.1);
+        color: #ffaa00;
+        border: 1px solid #ff6600;
+    }
+
+    
+    .hidden-clue {
+        font-size: 8px;
+        opacity: 0.03;
+        position: absolute;
+        pointer-events: none;
+        user-select: none;
+    }
+
+    .evidence {
+        background: #111;
+        border: 2px solid #333;
+        padding: 20px;
+        margin: 20px 0;
+        position: relative;
+    }
+
+    .evidence:hover {
+        border-color: #555;
+    }
+
+    .code-box {
+        background: #000;
+        border: 1px solid #444;
+        padding: 15px;
+        font-family: 'Courier New', monospace;
+        margin: 15px 0;
+        letter-spacing: 2px;
+    }
+
+   
+    .cipher {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 10px;
+        margin: 20px 0;
+    }
+
+    .cipher div {
+        background: #1a1a1a;
+        padding: 15px;
+        text-align: center;
+        border: 1px solid #333;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .cipher div:hover {
+        background: #2a2a2a;
+        border-color: #666;
+    }
+
+    .cipher div.selected {
+        background: #8b0000;
+        border-color: #ff0000;
+    }
+
+  
+    .mind-map {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        margin: 20px 0;
+    }
+
+    .mind-map .node {
+        background: #1a1a1a;
+        border: 2px solid #333;
+        padding: 15px;
+        min-width: 150px;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .mind-map .node:hover {
+        border-color: #666;
+        transform: scale(1.05);
+    }
+
+    .mind-map .node.selected {
+        background: #8b0000;
+        border-color: #ff0000;
+    }
+
+
+    #ending {
+        text-align: center;
+        padding: 60px 20px;
+    }
+
+    #ending.victory h1 {
+        color: #00ff00;
+        text-shadow: 0 0 30px rgba(0, 255, 0, 0.8);
+    }
+
+    #ending.defeat h1 {
+        color: #ff0000;
+        text-shadow: 0 0 30px rgba(255, 0, 0, 0.8);
+    }
+
+    .stats {
+        margin: 30px 0;
+        font-size: 18px;
+        line-height: 2;
+    }
+
+   
+    #hint-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.95);
+        z-index: 200;
+        padding: 100px 40px;
+        overflow-y: auto;
+    }
+
+    #hint-overlay.active {
+        display: block;
+    }
+
+    #hint-content {
+        max-width: 700px;
+        margin: auto;
+    }
+
+    .close-hint {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        font-size: 40px;
+        cursor: pointer;
+        color: #666;
+    }
+
+    .close-hint:hover {
+        color: #fff;
+    }
+
+    
+    .difficulty-btn {
+        display: block;
+        width: 300px;
+        margin: 20px auto;
+        padding: 20px;
+        font-size: 20px;
+    }
+
+    .difficulty-btn.easy {
+        border-color: #00aa00;
+    }
+
+    .difficulty-btn.normal {
+        border-color: #aaaa00;
+    }
+
+    .difficulty-btn.hard {
+        border-color: #aa0000;
+    }
+
+    
+    @keyframes glitch {
+        0% { transform: translate(0); }
+        20% { transform: translate(-2px, 2px); }
+        40% { transform: translate(-2px, -2px); }
+        60% { transform: translate(2px, 2px); }
+        80% { transform: translate(2px, -2px); }
+        100% { transform: translate(0); }
+    }
+
+    .glitch {
+        animation: glitch 0.3s infinite;
+    }
+
+    .roman-hint {
+        position: fixed;
+        font-size: 10px;
+        opacity: 0.05;
+        color: #fff;
+        font-family: serif;
+        z-index: 1;
+    }
+
+    .roman-hint.tl { top: 10px; left: 10px; }
+    .roman-hint.tr { top: 10px; right: 10px; }
+    .roman-hint.bl { bottom: 10px; left: 10px; }
+    .roman-hint.br { bottom: 10px; right: 10px; }
+
+    .nav-buttons {
+        margin-top: 40px;
+        padding-top: 20px;
+        border-top: 1px solid #333;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .nav-buttons button {
+        background: #1a1a1a;
+        border-color: #555;
+        font-size: 14px;
+        padding: 10px 20px;
+    }
+
+    .nav-buttons button:hover {
+        background: #2a2a2a;
+        border-color: #888;
+    }
+
+    .nav-buttons button.current-puzzle {
+        border-color: #ffaa00;
+        color: #ffaa00;
+    }
+</style>
+</head>
+<body>
+
+<audio loop id="background-music">
+    <source src="tension-background-music-460023.mp3" type="audio/mpeg">
+</audio>
+
+<div class="roman-hint tl">VII</div>
+<div class="roman-hint tr">III</div>
+<div class="roman-hint bl">IX</div>
+<div class="roman-hint br">V</div>
+
+<div id="top-bar">
+    <div id="timer">--:--</div>
+    <div id="progress">Puzzle: <span id="current-step">0</span> / 8</div>
+    <div id="hint-count" onclick="toggleHints()">💡 Pistas: <span id="hints-left">3</span></div>
+</div>
+
+<div id="hint-overlay">
+    <div class="close-hint" onclick="toggleHints()">×</div>
+    <div id="hint-content">
+        <h2>💡 Sistema de Pistas</h2>
+        <p>Cada pista te costará <strong>2 minutos de penalización</strong>.</p>
+        <p>Pistas disponibles: <span id="hints-available">3</span></p>
+        <div id="current-hint-text"></div>
+        <button onclick="useHint()">Usar Pista (-2:00)</button>
+        <button onclick="toggleHints()">Cancelar</button>
+    </div>
+</div>
+
+<div id="game">
+
+    <div id="intro" class="screen active">
+        <h1>SHOW YOUR INNOCENCE</h1>
+        <p style="font-size: 20px; color: #ff4444; margin: 30px 0;">
+         Eres un detective privado. Has llegado tarde a la escena del crimen.
+        </p>
+        <p>
+            El asesino  puede haber manipulado las evidencias para inculpar a un inocente. Dispones de tiempo 
+            limitado para examinar la escena, encontrar contradicciones y descubrir al verdadero culpable.
+        </p>
+        <p style="color: #888;">
+            Si fallas en identificar correctamente al asesino o el tiempo se agota, 
+            un inocente será condenado y el culpable escapará.
+        </p>
+        <p style="color: #666; margin-top: 40px;">
+        <strong>ADVERTENCIA:</strong> Este caso requiere observación meticulosa, memoria fotográfica, 
+            pensamiento lógico y cultura general. Los detalles ocultos son la clave.
+        </p>
+        
+        <h2 style="margin-top: 50px;">Selecciona Dificultad:</h2>
+        <button class="difficulty-btn easy" onclick="startGame(15)">
+            FÁCIL<br><span style="font-size: 14px;">15 minutos</span>
+        </button>
+        <button class="difficulty-btn normal" onclick="startGame(10)">
+            NORMAL<br><span style="font-size: 14px;">10 minutos</span>
+        </button>
+        <button class="difficulty-btn hard" onclick="startGame(5)">
+            DIFÍCIL<br><span style="font-size: 14px;">5 minutos</span>
+        </button>
+    </div>
+
+    <div id="puzzle1" class="screen">
+        <h2> Escena del Crimen: El Despacho</h2>
+        <div class="evidence">
+            <p><strong>Elementos visibles:</strong></p>
+            <ul style="line-height: 2;">
+                <li>📄 Carta medio quemada sobre el escritorio</li>
+                <li>⏰ Reloj de pared parado en <strong>03:17</strong></li>
+                <li>🖼️ Foto familiar en un marco donde se ven 2 personas </li>
+                <li>🔒 Cajón del escritorio cerrado con candado numérico (4 dígitos)</li>
+            </ul>
+            <div class="code-box" style="margin-top: 20px;">
+                <strong>Fragmento de la carta:</strong><br>
+                "Si alguien lee esto, ya és tarde.<br>
+                La hora esta patas arriba, y la fecha ha sido cambiada, no podrás adivinar el código del cajón."
+            </div>
+            <p style="color: #888; margin-top: 20px;">
+                <em>Examinas la foto familiar. Al darle la vuelta, hay una fecha escrita a mano: <strong>17/03</strong></em>
+            </p>
+        </div>
+        
+        <p><strong>¿Cuál es el código del cajón? (4 dígitos)</strong></p>
+        <input type="text" id="answer1" placeholder="####" maxlength="4" autocomplete="off">
+        <button class="primary" onclick="checkPuzzle1()">Abrir Cajón</button>
+        <div id="feedback1"></div>
+        <div id="nav-buttons-1" class="nav-buttons"></div>
+    </div>
+
+    <div id="puzzle2" class="screen">
+        <h2> La Estantería del Despacho</h2>
+        <div class="evidence">
+            <p><strong>Dentro del cajón encontraste una nota:</strong></p>
+            <div class="code-box">
+                "El culpable siempre cree que <u>vigila</u>, pero alguien siempre <u>observa</u>."
+            </div>
+            <p style="margin-top: 20px;"><strong>Libros en la estantería:</strong></p>
+            <div class="mind-map">
+                <div class="node" onclick="selectBook('crimen')">
+                    <strong>Crimen y Castigo</strong><br>
+                    <small>Dostoyevski</small>
+                </div>
+                <div class="node" onclick="selectBook('proceso')">
+                    <strong>El Proceso</strong><br>
+                    <small>Franz Kafka</small>
+                </div>
+                <div class="node" onclick="selectBook('1984')">
+                    <strong>1984</strong><br>
+                    <small>George Orwell</small>
+                </div>
+                <div class="node" onclick="selectBook('extranjero')">
+                    <strong>El Extranjero</strong><br>
+                    <small>Albert Camus</small>
+                </div>
+            </div>
+            <p style="color: #666; margin-top: 20px; font-size: 14px;">
+                💡 La frase de la nota parece hacer referencia a uno de estos libros...
+            </p>
+        </div>
+        <div id="feedback2"></div>
+        <div id="nav-buttons-2" class="nav-buttons"></div>
+    </div>
+
+    <div id="puzzle3" class="screen">
+        <h2>💻 El Ordenador del Investigador</h2>
+        <div class="evidence">
+            <p><strong>Dentro del libro, encontraste una nota con letras marcadas que forman:</strong></p>
+            <div id="book-clue" class="code-box" style="font-size: 24px; text-align: center; color: #ffaa00; display: none;">
+                <span id="letter-clue">_ A _ _ _</span>
+            </div>
+            <p style="margin-top: 20px;"><strong>En el escritorio hay un ordenador bloqueado con contraseña.</strong></p>
+            <p>Hay un Post-it amarillo con sangre en la esquina pegado en la pantalla:</p>
+            <div class="code-box" style="background: #aaaa00; color: #000;">
+                "Un Informe está falsicado."
+            </div>
+            <p style="margin-top: 20px;"><strong>Hay dos informes en papel:</strong></p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                <div class="code-box">
+                    <strong>📄 Informe A</strong><br>
+                    <small style="color: #666;">Fecha mod: Hoy 08:45</small><br><br>
+                    Hora de llegada: <strong>21:30</strong><br>
+                    Sospechoso: <strong>Miguel Torres</strong><br>
+                    Ubicación del sospechoso a la hora del crimen: Bar las 7 torres<br>
+                    Relacion con la víctima: Mejor amigo<br>
+                    <small>Lateralidad: Diestro</small>
+                </div>
+                <div class="code-box">
+                    <strong>📄 Informe B</strong><br>
+                    <small style="color: #888;">Fecha mod: Ayer 10:00</small><br><br>
+                    Hora de llegada: <strong>20:15</strong><br>
+                    Sospechoso: <strong>Carlos Ruiz</strong><br>
+                    Ubicación: Restaurante Norte<br>
+                    Relacion con la víctima: Hijo<br>
+                    <small>Lateralidad: Zurdo</small>
+                </div>
+            </div>
+        </div>
+        
+        <p><strong>Parece que la hora del Informe correcto es la contraseña del ordenador</strong></p>
+        <input type="text" id="answer3" placeholder="####" maxlength="4" autocomplete="off">
+        <button class="primary" onclick="checkPuzzle3()">Desbloquear</button>
+        <div id="feedback3"></div>
+        <div id="nav-buttons-3" class="nav-buttons"></div>
+    </div>
+
+    <div id="puzzle4" class="screen">
+        <h2>🎙️ Grabadora de Voz - Declaración del Testigo</h2>
+        <div class="evidence">
+            <p><strong>En el ordenador encontraste un archivo de audio.</strong></p>
+            <p style="color: #888;">Declaración de: <strong>Roberto Mendoza</strong> Testigo presencial, hermano de la víctima</p>
+            <p style="color: #ff4444;">⚠️ <strong>SOLO PODRÁS ESCUCHARLO UNA VEZ</strong></p>
+            <div class="code-box" style="text-align: center; padding: 30px;" id="audio-player">
+                <button class="primary" onclick="playAudio()" style="font-size: 20px; padding: 20px 40px;">
+                    ▶️ REPRODUCIR DECLARACIÓN
+                </button>
+            </div>
+            <div id="audio-transcript" style="display: none; margin-top: 20px;">
+                <p style="color: #888; font-style: italic;">
+                    "Yo... bueno, llegué tarde esa noche. Creo que eran las ocho... o las ocho y media... 
+                    no estoy seguro. Había mucho tráfico. Ah no, espera, fueron las nueve, sí, las nueve en punto porque 
+                    recuerdo que sonaba la campana de la iglesia. O tal vez eran las nueve y cuarto... 
+                    La cuestión es que cuando llegué... bueno, estaba oscuro. Y llovía, sí, estaba lloviendo bastante fuerte. 
+                    O quizás era neblina... no, no, definitivamente llovía porque me mojé al bajar del coche. 
+                    Y cuando entré... él ya no estaba. Se había marchado. O eso creo. La casa estaba vacía. 
+                    Bueno, no completamente vacía, había... cosas. Pero él no estaba allí. Estoy casi seguro. 
+                    A menos que estuviera en otra habitación, pero yo no lo vi. Ah, y vi a alguien saliendo por la puerta trasera... 
+                    era... creo que era Miguel Torres. Estaba oscuro, no estoy seguro. Lo reconocí por su chaqueta marrón. 
+                    Iba corriendo. Parecía nervioso. Eso es todo lo que puedo decir."
+                </p>
+            </div>
+        </div>
+        <div id="questions-section" style="display: none;">
+            <p style="margin-top: 30px;"><strong>Analiza lo que escuchaste:</strong></p>
+            
+            <p style="margin-top: 20px;">1️⃣ ¿A qué hora llegó el testigo?</p>
+            <button onclick="answerQuestion1('8')">20:00</button>
+            <button onclick="answerQuestion1('830')">20:30</button>
+            <button onclick="answerQuestion1('9')">21:00</button>
+            <button onclick="answerQuestion1('915')">21:15</button>
+            <div id="feedback4a"></div>
+            
+            <div id="question2" style="display: none;">
+                <p style="margin-top: 20px;">2️⃣ ¿Qué condiciones climáticas había?</p>
+                <button onclick="answerQuestion2('lluvia')">Lluvia</button>
+                <button onclick="answerQuestion2('neblina')">Neblina</button>
+                <button onclick="answerQuestion2('ambas')">Ambas</button>
+                <button onclick="answerQuestion2('nose')">No está claro</button>
+                <div id="feedback4b"></div>
+            </div>
+            
+            <div id="question3" style="display: none;">
+                <p style="margin-top: 20px;">3️⃣ ¿A quién vio saliendo?</p>
+                <button onclick="answerQuestion3('miguel')">Miguel Torres</button>
+                <button onclick="answerQuestion3('carlos')">Carlos Ruiz</button>
+                <button onclick="answerQuestion3('nadie')">Nadie</button>
+                <button onclick="answerQuestion3('nose')">No está seguro</button>
+                <div id="feedback4c"></div>
+            </div>
+        </div>
+        <div id="feedback4"></div>
+        <div id="nav-buttons-4" class="nav-buttons"></div>
+    </div>
+
+    <div id="puzzle5" class="screen">
+        <h2>🖼️ El Cuadro Torcido</h2>
+        <div class="evidence">
+            <p><strong>Observas la pared del despacho.</strong></p>
+            <p>Hay un cuadro antiguo que parece estar ligeramente inclinado hacia la derecha.</p>
+            <div style="text-align: center; margin: 30px 0;">
+                <div style="display: inline-block; transform: rotate(5deg); border: 10px solid #5a3a1a; padding: 30px; background: #1a1a1a;">
+                    <div style="width: 300px; height: 200px; background: linear-gradient(45deg, #2a2a2a, #4a4a4a); display: flex; align-items: center; justify-content: center; font-size: 14px; color: #666;">
+                        [Paisaje abstracto]
+                    </div>
+                </div>
+            </div>
+            <button class="primary" onclick="movePainting()">🔍 Enderezar el Cuadro</button>
+            <div id="behind-painting" style="display: none; margin-top: 30px;">
+                <p style="margin-bottom: 10px; color: #ffaa00;"><strong>Interactúa con el cuadro para encontrar lo oculto.</strong></p>
+                <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap;">
+                    <div style="width:320px; text-align:center;">
+                        <div id="painting-frame" style="width:300px;height:200px;margin:auto;border:10px solid #5a3a1a;overflow:hidden;">
+                            <div id="painting-img" style="width:100%;height:100%;background:linear-gradient(45deg,#2a2a2a,#4a4a4a);display:flex;align-items:center;justify-content:center;color:#666;transform:rotate(5deg);transition:transform 0.2s;">
+                                <div id="hidden-mark" style="position:relative;opacity:0;transition:opacity 0.3s;font-size:26px;color:#ff4444;">&#9650;</div>
+                                <div style="position:absolute;bottom:8px;left:8px;font-size:12px;color:#999;">[Paisaje abstracto]</div>
+                            </div>
+                        </div>
+                        <div style="margin-top:10px;color:#888;">Usa el control para enderezar el cuadro</div>
+                        <input id="painting-rotate" type="range" min="-15" max="15" value="5" oninput="rotatePainting(this.value)" style="width:100%;margin-top:8px;">
+                        <div style="margin-top:8px;font-size:13px;color:#aaa;">Ángulo: <span id="rotate-value">5</span>°</div>
+                    </div>
+
+                    <div style="flex:1; min-width:260px;">
+                        <div id="compartment" style="display:none;">
+                            <div class="code-box" style="border-color: #ff0000;">
+                                <p style="color: #ff4444; font-size: 18px;"><strong>Mensaje grabado con sangre en la pared:</strong></p>
+                                <p style="font-size: 20px; margin-top: 15px;">"La verdad está en las manos."</p>
+                            </div>
+                            <p style="margin-top: 12px;"><strong>Al inspeccionar encuentras:</strong></p>
+                            <ul style="line-height: 2;">
+                                <li><button onclick="inspectItem('pen')">✒️ Examinar bolígrafo rojo</button></li>
+                                <li><button onclick="inspectItem('glove')">🧤 Examinar guante de látex (lado izquierdo)</button></li>
+                                <li><button onclick="inspectItem('paper')">📄 Examinar fragmento de papel rasgado</button></li>
+                            </ul>
+                            <div id="item-inspect" style="margin-top:12px;color:#ddd;"></div>
+                            <p style="color: #888; margin-top: 12px;"><em>Necesitas alinear correctamente el cuadro para que el compartimiento se abra. Inspecciona los objetos para deducir la lateralidad del autor.</em></p>
+                        </div>
+                        <div id="compartment-locked" style="margin-top:6px;color:#666;">El compartimiento está oculto. Endereza el cuadro para revelarlo.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="question5" style="display: none;">
+            <p style="margin-top: 30px;"><strong>Analiza la evidencia encontrada. ¿Qué mano usó el sospechoso?</strong></p>
+            <button onclick="checkPuzzle5('derecha')">Derecha</button>
+            <button onclick="checkPuzzle5('izquierda')">Izquierda</button>
+            <button onclick="checkPuzzle5('ambas')">Ambas</button>
+            <button onclick="checkPuzzle5('ninguna')">Alguien más escribió</button>
+        </div>
+        <div id="feedback5"></div>
+        <div id="nav-buttons-5" class="nav-buttons"></div>
+    </div>
+
+    <div id="puzzle6" class="screen">
+        <h2>📋 Declaración de Segundo Testigo</h2>
+        <div class="evidence">
+            <p><strong>Encuentras un segundo expediente de testimonio:</strong></p>
+            <p style="color: #888;">Declarante: <strong>Elena Martínez</strong> (Vecina del edificio)</p>
+            <div class="code-box">
+                <p><strong>Extracto de la declaración escrita:</strong></p>
+                <p style="margin-top: 15px;">"Esa noche escuché ruidos extraños provenientes del apartamento. 
+                Eran aproximadamente las 20:50. Decidí asomarme por la mirilla y vi a alguien 
+                saliendo del apartamento de la víctima. Estaba nervioso, miraba a ambos lados del pasillo.
+                No pude ver bien su rostro al principio, pero cuando pasó bajo la luz del pasillo, su cara me sono mucho.</p>
+                <p style="margin-top: 10px;"> Me suena mucho porque vive aquí, estoy segura de eso.
+                Llevaba un maletín negro en la mano izquierda, no se que llevaria ahí Caminaba rápido, casi corriendo. Parecía alterado.</p>
+                <p style="margin-top: 10px;">Cuando la policía llegó más tarde y me preguntó, les di todos estos detalles. 
+                Estoy completamente segura de lo que vi."</p>
+            </div>
+            <p style="color: #666; margin-top: 20px;">
+                <em>Firma del testigo adjunta al documento. Fecha: [DÍA DEL CRIMEN]</em>
+            </p>
+        </div>
+        
+        <p style="margin-top: 30px;"><strong>¿Quién vio Elena Martínez saliendo del apartamento?</strong></p>
+        <input type="text" id="answer6" placeholder="Nombre del sospechoso..." autocomplete="off">
+        <button class="primary" onclick="checkPuzzle6()">Confirmar</button>
+        <div id="feedback6"></div>
+        <div id="nav-buttons-6" class="nav-buttons"></div>
+    </div>
+    
+    <div id="puzzle7" class="screen">
+        <h2>⚖️ Acusación Final</h2>
+        <div class="evidence">
+            <p><strong>Has recopilado todas las pruebas. Es momento de acusar.</strong></p>
+            <p style="color: #ff4444; font-size: 18px; margin: 20px 0;">
+                ⚠️ Si acusas incorrectamente, el verdadero asesino escapará.
+            </p>
+            <p><strong>Evidencias recopiladas:</strong></p>
+            <ul style="line-height: 2;">
+                <li>✓ Código 0317 del cajón (reloj parado)</li>
+                <li>✓ Libro 1984 con letras que forman: ____O_</li>
+                <li>✓ Informe alterado - hora cambiada de 20:15 a 21:30</li>
+                <li>✓ Declaración  en la grabadora</li>
+                <li>✓ Declaración  de la vecina</li>
+                <li>✓ Guante izquierdo + mensaje</li>
+            </ul>
+        </div>
+        
+        <h3 style="margin-top: 40px;">PASO 1: Identifica al asesino</h3>
+        <div class="mind-map" id="suspect-selection">
+            <div class="node" onclick="selectMainSuspect('carlos')">
+                <strong id="suspect-b-name">Sospechoso B</strong><br>
+                <small>Hijo de la víctima</small><br>
+                <small style="color: #888;">Zurdo</small>
+            </div>
+            <div class="node" onclick="selectMainSuspect('miguel')">
+                <strong id="suspect-a-name">Sospechoso A</strong><br>
+                <small>Mejor amigo de la víctima</small><br>
+                <small style="color: #888;">Diestro</small>
+            </div>
+            <div class="node" onclick="selectMainSuspect('investigador')">
+                <strong>El Investigador</strong><br>
+                <small>Tenía acceso a todo</small>
+            </div>
+            <div class="node" onclick="selectMainSuspect('victima')">
+                <strong>Suicidio</strong><br>
+                <small>La víctima se quitó la vida</small>
+            </div>
+        </div>
+        
+        <div id="evidence-selection" style="display: none;">
+            <h3 style="margin-top: 40px;">PASO 2: Selecciona 3 pruebas que demuestren la culpabilidad</h3>
+            <p style="color: #888;">Elige las pruebas más incriminatorias en el orden que consideres lógico.</p>
+            
+            <div class="cipher" id="evidence-grid">
+            </div>
+            
+            <div style="margin-top: 30px; padding: 20px; background: #1a1a1a; border: 2px solid #444;">
+                <p><strong>Pruebas seleccionadas:</strong></p>
+                <p id="selected-evidence" style="font-size: 18px; color: #ffaa00;">Ninguna</p>
+                <button class="primary" onclick="finalAccusation()" style="margin-top: 15px;">ACUSAR FORMALMENTE</button>
+            </div>
+        </div>
+        <div id="feedback7"></div>
+        <div id="nav-buttons-7" class="nav-buttons"></div>
+    </div>
+
+    <div id="ending" class="screen">
+        <h1 id="ending-title">RESULTADO</h1>
+        <div class="stats" id="stats-content"></div>
+        <button onclick="location.reload()">Jugar de Nuevo</button>
+    </div>
+
+</div>
+
+<script>
+
+let gameTime = 0;
+let timerInterval = null;
+let currentPuzzle = 0;
+let hintsUsed = 0;
+let errorsCount = 0;
+let startTime = 0;
+
+const TOTAL_PUZZLES = 7;
+const HINTS_AVAILABLE = 3;
+const PENALTY_PER_HINT = 120; 
+
+const solutions = {
+    puzzle1: ['3071', '1703', '7103', '0317', '1730', '7130'], 
+    puzzle2: ['1984', '84', 'orwell', 'george orwell'],
+    puzzle3: ['2015', '20:15'], 
+    puzzle4: ['9', '21', '2100', 'nueve'], 
+    puzzle4b: ['lluvia', 'llovia', 'lloviendo'],
+    puzzle4c: ['no', 'marchado', 'ido'],
+    puzzle5: ['izquierda', 'zurdo', 'mano izquierda'],
+    puzzle6: ['carlos', 'carlos ruiz', 'ruiz'], 
+    puzzle7: {
+        suspects: ['carlos'], 
+        
+        validEvidences: [2, 3, 4, 6, 7, 8] 
+    }
+};
+
+
+let audioPlayed = false;
+let currentQuestion = 1;
+let answers4 = [];
+let selectedEvidence = [];
+let selectedSuspect = null;
+let unlockedPuzzles = [1]; 
+
+let collectedEvidence = {
+    puzzle1: false,
+    puzzle2: false,
+    puzzle3: false,
+    puzzle4: false,
+    puzzle5: false,
+    puzzle6: false
+};
+
+const hints = {
+    puzzle1: "La carta dice que el error está en la hora. El reloj marca 03:17. La foto tiene una fecha escrita: 17/03, la nota habla de que la hora esta al revés",
+    puzzle2: "La frase habla de VIGILAR y OBSERVAR. ¿Qué libro famoso trata sobre vigilancia constante? Piensa en el Gran Hermano.",
+    puzzle3: "Hay dos informes, la clave esta en ellos.Piensa que puede haber hecho el culpable para incuriminar a otro",
+    puzzle4: "Roberto Mendoza es el testigo. Escucha todo: hora, clima, y especialmente a quién vió. Esto es crucial.",
+    puzzle5: "La tinta de la carta, estaba escurrida, como si hubieran pasado la mano por encima mientras escribían.",
+    puzzle6: "Elena Martínez es muy específica en su testimonio, fijate en los detalles.",
+    puzzle7: "Para ganar: acusa al culpable con 3 evidencias que LO INCRIMINEN."
+};
+
+
+function startGame(minutes) {
+    gameTime = minutes * 60;
+    startTime = Date.now();
+    
+    const bgMusic = document.getElementById('background-music');
+    bgMusic.play().catch(e => console.log('Audio autoplay bloqueado'));
+    
+    document.getElementById('intro').classList.remove('active');
+    document.getElementById('puzzle1').classList.add('active');
+    currentPuzzle = 1;
+    updateProgress();
+    
+    updateTimer();
+    timerInterval = setInterval(() => {
+        gameTime--;
+        updateTimer();
+        
+        if (gameTime <= 0) {
+            endGame(false, 'Se acabó el tiempo');
+        }
+    }, 1000);
+}
+
+function updateTimer() {
+    const minutes = Math.floor(gameTime / 60);
+    const seconds = gameTime % 60;
+    const timerElement = document.getElementById('timer');
+    timerElement.textContent = 
+        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    
+    if (gameTime <= 300 && gameTime > 0) {
+        timerElement.classList.add('warning');
+    }
+    
+    if (gameTime <= 120 && gameTime > 0) {
+        if (Math.random() > 0.95) {
+            document.body.classList.add('glitch');
+            setTimeout(() => document.body.classList.remove('glitch'), 300);
+        }
+    }
+}
+
+function updateProgress() {
+    document.getElementById('current-step').textContent = currentPuzzle;
+    document.getElementById('hints-left').textContent = HINTS_AVAILABLE - hintsUsed;
+}
+
+function nextPuzzle() {
+    document.getElementById(`puzzle${currentPuzzle}`).classList.remove('active');
+    currentPuzzle++;
+    
+    if (!unlockedPuzzles.includes(currentPuzzle)) {
+        unlockedPuzzles.push(currentPuzzle);
+    }
+    
+    updateProgress();
+    
+    if (currentPuzzle <= TOTAL_PUZZLES) {
+        document.getElementById(`puzzle${currentPuzzle}`).classList.add('active');
+        
+        if (currentPuzzle === 3) {
+            updatePuzzle3Info();
+        }
+        
+        updateNavigationButtons();
+    }
+}
+
+function goToPuzzle(puzzleNum) {
+    if (!unlockedPuzzles.includes(puzzleNum)) {
+        alert('Este puzzle aún no está desbloqueado.');
+        return;
+    }
+    
+    document.getElementById(`puzzle${currentPuzzle}`).classList.remove('active');
+    
+    currentPuzzle = puzzleNum;
+    document.getElementById(`puzzle${currentPuzzle}`).classList.add('active');
+    
+    if (currentPuzzle === 3) {
+        updatePuzzle3Info();
+    }
+    
+    updateProgress();
+    updateNavigationButtons();
+}
+
+function updatePuzzle3Info() {
+    const bookClueEl = document.getElementById('book-clue');
+    const letterClue = document.getElementById('letter-clue');
+    if (bookClueEl) {
+        if (collectedEvidence.puzzle1) {
+            bookClueEl.style.display = 'block';
+            if (letterClue) letterClue.textContent = '_ A _ _ _';
+        } else {
+            bookClueEl.style.display = 'none';
+            if (letterClue) letterClue.textContent = '_ A _ _ _';
+        }
+    }
+
+    const suspectAInforme = document.getElementById('suspect-a-informe');
+    if (suspectAInforme && collectedEvidence.puzzle2) {
+        suspectAInforme.textContent = 'Miguel Torres';
+    }
+
+    const suspectBInforme = document.getElementById('suspect-b-informe');
+    if (suspectBInforme && collectedEvidence.puzzle2) {
+        suspectBInforme.textContent = 'Carlos Ruiz';
+    }
+}
+
+function updateNavigationButtons() {
+    unlockedPuzzles.forEach(puzzleNum => {
+        const navContainer = document.getElementById(`nav-buttons-${puzzleNum}`);
+        if (!navContainer) return;
+        
+        navContainer.innerHTML = '';
+        
+        unlockedPuzzles.forEach(num => {
+            const btn = document.createElement('button');
+            btn.textContent = `Puzzle ${num}`;
+            if (num === currentPuzzle) {
+                btn.classList.add('current-puzzle');
+            }
+            btn.onclick = () => goToPuzzle(num);
+            navContainer.appendChild(btn);
+        });
+    });
+}
+
+function showFeedback(puzzleNum, message, isError = false, isPenalty = false) {
+    const feedbackEl = document.getElementById(`feedback${puzzleNum}`);
+    feedbackEl.innerHTML = message;
+    feedbackEl.className = 'feedback';
+}
+
+
+
+function toggleHints() {
+    const overlay = document.getElementById('hint-overlay');
+    overlay.classList.toggle('active');
+    
+    if (overlay.classList.contains('active')) {
+        document.getElementById('hints-available').textContent = HINTS_AVAILABLE - hintsUsed;
+        document.getElementById('current-hint-text').innerHTML = `
+            <div class="evidence">
+                <p><strong>Pista para Puzzle ${currentPuzzle}:</strong></p>
+                <p>${hints[`puzzle${currentPuzzle}`] || 'No hay pista disponible para este puzzle.'}</p>
+            </div>
+        `;
+    }
+}
+
+function useHint() {
+    if (hintsUsed >= HINTS_AVAILABLE) {
+        alert('No te quedan pistas disponibles.');
+        return;
+    }
+    
+    hintsUsed++;
+    gameTime -= PENALTY_PER_HINT;
+    updateProgress();
+    toggleHints();
+    
+    alert(`Pista revelada. Penalización: -${PENALTY_PER_HINT / 60} minutos`);
+}
+
+
+
+function checkPuzzle1() {
+    const answer = document.getElementById('answer1').value.trim();
+    
+    if (solutions.puzzle1.includes(answer)) {
+        collectedEvidence.puzzle1 = true;
+        showFeedback(1, 'El cajón se abre con un clic. Hay documentos dentro... puede que sean importantes.');
+        setTimeout(nextPuzzle, 2500);
+    } else {
+        showFeedback(1, 'El cajón permanece cerrado. Quizás el código no sea tan obvio...');
+        setTimeout(() => {
+            document.getElementById('puzzle1').classList.remove('active');
+            currentPuzzle = 3;
+            if (!unlockedPuzzles.includes(3)) {
+                unlockedPuzzles.push(3);
+            }
+            updateProgress();
+            document.getElementById('puzzle3').classList.add('active');
+            updatePuzzle3Info();
+            updateNavigationButtons();
+        }, 2500);
+    }
+}
+
+function selectBook(book) {
+    if (book === '1984' || solutions.puzzle2.includes(book)) {
+        collectedEvidence.puzzle2 = true;
+        showFeedback(2, 'Algo cae del libro... letras marcadas forman un patrón. Podría ser relevante.');
+        setTimeout(nextPuzzle, 2800);
+    } else {
+        showFeedback(2, 'El libro parece normal. Tal vez este no sea el indicado... o tal vez sí.');
+        setTimeout(nextPuzzle, 2800);
+    }
+}
+
+function checkPuzzle3() {
+    const answer = document.getElementById('answer3').value.trim();
+    
+    if (solutions.puzzle3.includes(answer)) {
+        collectedEvidence.puzzle3 = true;
+        showFeedback(3, 'La pantalla parpadea... accedes a archivos. Hay información aquí, pero ¿es fiable?');
+        setTimeout(nextPuzzle, 2500);
+    } else {
+        showFeedback(3, 'Contraseña rechazada. El sistema se bloquea permanentemente.');
+        setTimeout(() => {
+            document.getElementById('puzzle3').classList.remove('active');
+            currentPuzzle = 5; 
+            if (!unlockedPuzzles.includes(5)) {
+                unlockedPuzzles.push(5);
+            }
+            updateProgress();
+            document.getElementById('puzzle5').classList.add('active');
+            updateNavigationButtons();
+        }, 2500);
+    }
+}
+
+function playAudio() {
+    if (audioPlayed) {
+        alert('Ya has escuchado el audio. No puedes reproducirlo de nuevo.');
+        return;
+    }
+    
+    audioPlayed = true;
+    const player = document.getElementById('audio-player');
+    const transcript = document.getElementById('audio-transcript');
+    const questions = document.getElementById('questions-section');
+    
+    player.innerHTML = '<p style="color: #ffaa00;">🎙️ Reproduciendo...</p>';
+    
+    setTimeout(() => {
+        transcript.style.display = 'block';
+        player.innerHTML = '<p style="color: #666;">Audio finalizado</p>';
+    }, 5000);
+    
+    setTimeout(() => {
+        transcript.style.display = 'none';
+        questions.style.display = 'block';
+    }, 25000);
+}
+
+function answerQuestion1(answer) {
+    if (solutions.puzzle4.includes(answer)) {
+        showFeedback('4a', `Has elegido: ${answer === '9' || answer === '21' || answer === '2100' ? '21:00' : answer}. El testigo mencionó varias horas...`);
+        answers4.push(true);
+        setTimeout(() => {
+            document.getElementById('feedback4a').innerHTML = '';
+            document.getElementById('question2').style.display = 'block';
+        }, 2000);
+    } else {
+        showFeedback('4a', `Has elegido: ${answer === '8' ? '20:00' : answer === '830' ? '20:30' : '21:15'}. Posiblemente. Mencionó varias horas.`);
+        answers4.push(false);
+        setTimeout(() => {
+            document.getElementById('feedback4a').innerHTML = '';
+            document.getElementById('question2').style.display = 'block';
+        }, 2000);
+    }
+}
+
+function answerQuestion2(answer) {
+    if (solutions.puzzle4b.includes(answer)) {
+        showFeedback('4b', `Has elegido: ${answer}. También mencionó neblina...`);
+        answers4.push(true);
+        setTimeout(() => {
+            document.getElementById('feedback4b').innerHTML = '';
+            document.getElementById('question3').style.display = 'block';
+        }, 2000);
+    } else {
+        showFeedback('4b', `Has elegido: ${answer}. Las condiciones climáticas son confusas en su relato.`);
+        answers4.push(false);
+        setTimeout(() => {
+            document.getElementById('feedback4b').innerHTML = '';
+            document.getElementById('question3').style.display = 'block';
+        }, 2000);
+    }
+}
+
+function answerQuestion3(answer) {
+    if (answer === 'miguel') {
+        answers4.push(true);
+        
+        if (answers4.filter(a => a === true).length === 3) {
+            collectedEvidence.puzzle4 = true;
+            showFeedback(4, `Has registrado: vio a ${answer === 'miguel' ? 'Miguel Torres' : answer}. Roberto parece seguro de su testimonio.`);
+        } else {
+            showFeedback(4, `Testimonio registrado: ${answer}. Hay contradicciones en otros detalles.`);
+        }
+        setTimeout(nextPuzzle, 3000);
+    } else {
+        answers4.push(false);
+        showFeedback(4, `Testimonio registrado: ${answer === 'carlos' ? 'Carlos Ruiz' : answer === 'nadie' ? 'nadie' : 'no está seguro'}. El testigo tenía dudas.`);
+        setTimeout(nextPuzzle, 3000);
+    }
+}
+
+// Puzzle 5: Cuadro
+function movePainting() {
+    document.getElementById('behind-painting').style.display = 'block';
+    document.getElementById('compartment-locked').style.display = 'block';
+    document.getElementById('compartment').style.display = 'none';
+    document.getElementById('question5').style.display = 'none';
+    document.getElementById('item-inspect').innerHTML = '';
+    paintingAligned = false;
+    document.getElementById('painting-img').style.transform = 'rotate(5deg)';
+    document.getElementById('painting-rotate').value = 5;
+    document.getElementById('rotate-value').textContent = '5';
+    showFeedback(5, 'Has descubierto información detrás del cuadro. Alinea el cuadro para revelar el compartimiento.', false);
+}
+
+let paintingAligned = false;
+
+function rotatePainting(value) {
+    const deg = Number(value);
+    document.getElementById('painting-img').style.transform = `rotate(${deg}deg)`;
+    document.getElementById('rotate-value').textContent = `${deg}`;
+    // reveal when approximately aligned to 0 degrees
+    if (Math.abs(deg) <= 2) {
+        paintingAligned = true;
+        document.getElementById('hidden-mark').style.opacity = '1';
+        document.getElementById('compartment').style.display = 'block';
+        document.getElementById('compartment-locked').style.display = 'none';
+        document.getElementById('question5').style.display = 'block';
+    } else {
+        paintingAligned = false;
+        document.getElementById('hidden-mark').style.opacity = '0';
+        document.getElementById('compartment').style.display = 'none';
+        document.getElementById('compartment-locked').style.display = 'block';
+        document.getElementById('question5').style.display = 'none';
+    }
+}
+
+function inspectItem(item) {
+    const out = document.getElementById('item-inspect');
+    if (!paintingAligned) {
+        out.innerHTML = `<div class="penalty">Alinea primero el cuadro para poder inspeccionar.</div>`;
+        return;
+    }
+
+    if (item === 'pen') {
+        out.innerHTML = `<div class="code-box">Bolígrafo rojo: la tinta está parcialmente seca y la punta muestra desgaste irregular. Hay pequeñas fibras marrones atrapadas en la rosca del capuchón, como si hubiera rozado con una prenda oscura.</div>`;
+    } else if (item === 'glove') {
+        out.innerHTML = `<div class="code-box">Guante de látex: parece diseñado para la mano izquierda. Presenta manchas recientes de tinta en la palma; el borde muestra un ligero desgaste en el lado que cubriría los dedos.</div>`;
+    } else if (item === 'paper') {
+        out.innerHTML = `<div class="code-box">Fragmento de papel: trozo rasgado con trazos de una firma parcial; se distingue una letra que podría interpretarse como 'M' o 'A' según la orientación. Hay salpicaduras que dificultan una lectura segura.</div>`;
+    }
+}
+
+function checkPuzzle5(answer) {
+    if (!paintingAligned) {
+        showFeedback(5, 'Aún no has alineado e inspeccionado correctamente el cuadro. Asegúrate de examinar los objetos.', true);
+        return;
+    }
+
+    if (solutions.puzzle5.includes(answer.toLowerCase())) {
+        collectedEvidence.puzzle5 = true;
+        showFeedback(5, `Has concluido: ${answer}. Esta pista podría ser relevante.`);
+        setTimeout(nextPuzzle, 3000);
+    } else {
+        collectedEvidence.puzzle5 = false;
+        showFeedback(5, `Has concluido: ${answer}. Puede que hayas interpretado mal la evidencia.`);
+        setTimeout(nextPuzzle, 3000);
+    }
+}
+
+function checkPuzzle6() {
+    const answer = document.getElementById('answer6').value.trim().toLowerCase();
+    
+    const validAnswers = ['carlos', 'carlos ruiz', 'ruiz'];
+    
+    if (validAnswers.includes(answer)) {
+        collectedEvidence.puzzle6 = true;
+        showFeedback(6, `Registrado: ${answer}. Elena parece muy segura de su testimonio.`);
+        setTimeout(nextPuzzle, 2500);
+    } else {
+        showFeedback(6, `Registrado: ${answer}. El testimonio queda archivado.`);
+        setTimeout(nextPuzzle, 2500);
+    }
+}
+
+function selectMainSuspect(suspect) {
+    selectedSuspect = suspect;
+    
+    updateSuspectNames();
+    
+    document.querySelectorAll('#suspect-selection .node').forEach(node => {
+        node.classList.remove('selected');
+    });
+    
+    event.target.closest('.node').classList.add('selected');
+    
+    populateEvidenceGrid();
+    document.getElementById('evidence-selection').style.display = 'block';
+    
+    const suspectName = event.target.closest('.node').querySelector('strong').textContent;
+    showFeedback(7, `Has seleccionado a <strong>${suspectName}</strong> como sospechoso. Ahora selecciona las pruebas.`);
+}
+
+function updateSuspectNames() {
+    if (collectedEvidence.puzzle2 || collectedEvidence.puzzle3 || collectedEvidence.puzzle6) {
+        const suspectB = document.getElementById('suspect-b-name');
+        if (suspectB && suspectB.textContent === 'Sospechoso B') {
+            suspectB.textContent = 'Carlos Ruiz';
+        }
+    }
+    
+    if (collectedEvidence.puzzle3 || collectedEvidence.puzzle4) {
+        const suspectA = document.getElementById('suspect-a-name');
+        if (suspectA && suspectA.textContent === 'Sospechoso A') {
+            suspectA.textContent = 'Miguel Torres';
+        }
+    }
+}
+
+function populateEvidenceGrid() {
+    const evidenceGrid = document.getElementById('evidence-grid');
+    evidenceGrid.innerHTML = '';
+    
+    const evidenceDescriptions = {
+        1: { name: 'Cajón desbloqueado', desc: 'Código del cajón (reloj/fecha)', incriminates: null },
+        2: { name: 'Libro 1984', desc: 'Letras forman ___O_', incriminates: 'carlos' },
+        3: { 
+            name: collectedEvidence.puzzle2 ? 'Informe de Carlos' : 'Informe del Sospechoso B', 
+            desc: collectedEvidence.puzzle2 ? 'Informe de Carlos a las 20:15' : 'Informe del hijo a las 20:15', 
+            incriminates: 'carlos' 
+        },
+        4: { 
+            name: collectedEvidence.puzzle2 || collectedEvidence.puzzle3 ? 'Testimonio Roberto' : 'Testimonio Roberto', 
+            desc: collectedEvidence.puzzle2 || collectedEvidence.puzzle3 ? 'Vio a Miguel saliendo' : 'Vio a Sospechoso A saliendo', 
+            incriminates: 'miguel' 
+        },
+        5: { name: 'Guante izquierdo', desc: 'Con manchas de tinta', incriminates: 'carlos' },
+        6: { 
+            name: collectedEvidence.puzzle2 || collectedEvidence.puzzle3 ? 'Testimonio Elena' : 'Testimonio Elena', 
+            desc: collectedEvidence.puzzle2 || collectedEvidence.puzzle3 ? 'Vio a alguien zurdo con maletín' : 'Vio a Sospechoso B con maletín', 
+            incriminates: 'carlos' 
+        }
+    };
+    
+    const mapping = {
+        puzzle1: 1,
+        puzzle2: 2,
+        puzzle3: 3,
+        puzzle4: 4,
+        puzzle5: 5,
+        puzzle6: 6
+    };
+    
+    let evidenceNum = 0;
+    Object.keys(collectedEvidence).forEach(puzzle => {
+        if (collectedEvidence[puzzle]) {
+            const num = mapping[puzzle];
+            const ev = evidenceDescriptions[num];
+            
+            const div = document.createElement('div');
+            div.innerHTML = `<strong>${num}</strong><br>${ev.name}`;
+            div.onclick = () => selectEvidence(num);
+            evidenceGrid.appendChild(div);
+            evidenceNum++;
+        }
+    });
+    
+    if (evidenceNum === 0) {
+        const div = document.createElement('div');
+        div.innerHTML = '<p style="color: #ff4444;">No recolectaste ninguna evidencia</p>';
+        div.style.gridColumn = '1 / -1';
+        evidenceGrid.appendChild(div);
+    }
+}
+
+function selectEvidence(num) {
+    const index = selectedEvidence.indexOf(num);
+    
+    if (index > -1) {
+        selectedEvidence.splice(index, 1);
+        event.target.classList.remove('selected');
+    } else {
+        if (selectedEvidence.length >= 3) {
+            alert('Solo puedes seleccionar 3 pruebas.');
+            return;
+        }
+        selectedEvidence.push(num);
+        event.target.classList.add('selected');
+    }
+    
+    const evidenceNames = {
+        1: 'Cajón',
+        2: 'Libro ',
+        3: 'Informe ',
+        4: 'Testigo Roberto',
+        5: 'Guante',
+        6: 'Testigo Elena'
+    };
+    
+    const selected = selectedEvidence.map(n => evidenceNames[n]).join(', ');
+    document.getElementById('selected-evidence').textContent = 
+        selectedEvidence.length > 0 ? selected : 'Ninguna';
+}
+
+function finalAccusation() {
+    if (!selectedSuspect) {
+        alert('Primero debes seleccionar un sospechoso.');
+        return;
+    }
+    
+   
+    if (selectedEvidence.length < 3) {
+        showFeedback(7, 'Evidencia insuficiente. La acusación no puede proceder sin al menos 3 pruebas sólidas.');
+        setTimeout(() => endGame(false, 'Evidencia insuficiente'), 3000);
+        return;
+    }
+    
+    const carlosEvidence = [2, 3, 5, 6];
+    
+    const carlosEvidenceSelected = selectedEvidence.filter(e => carlosEvidence.includes(e)).length;
+    
+    if (selectedSuspect === 'carlos' && selectedEvidence.length === 3 && carlosEvidenceSelected === 3) {
+        showFeedback(7, 'Has presentado tu acusación formal. El juicio determinará el destino del acusado.');
+        setTimeout(() => endGame(true), 3000);
+    }
+    else if (selectedSuspect === 'carlos' && carlosEvidenceSelected >= 2) {
+        showFeedback(7, 'Acusación presentada, pero algunas pruebas no parecen relevantes. El caso podría desestimarse.');
+        setTimeout(() => endGame(false, 'Evidencia parcialmente incriminatoria'), 3000);
+    }
+    else {
+        showFeedback(7, 'Has presentado tu acusación. El tiempo dirá si fue la correcta.');
+        setTimeout(() => endGame(false, 'La investigación quedó inconclusa'), 3000);
+    }
+}
+
+
+function endGame(victory, reason = '') {
+    clearInterval(timerInterval);
+    
+    document.getElementById(`puzzle${currentPuzzle}`).classList.remove('active');
+    
+    const ending = document.getElementById('ending');
+    ending.classList.add('active');
+    
+    const endingTitle = document.getElementById('ending-title');
+    const statsContent = document.getElementById('stats-content');
+    
+    const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(elapsedTime / 60);
+    const seconds = elapsedTime % 60;
+    
+    if (victory) {
+        ending.classList.add('victory');
+        endingTitle.textContent = '🟢 CASO CERRADO';
+        statsContent.innerHTML = `
+            <p style="color: #00ff00; font-size: 24px;">ACUSACIÓN ACEPTADA</p>
+            <p>Tu investigación fue suficientemente sólida. El acusado enfrentará juicio.</p>
+            <p>Tiempo completado: ${minutes}:${seconds.toString().padStart(2, '0')}</p>
+            <p>Errores cometidos: ${errorsCount}</p>
+            <p>Pistas usadas: ${hintsUsed} / ${HINTS_AVAILABLE}</p>
+            <p style="margin-top: 30px; color: #888;">
+                La verdad siempre tiene múltiples caras. Tu versión de los hechos ha prevalecido.
+            </p>
+        `;
+    } else {
+        ending.classList.add('defeat');
+        endingTitle.textContent = '🔴 INVESTIGACIÓN CERRADA';
+        statsContent.innerHTML = `
+            <p style="color: #ff0000; font-size: 24px;">${reason || 'CASO ARCHIVADO'}</p>
+            <p>No se pudo establecer una acusación sólida.</p>
+            <p>Puzzles resueltos: ${currentPuzzle - 1} / ${TOTAL_PUZZLES}</p>
+            <p>Errores cometidos: ${errorsCount}</p>
+            <p>Pistas usadas: ${hintsUsed} / ${HINTS_AVAILABLE}</p>
+            <p style="margin-top: 30px; color: #666;">
+                El caso permanece sin resolver. La verdad se ha perdido en las sombras.
+            </p>
+        `;
+    }
+}
+
+
+document.querySelectorAll('input').forEach(input => {
+    input.addEventListener('paste', e => e.preventDefault());
+});
+
+
+document.querySelectorAll('input').forEach((input, index) => {
+    input.addEventListener('keypress', e => {
+        if (e.key === 'Enter') {
+            const puzzleNum = index + 1;
+            const checkFunction = window[`checkPuzzle${puzzleNum}`];
+            if (checkFunction) checkFunction();
+        }
+    });
+});
+
+</script>
+
+</body>
+</html>

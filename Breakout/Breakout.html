@@ -1,0 +1,357 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Breakout</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        canvas {
+            background: #000;
+            display: block;
+            margin: 20px auto;
+            border: 2px solid white;
+        }
+
+        .power-up-info {
+            color: #ffd700;
+            font-weight: bold;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🧱 Breakout</h1>
+    <p>
+        Nivel: <span id="level">1</span> |
+        Puntos: <span id="score">0</span> |
+        Vidas: <span id="lives">3</span>
+    </p>
+    <p class="power-up-info" id="powerUpStatus"></p>
+
+    <canvas id="game" width="480" height="320"></canvas>
+    <button onclick="resetGame()">Reiniciar</button>
+
+    <script>
+        const canvas = document.getElementById("game");
+        const ctx = canvas.getContext("2d");
+
+        let score = 0;
+        let lives = 3;
+        let level = 1;
+
+        let balls = [{
+            x: canvas.width / 2,
+            y: canvas.height - 30,
+            dx: 2,
+            dy: -2,
+            r: 8
+        }];
+
+        let powerUps = [];
+        let paddleNormalWidth = 80;
+        let paddlePowerUpTime = 0;
+
+        const paddle = {
+            w: 80,
+            h: 10,
+            x: (canvas.width - 80) / 2,
+            speed: 6
+        };
+
+        const rows = 4;
+        const cols = 6;
+        const brickW = 70;
+        const brickH = 20;
+        const padding = 10;
+        const offsetTop = 30;
+        const offsetLeft = 35;
+
+        let bricks = [];
+
+        function initBricks() {
+            bricks = [];
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    // 20% de probabilidad de que tenga power-up
+                    const hasPowerUp = Math.random() < 0.2;
+                    const powerUpType = Math.random() < 0.5 ? 'extraBall' : 'bigPaddle';
+                    
+                    bricks.push({
+                        x: offsetLeft + c * (brickW + padding),
+                        y: offsetTop + r * (brickH + padding),
+                        alive: true,
+                        powerUp: hasPowerUp ? powerUpType : null
+                    });
+                }
+            }
+        }
+
+        let right = false;
+        let left = false;
+
+        document.addEventListener("keydown", e => {
+            if (e.key === "ArrowRight") right = true;
+            if (e.key === "ArrowLeft") left = true;
+        });
+        document.addEventListener("keyup", e => {
+            if (e.key === "ArrowRight") right = false;
+            if (e.key === "ArrowLeft") left = false;
+        });
+        document.addEventListener("mousemove", e => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            paddle.x = x - paddle.w / 2;
+        });
+
+        function drawBall() {
+            balls.forEach(ball => {
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+                ctx.fillStyle = "white";
+                ctx.fill();
+            });
+        }
+
+        function drawPowerUps() {
+            powerUps.forEach(p => {
+                ctx.fillStyle = p.type === 'extraBall' ? '#00ff00' : '#ff00ff';
+                ctx.fillRect(p.x - 10, p.y - 10, 20, 20);
+                ctx.fillStyle = 'white';
+                ctx.font = '14px Arial';
+                ctx.fillText(p.type === 'extraBall' ? '⚽' : '📏', p.x - 7, p.y + 5);
+            });
+        }
+
+        function drawPaddle() {
+            ctx.fillStyle = "cyan";
+            ctx.fillRect(
+                paddle.x,
+                canvas.height - paddle.h - 5,
+                paddle.w,
+                paddle.h
+            );
+        }
+
+        function drawBricks() {
+            bricks.forEach(b => {
+                if (b.alive) {
+                    ctx.fillStyle = b.powerUp ? (b.powerUp === 'extraBall' ? '#ffaa00' : '#ff66ff') : 'orange';
+                    ctx.fillRect(b.x, b.y, brickW, brickH);
+                    
+                    // Mostrar indicador de power-up
+                    if (b.powerUp) {
+                        ctx.fillStyle = 'white';
+                        ctx.font = '12px Arial';
+                        ctx.fillText(b.powerUp === 'extraBall' ? '⚽' : '📏', b.x + brickW/2 - 6, b.y + brickH/2 + 4);
+                    }
+                }
+            });
+        }
+
+        function collision() {
+            balls.forEach(ball => {
+                // Paleta
+                if (
+                    ball.y + ball.r >= canvas.height - paddle.h - 5 &&
+                    ball.x > paddle.x &&
+                    ball.x < paddle.x + paddle.w
+                ) {
+                    ball.dy *= -1;
+                }
+
+                // Ladrillos
+                bricks.forEach(b => {
+                    if (
+                        b.alive &&
+                        ball.x > b.x &&
+                        ball.x < b.x + brickW &&
+                        ball.y > b.y &&
+                        ball.y < b.y + brickH
+                    ) {
+                        ball.dy *= -1;
+                        b.alive = false;
+                        score++;
+                        document.getElementById("score").textContent = score;
+
+                        // Soltar power-up si el ladrillo lo tiene
+                        if (b.powerUp) {
+                            powerUps.push({
+                                x: b.x + brickW / 2,
+                                y: b.y + brickH / 2,
+                                type: b.powerUp,
+                                speed: 2
+                            });
+                        }
+
+                        // ¿Nivel completado?
+                        if (bricks.every(br => !br.alive)) {
+                            level++;
+                            document.getElementById("level").textContent = level;
+
+                            // Aumentar dificultad progresivamente
+                            const speedIncrease = 1 + (level * 0.15);
+                            balls.forEach(b => {
+                                b.dx = (b.dx > 0 ? 2 : -2) * speedIncrease;
+                                b.dy = (b.dy > 0 ? 2 : -2) * speedIncrease;
+                            });
+
+                            // Reiniciar ladrillos y pelota
+                            initBricks();
+                            balls = [{
+                                x: canvas.width / 2,
+                                y: canvas.height - 30,
+                                dx: 2 * speedIncrease,
+                                dy: -2 * speedIncrease,
+                                r: 8
+                            }];
+                            powerUps = [];
+                        }
+                    }
+                });
+            });
+
+            // Colisión power-ups con paleta
+            powerUps = powerUps.filter(p => {
+                if (
+                    p.y + 10 >= canvas.height - paddle.h - 5 &&
+                    p.x > paddle.x &&
+                    p.x < paddle.x + paddle.w
+                ) {
+                    activatePowerUp(p.type);
+                    return false;
+                }
+                return p.y < canvas.height;
+            });
+        }
+
+        function activatePowerUp(type) {
+            if (type === 'extraBall') {
+                // Añadir una pelota nueva con dirección aleatoria
+                const angle = (Math.random() * Math.PI / 2) + Math.PI / 4;
+                const speed = Math.sqrt(balls[0].dx ** 2 + balls[0].dy ** 2);
+                balls.push({
+                    x: paddle.x + paddle.w / 2,
+                    y: canvas.height - paddle.h - 15,
+                    dx: Math.cos(angle) * speed,
+                    dy: -Math.sin(angle) * speed,
+                    r: 8
+                });
+                updatePowerUpStatus('🎉 ¡Pelota Extra!');
+            } else if (type === 'bigPaddle') {
+                paddle.w = paddleNormalWidth * 1.5;
+                paddlePowerUpTime = Date.now() + 10000; // 10 segundos
+                updatePowerUpStatus('📏 ¡Base Grande! (10s)');
+            }
+        }
+
+        function updatePowerUpStatus(msg) {
+            const statusEl = document.getElementById('powerUpStatus');
+            statusEl.textContent = msg;
+            setTimeout(() => {
+                if (statusEl.textContent === msg) statusEl.textContent = '';
+            }, 2000);
+        }
+
+        function update() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawBall();
+            drawPaddle();
+            drawBricks();
+            drawPowerUps();
+            collision();
+
+            // Actualizar pelotas
+            balls = balls.filter(ball => {
+                ball.x += ball.dx;
+                ball.y += ball.dy;
+
+                // Paredes
+                if (ball.x + ball.r > canvas.width || ball.x - ball.r < 0)
+                    ball.dx *= -1;
+
+                if (ball.y - ball.r < 0)
+                    ball.dy *= -1;
+
+                // Caída
+                if (ball.y + ball.r > canvas.height) {
+                    // Si queda más de una pelota, solo eliminarla
+                    if (balls.length > 1) {
+                        return false;
+                    }
+                    
+                    // Si es la última pelota, perder vida
+                    lives--;
+                    document.getElementById("lives").textContent = lives;
+
+                    if (lives === 0) {
+                        alert("GAME OVER\nNivel alcanzado: " + level + "\nPuntuación: " + score);
+                        resetGame();
+                        return false;
+                    } else {
+                        ball.x = canvas.width / 2;
+                        ball.y = canvas.height - 30;
+                        ball.dy = -Math.abs(ball.dy);
+                    }
+                }
+                return true;
+            });
+
+            // Actualizar power-ups
+            powerUps.forEach(p => p.y += p.speed);
+
+            // Verificar si el power-up de la base ha expirado
+            if (paddlePowerUpTime > 0 && Date.now() > paddlePowerUpTime) {
+                paddle.w = paddleNormalWidth;
+                paddlePowerUpTime = 0;
+                document.getElementById('powerUpStatus').textContent = '';
+            }
+
+            // Movimiento paleta
+            if (right && paddle.x < canvas.width - paddle.w)
+                paddle.x += paddle.speed;
+            if (left && paddle.x > 0)
+                paddle.x -= paddle.speed;
+
+            requestAnimationFrame(update);
+        }
+
+        function resetGame() {
+            score = 0;
+            lives = 3;
+            level = 1;
+
+            balls = [{
+                x: canvas.width / 2,
+                y: canvas.height - 30,
+                dx: 2,
+                dy: -2,
+                r: 8
+            }];
+
+            powerUps = [];
+            paddle.w = paddleNormalWidth;
+            paddlePowerUpTime = 0;
+
+            initBricks();
+
+            document.getElementById("score").textContent = score;
+            document.getElementById("lives").textContent = lives;
+            document.getElementById("level").textContent = level;
+            document.getElementById("powerUpStatus").textContent = '';
+        }
+
+        initBricks();
+        update();
+    </script>
+
+</body>
+</html>

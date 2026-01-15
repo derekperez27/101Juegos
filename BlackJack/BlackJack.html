@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Blackjack</title>
+
+<style>
+body {
+  font-family: 'Arial', sans-serif;
+  background: linear-gradient(135deg, #0b5135 0%, #1a7a4f 100%);
+  color: white;
+  text-align: center;
+  margin: 0;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+h1 {
+  font-size: 48px;
+  text-shadow: 3px 3px 6px rgba(0,0,0,0.5);
+  margin-bottom: 20px;
+}
+
+button {
+  padding: 12px 24px;
+  font-size: 16px;
+  margin: 5px;
+  background: linear-gradient(145deg, #2d8659, #1f5d3d);
+  color: white;
+  border: 2px solid #ffd700;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+
+button:hover {
+  background: linear-gradient(145deg, #3a9f6f, #267049);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input {
+  padding: 10px;
+  font-size: 16px;
+  margin: 5px;
+  border: 2px solid #ffd700;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.9);
+  width: 100px;
+}
+
+.cards {
+  font-size: 24px;
+  margin: 15px;
+  min-height: 80px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.card {
+  background: white;
+  color: black;
+  padding: 15px 12px;
+  border-radius: 8px;
+  font-size: 28px;
+  font-weight: bold;
+  min-width: 50px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  display: inline-block;
+}
+
+.card.red {
+  color: #d32f2f;
+}
+
+.panel {
+  margin: 15px auto;
+  padding: 20px;
+  border: 3px solid #ffd700;
+  background: rgba(0,0,0,0.3);
+  border-radius: 15px;
+  display: inline-block;
+  min-width: 300px;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+}
+
+.dealer-panel {
+  background: rgba(139,0,0,0.2);
+  border-color: #ff6b6b;
+}
+
+.players-container {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.player-panel {
+  background: rgba(0,100,200,0.2);
+  border-color: #4dabf7;
+  flex: 1;
+  min-width: 250px;
+  max-width: 350px;
+}
+
+.player-panel.active {
+  border-color: #ffd700;
+  box-shadow: 0 0 20px rgba(255,215,0,0.5);
+}
+
+.player-panel.bot {
+  border-color: #9775fa;
+  background: rgba(100,50,150,0.2);
+}
+
+.chips-display {
+  font-size: 24px;
+  font-weight: bold;
+  color: #ffd700;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+  margin: 10px;
+}
+
+.bet-section {
+  background: rgba(0,0,0,0.3);
+  padding: 15px;
+  border-radius: 10px;
+  display: inline-block;
+  margin: 15px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Panel de configuración */
+.setup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.setup-panel {
+  background: linear-gradient(135deg, #1a7a4f 0%, #0b5135 100%);
+  padding: 40px;
+  border-radius: 20px;
+  border: 3px solid #ffd700;
+  max-width: 600px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.setup-panel h2 {
+  margin-top: 0;
+  font-size: 32px;
+  color: #ffd700;
+}
+
+.player-setup {
+  margin: 20px 0;
+  padding: 15px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 10px;
+}
+
+.mode-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.mode-btn {
+  padding: 10px 20px;
+  background: rgba(255,255,255,0.1);
+  border: 2px solid #666;
+  color: white;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.mode-btn.selected {
+  background: #ffd700;
+  color: black;
+  border-color: #ffd700;
+}
+
+.result-message {
+  font-size: 28px;
+  font-weight: bold;
+  margin: 20px;
+  padding: 15px;
+  border-radius: 10px;
+  display: inline-block;
+}
+
+.result-message.win {
+  background: rgba(0,255,0,0.3);
+  border: 2px solid #00ff00;
+}
+
+.result-message.lose {
+  background: rgba(255,0,0,0.3);
+  border: 2px solid #ff0000;
+}
+
+.result-message.tie {
+  background: rgba(255,255,0,0.3);
+  border: 2px solid #ffff00;
+}
+</style>
+</head>
+
+<body>
+
+<!-- Panel de configuración inicial -->
+<div class="setup-overlay" id="setupOverlay">
+  <div class="setup-panel">
+    <h2>⚙️ Configuración del Juego</h2>
+    
+    <div style="margin: 20px 0;">
+      <label style="font-size: 20px;">¿Cuántos jugadores? (1-4)</label><br>
+      <input type="number" id="numPlayers" min="1" max="4" value="1" style="width: 80px; font-size: 20px; margin: 10px;">
+    </div>
+    
+    <div id="playersConfig"></div>
+    
+    <button onclick="confirmSetup()" style="font-size: 20px; padding: 15px 30px;">Comenzar Juego</button>
+  </div>
+</div>
+
+<!-- Juego principal -->
+<div id="gameArea" class="hidden">
+  <h1>🃏 Blackjack</h1>
+
+  <div class="bet-section">
+    <div class="chips-display">💰 Fichas Totales: <span id="chips">100</span></div>
+    <button onclick="startRound()">Repartir Cartas</button>
+  </div>
+
+  <div class="panel dealer-panel">
+    <h2>🎩 Crupier</h2>
+    <div class="cards" id="dealerCards"></div>
+    <div>Total: <span id="dealerTotal">0</span></div>
+  </div>
+
+  <div class="players-container" id="playersContainer"></div>
+
+  <div id="actionButtons" style="margin: 20px;">
+    <button id="hitBtn" onclick="hit()">🃏 Pedir Carta</button>
+    <button id="standBtn" onclick="stand()">✋ Plantarse</button>
+  </div>
+
+  <div id="result"></div>
+
+  <button onclick="resetGame()" style="margin-top: 20px;">🔄 Nueva Configuración</button>
+</div>
+
+<script>
+let deck = [];
+let dealer = [];
+let players = [];
+let numPlayers = 1;
+let currentPlayerIndex = 0;
+let roundActive = false;
+
+const suits = ['♠', '♥', '♦', '♣'];
+const suitColors = {'♠': 'black', '♥': 'red', '♦': 'red', '♣': 'black'};
+
+// Configuración inicial
+document.getElementById('numPlayers').addEventListener('change', updatePlayersConfig);
+updatePlayersConfig();
+
+function updatePlayersConfig() {
+  const num = parseInt(document.getElementById('numPlayers').value);
+  const container = document.getElementById('playersConfig');
+  container.innerHTML = '';
+  
+  for (let i = 0; i < num; i++) {
+    const div = document.createElement('div');
+    div.className = 'player-setup';
+    div.innerHTML = `
+      <h3>Jugador ${i + 1}</h3>
+      <div class="mode-buttons">
+        <button class="mode-btn selected" onclick="selectMode(${i}, 'human')">👤 Humano</button>
+        <button class="mode-btn" onclick="selectMode(${i}, 'bot')">🤖 Máquina</button>
+      </div>
+      <input type="hidden" id="playerMode${i}" value="human">
+    `;
+    container.appendChild(div);
+  }
+}
+
+function selectMode(playerIndex, mode) {
+  const buttons = document.querySelectorAll(`#playersConfig .player-setup:nth-child(${playerIndex + 1}) .mode-btn`);
+  buttons.forEach(btn => btn.classList.remove('selected'));
+  event.target.classList.add('selected');
+  document.getElementById(`playerMode${playerIndex}`).value = mode;
+}
+
+function confirmSetup() {
+  numPlayers = parseInt(document.getElementById('numPlayers').value);
+  players = [];
+  
+  for (let i = 0; i < numPlayers; i++) {
+    const mode = document.getElementById(`playerMode${i}`).value;
+    players.push({
+      id: i,
+      name: mode === 'human' ? `Jugador ${i + 1}` : `Bot ${i + 1}`,
+      isBot: mode === 'bot',
+      chips: 100,
+      hand: [],
+      bet: 0,
+      standing: false
+    });
+  }
+  
+  document.getElementById('setupOverlay').classList.add('hidden');
+  document.getElementById('gameArea').classList.remove('hidden');
+  renderPlayers();
+  updateChipsDisplay();
+}
+
+function renderPlayers() {
+  const container = document.getElementById('playersContainer');
+  container.innerHTML = '';
+  
+  players.forEach((player, index) => {
+    const div = document.createElement('div');
+    div.className = `panel player-panel ${player.isBot ? 'bot' : ''}`;
+    div.id = `player${index}`;
+    
+    const betInput = player.isBot ? '' : `
+      <div style="margin: 10px;">
+        <label>Apuesta: </label>
+        <input type="number" id="betInput${index}" min="1" max="${player.chips}" value="10" style="width: 70px;">
+      </div>
+    `;
+    
+    div.innerHTML = `
+      <h3>${player.isBot ? '🤖' : '👤'} ${player.name}</h3>
+      <div class="chips-display">💰 ${player.chips}</div>
+      ${betInput}
+      <div class="cards" id="playerCards${index}"></div>
+      <div>Total: <span id="playerTotal${index}">0</span></div>
+      <div id="playerStatus${index}" style="margin-top: 10px; font-size: 18px;"></div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function createDeck() {
+  const values = ["A",2,3,4,5,6,7,8,9,10,"J","Q","K"];
+  deck = [];
+  suits.forEach(suit => {
+    values.forEach(val => {
+      const numValue = val === "J" || val === "Q" || val === "K" ? 10 : val;
+      deck.push({display: val + suit, value: numValue, suit: suit});
+    });
+  });
+  deck.sort(() => Math.random() - 0.5);
+}
+
+function handTotal(hand) {
+  let total = 0;
+  let aces = 0;
+
+  hand.forEach(card => {
+    if (card.value === "A") {
+      aces++;
+      total += 11;
+    } else {
+      total += card.value;
+    }
+  });
+
+  while (total > 21 && aces > 0) {
+    total -= 10;
+    aces--;
+  }
+  return total;
+}
+
+function startRound() {
+  // Recoger apuestas de cada jugador
+  let canStart = true;
+  let errorMsg = '';
+  
+  players.forEach((player, index) => {
+    if (player.isBot) {
+      // Los bots apuestan un valor aleatorio entre 5 y min(20, sus fichas)
+      const maxBotBet = Math.min(20, player.chips);
+      const minBotBet = Math.min(5, player.chips);
+      player.bet = Math.floor(Math.random() * (maxBotBet - minBotBet + 1)) + minBotBet;
+    } else {
+      // Jugadores humanos introducen su apuesta
+      const betInput = document.getElementById(`betInput${index}`);
+      const betAmount = parseInt(betInput.value);
+      
+      if (isNaN(betAmount) || betAmount <= 0) {
+        canStart = false;
+        errorMsg = `${player.name}: La apuesta debe ser mayor a 0`;
+        return;
+      }
+      
+      if (betAmount > player.chips) {
+        canStart = false;
+        errorMsg = `${player.name}: No tienes suficientes fichas (tienes ${player.chips})`;
+        return;
+      }
+      
+      player.bet = betAmount;
+    }
+  });
+  
+  if (!canStart) {
+    return alert(errorMsg);
+  }
+
+  createDeck();
+  dealer = [deck.pop(), deck.pop()];
+  
+  players.forEach(player => {
+    player.hand = [deck.pop(), deck.pop()];
+    player.standing = false;
+    document.getElementById(`playerStatus${player.id}`).innerHTML = `💰 Apuesta: ${player.bet}`;
+  });
+  
+  roundActive = true;
+  currentPlayerIndex = 0;
+  document.getElementById("result").innerHTML = "";
+  updateAllUI();
+  
+  // Verificar blackjacks
+  let allBlackjack = true;
+  players.forEach(player => {
+    if (handTotal(player.hand) !== 21) allBlackjack = false;
+  });
+  
+  if (allBlackjack) {
+    finishRound();
+  } else {
+    nextPlayer();
+  }
+}
+
+function nextPlayer() {
+  // Buscar siguiente jugador que no esté plantado
+  while (currentPlayerIndex < players.length && players[currentPlayerIndex].standing) {
+    currentPlayerIndex++;
+  }
+  
+  if (currentPlayerIndex >= players.length) {
+    // Todos los jugadores terminaron
+    finishRound();
+    return;
+  }
+  
+  updateActivePlayer();
+  
+  // Si es un bot, jugar automáticamente
+  if (players[currentPlayerIndex].isBot) {
+    setTimeout(botPlay, 1000);
+  }
+}
+
+function botPlay() {
+  const player = players[currentPlayerIndex];
+  const total = handTotal(player.hand);
+  
+  if (total < 17) {
+    hit();
+  } else {
+    stand();
+  }
+}
+
+function updateActivePlayer() {
+  players.forEach((player, index) => {
+    const panel = document.getElementById(`player${index}`);
+    if (index === currentPlayerIndex && !player.standing) {
+      panel.classList.add('active');
+    } else {
+      panel.classList.remove('active');
+    }
+  });
+  
+  const hitBtn = document.getElementById('hitBtn');
+  const standBtn = document.getElementById('standBtn');
+  
+  if (currentPlayerIndex < players.length && !players[currentPlayerIndex].isBot) {
+    hitBtn.disabled = false;
+    standBtn.disabled = false;
+  } else {
+    hitBtn.disabled = true;
+    standBtn.disabled = true;
+  }
+}
+
+function hit() {
+  if (!roundActive || currentPlayerIndex >= players.length) return;
+  
+  const player = players[currentPlayerIndex];
+  player.hand.push(deck.pop());
+  updateAllUI();
+
+  if (handTotal(player.hand) > 21) {
+    player.standing = true;
+    document.getElementById(`playerStatus${currentPlayerIndex}`).innerHTML = "💥 ¡Pasado!";
+    currentPlayerIndex++;
+    setTimeout(nextPlayer, 1000);
+  } else if (player.isBot) {
+    setTimeout(botPlay, 1000);
+  }
+}
+
+function stand() {
+  if (!roundActive || currentPlayerIndex >= players.length) return;
+  
+  players[currentPlayerIndex].standing = true;
+  document.getElementById(`playerStatus${currentPlayerIndex}`).innerHTML = "✋ Plantado";
+  currentPlayerIndex++;
+  
+  setTimeout(nextPlayer, 500);
+}
+
+function finishRound() {
+  roundActive = false;
+  
+  // El crupier juega
+  while (handTotal(dealer) < 17) {
+    dealer.push(deck.pop());
+  }
+  
+  updateAllUI();
+  
+  const dealerTotal = handTotal(dealer);
+  let resultHTML = '<div style="margin: 20px;">';
+  
+  players.forEach((player, index) => {
+    const playerTotal = handTotal(player.hand);
+    let result = '';
+    let resultClass = '';
+    
+    if (playerTotal > 21) {
+      result = '❌ Perdió (pasado)';
+      resultClass = 'lose';
+      player.chips -= player.bet;
+    } else if (playerTotal === 21 && player.hand.length === 2 && dealerTotal !== 21) {
+      result = '🎉 ¡Blackjack! (x1.5)';
+      resultClass = 'win';
+      player.chips += Math.floor(player.bet * 1.5);
+    } else if (dealerTotal > 21) {
+      result = '🎉 Ganó (crupier pasado)';
+      resultClass = 'win';
+      player.chips += player.bet;
+    } else if (playerTotal > dealerTotal) {
+      result = '🎉 Ganó';
+      resultClass = 'win';
+      player.chips += player.bet;
+    } else if (playerTotal < dealerTotal) {
+      result = '❌ Perdió';
+      resultClass = 'lose';
+      player.chips -= player.bet;
+    } else {
+      result = '🤝 Empate';
+      resultClass = 'tie';
+    }
+    
+    document.getElementById(`playerStatus${index}`).innerHTML = result;
+    resultHTML += `<div class="result-message ${resultClass}">${player.name}: ${result}</div>`;
+  });
+  
+  resultHTML += '</div>';
+  document.getElementById('result').innerHTML = resultHTML;
+  
+  updateChipsDisplay();
+  updateActivePlayer();
+  
+  // Verificar si algún jugador se quedó sin fichas
+  setTimeout(() => {
+    const broke = players.filter(p => p.chips <= 0);
+    if (broke.length > 0) {
+      let msg = '💸 Sin fichas: ' + broke.map(p => p.name).join(', ');
+      alert(msg + '\n\nInicia una nueva configuración para continuar.');
+    }
+  }, 1000);
+}
+
+function updateAllUI() {
+  // Actualizar cartas del crupier
+  const dealerCardsEl = document.getElementById("dealerCards");
+  dealerCardsEl.innerHTML = '';
+  dealer.forEach(card => {
+    const cardEl = document.createElement('span');
+    cardEl.className = `card ${suitColors[card.suit] === 'red' ? 'red' : ''}`;
+    cardEl.textContent = card.display;
+    dealerCardsEl.appendChild(cardEl);
+  });
+  document.getElementById("dealerTotal").textContent = handTotal(dealer);
+  
+  // Actualizar cartas de los jugadores
+  players.forEach((player, index) => {
+    const cardsEl = document.getElementById(`playerCards${index}`);
+    cardsEl.innerHTML = '';
+    player.hand.forEach(card => {
+      const cardEl = document.createElement('span');
+      cardEl.className = `card ${suitColors[card.suit] === 'red' ? 'red' : ''}`;
+      cardEl.textContent = card.display;
+      cardsEl.appendChild(cardEl);
+    });
+    document.getElementById(`playerTotal${index}`).textContent = handTotal(player.hand);
+  });
+}
+
+function updateChipsDisplay() {
+  let totalChips = 0;
+  players.forEach((player, index) => {
+    const panel = document.getElementById(`player${index}`);
+    if (panel) {
+      panel.querySelector('.chips-display').textContent = `💰 ${player.chips}`;
+      
+      // Actualizar el máximo del input de apuesta para jugadores humanos
+      if (!player.isBot) {
+        const betInput = document.getElementById(`betInput${index}`);
+        if (betInput) {
+          betInput.max = player.chips;
+          if (parseInt(betInput.value) > player.chips) {
+            betInput.value = Math.min(10, player.chips);
+          }
+        }
+      }
+    }
+    totalChips += player.chips;
+  });
+  document.getElementById('chips').textContent = totalChips;
+}
+
+function resetGame() {
+  document.getElementById('gameArea').classList.add('hidden');
+  document.getElementById('setupOverlay').classList.remove('hidden');
+  updatePlayersConfig();
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Don't Stop</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+button{
+    padding:10px 20px;
+    font-size:16px;
+    margin-top:10px;
+    cursor:pointer;
+}
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+#records h2 {
+    color: #00ff00;
+}
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #00ff00;
+}
+.record-rank {
+    font-weight: bold;
+    color: #00ff00;
+    margin-right: 10px;
+}
+.record-time {
+    color: #4CAF50;
+    font-weight: bold;
+}
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+</style>
+</head>
+<body>
+
+<h1>⏱️ DON'T STOP</h1>
+<p>No dejes de moverte y esquiva las paredes</p>
+<p>Tiempo vivo: <span id="time">0</span>s | Velocidad: <span id="speedDisplay">2.0</span></p>
+<p id="msg"></p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<button id="restart" style="display:none">🔁 Volver a jugar</button>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const timeSpan = document.getElementById("time");
+const speedDisplay = document.getElementById("speedDisplay");
+const msg = document.getElementById("msg");
+const restartBtn = document.getElementById("restart");
+
+let running, time, wallSpeed, walls;
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('dontStopRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(time) {
+    const records = loadRecords();
+    records.push({
+        time: time,
+        date: new Date().toLocaleDateString()
+    });
+    records.sort((a, b) => b.time - a.time);
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('dontStopRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-time">${record.time}s</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('dontStopRecords');
+        displayRecords();
+    }
+}
+
+displayRecords();
+
+/* ===== PLAYER ===== */
+let player;
+
+/* ===== INPUT ===== */
+const keys = {};
+document.addEventListener("keydown",e=>keys[e.key]=true);
+document.addEventListener("keyup",e=>keys[e.key]=false);
+
+/* ===== INIT ===== */
+function startGame(){
+    running = true;
+    time = 0;
+    wallSpeed = 2;
+    walls = [];
+    msg.textContent = "";
+    restartBtn.style.display = "none";
+
+    player = {
+        x: 200,
+        y: 200,
+        size: 16,
+        speed: 3,
+        stopped: false
+    };
+    
+    // Spawnear primera pared
+    spawnWall();
+}
+
+/* ===== WALLS ===== */
+function spawnWall() {
+    const gapSize = 80; // Tamaño del hueco
+    const gapY = Math.random() * (400 - gapSize);
+    
+    walls.push({
+        x: 0,
+        gapY: gapY,
+        gapSize: gapSize,
+        passed: false
+    });
+}
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    // Movimiento del jugador (solo si no está parado)
+    if(!player.stopped) {
+        if(keys["w"]){ player.y -= player.speed; }
+        if(keys["s"]){ player.y += player.speed; }
+        if(keys["a"]){ player.x -= player.speed; }
+        if(keys["d"]){ player.x += player.speed; }
+
+        // Límites
+        player.x = Math.max(0, Math.min(384, player.x));
+        player.y = Math.max(0, Math.min(384, player.y));
+    }
+
+    // Mover paredes
+    walls.forEach(wall => {
+        wall.x += wallSpeed;
+        
+        // Colisión con pared
+        if(!wall.passed && wall.x <= player.x + player.size && wall.x + 10 >= player.x) {
+            // Verificar si el jugador está en el hueco
+            if(player.y < wall.gapY || player.y + player.size > wall.gapY + wall.gapSize) {
+                // Choca con la pared - el jugador se para
+                player.stopped = true;
+                die("Chocaste con la pared");
+            }
+        }
+        
+        // Marcar como pasada
+        if(wall.x > player.x + player.size && !wall.passed) {
+            wall.passed = true;
+        }
+    });
+
+    // Eliminar paredes fuera de pantalla
+    walls = walls.filter(w => w.x < 400);
+    
+    // Spawnear nueva pared cuando la anterior pasa cierta posición
+    if(walls.length === 0 || walls[walls.length - 1].x > 150) {
+        spawnWall();
+    }
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0,0,400,400);
+    
+    // Dibujar paredes
+    ctx.fillStyle = "#555";
+    walls.forEach(wall => {
+        // Parte superior de la pared
+        ctx.fillRect(wall.x, 0, 10, wall.gapY);
+        // Parte inferior de la pared
+        ctx.fillRect(wall.x, wall.gapY + wall.gapSize, 10, 400 - (wall.gapY + wall.gapSize));
+        
+        // Borde del hueco
+        ctx.strokeStyle = "#888";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(wall.x, wall.gapY, 10, wall.gapSize);
+    });
+    
+    // Jugador
+    ctx.fillStyle = player.stopped ? "red" : "cyan";
+    ctx.fillRect(player.x, player.y, player.size, player.size);
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ===== TIEMPO / DIFICULTAD ===== */
+setInterval(()=>{
+    if(!running) return;
+
+    time++;
+    timeSpan.textContent = time;
+
+    // Aumentar velocidad de las paredes cada 5 segundos
+    if(time % 5 === 0 && wallSpeed < 8){
+        wallSpeed += 0.5;
+        player.speed += 1.0; // Aumentar velocidad del jugador (2x)
+        speedDisplay.textContent = wallSpeed.toFixed(1);
+    }
+},1000);
+
+/* ===== GAME OVER ===== */
+function die(message = "💀 TE PARASTE"){
+    running = false;
+    player.stopped = true;
+    
+    saveRecord(time);
+    
+    const records = loadRecords();
+    const isTopRecord = records.length > 0 && records[0].time === time;
+    
+    if(isTopRecord) {
+        msg.textContent = "🏆 ¡NUEVO RÉCORD! " + message;
+    } else {
+        msg.textContent = message;
+    }
+    
+    restartBtn.style.display = "inline-block";
+}
+
+/* ===== RESTART ===== */
+restartBtn.onclick = () => {
+    startGame();
+};
+
+/* ===== START ===== */
+startGame();
+loop();
+</script>
+
+</body>
+</html>

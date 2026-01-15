@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Memory Debt</title>
+<style>
+body {
+    margin: 0;
+    background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+    color: white;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+#game-container {
+    text-align: center;
+    position: relative;
+    max-width: 800px;
+    width: 90%;
+}
+
+h1 {
+    font-size: 48px;
+    margin: 20px 0;
+    text-shadow: 0 0 20px #00ff88;
+    letter-spacing: 4px;
+}
+
+.subtitle {
+    font-size: 18px;
+    color: #ff6b6b;
+    margin-bottom: 30px;
+    font-style: italic;
+}
+
+#stats {
+    display: flex;
+    justify-content: space-around;
+    margin: 20px 0;
+    font-size: 20px;
+}
+
+.stat {
+    background: rgba(255,255,255,0.1);
+    padding: 15px 25px;
+    border-radius: 10px;
+    border: 2px solid #00ff88;
+    transition: all 0.3s;
+}
+
+.stat.danger {
+    border-color: #ff6b6b;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+#display-area {
+    background: rgba(0,0,0,0.5);
+    padding: 60px;
+    margin: 30px 0;
+    border-radius: 15px;
+    min-height: 200px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 80px;
+    font-weight: bold;
+    border: 3px solid #00ff88;
+    position: relative;
+    overflow: hidden;
+}
+
+.noise {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(255,255,255,0.03) 2px,
+        rgba(255,255,255,0.03) 4px
+    );
+    animation: noise 0.3s infinite;
+}
+
+@keyframes noise {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(2px); }
+}
+
+#question-area {
+    font-size: 28px;
+    margin: 30px 0;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #00ff88;
+}
+
+#answers {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.answer-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    padding: 20px 40px;
+    font-size: 24px;
+    color: white;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.answer-btn:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+}
+
+.answer-btn.correct {
+    background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%);
+}
+
+.answer-btn.wrong {
+    background: linear-gradient(135deg, #ff6b6b 0%, #cc0000 100%);
+}
+
+.answer-btn.fail-on-purpose {
+    background: linear-gradient(135deg, #ff9500 0%, #ff5500 100%);
+}
+
+#timer-bar {
+    width: 100%;
+    height: 30px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 15px;
+    overflow: hidden;
+    margin: 20px 0;
+    border: 2px solid #00ff88;
+}
+
+#timer-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00ff88 0%, #00cc66 50%, #ff6b6b 100%);
+    transition: width 0.1s linear;
+    border-radius: 15px;
+}
+
+#start-btn, #restart-btn {
+    background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%);
+    border: none;
+    padding: 20px 60px;
+    font-size: 28px;
+    color: #000;
+    border-radius: 15px;
+    cursor: pointer;
+    font-weight: bold;
+    margin: 20px;
+    transition: all 0.3s;
+    box-shadow: 0 5px 20px rgba(0,255,136,0.4);
+}
+
+#start-btn:hover, #restart-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 10px 30px rgba(0,255,136,0.6);
+}
+
+#game-over {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.9);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+#game-over-content {
+    background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+    padding: 50px;
+    border-radius: 20px;
+    border: 3px solid #ff6b6b;
+    text-align: center;
+}
+
+#game-over h2 {
+    font-size: 48px;
+    color: #ff6b6b;
+    margin-bottom: 20px;
+}
+
+#instructions {
+    background: rgba(0,0,0,0.3);
+    padding: 20px;
+    border-radius: 10px;
+    margin: 20px 0;
+    font-size: 14px;
+    text-align: left;
+    border: 1px solid #00ff88;
+}
+
+#instructions h3 {
+    color: #00ff88;
+    margin-top: 0;
+}
+
+#instructions ul {
+    margin: 10px 0;
+}
+
+.warning {
+    color: #ff9500;
+    font-weight: bold;
+    margin: 10px 0;
+    font-size: 16px;
+}
+
+.data-item {
+    display: inline-block;
+    margin: 10px;
+    font-size: 60px;
+}
+
+.color-box {
+    width: 120px;
+    height: 120px;
+    border-radius: 15px;
+    border: 3px solid white;
+    display: inline-block;
+}
+
+.symbol {
+    font-size: 100px;
+}
+</style>
+</head>
+<body>
+
+<div id="game-container">
+    <h1>⚠️ MEMORY DEBT</h1>
+    <p class="subtitle">"Recordar te ayuda ahora, pero te mata después"</p>
+    
+    <div id="menu">
+        <div id="instructions">
+            <h3>📋 INSTRUCCIONES</h3>
+            <ul>
+                <li>Se te mostrarán datos (números, colores, símbolos)</li>
+                <li>Debes responder preguntas sobre esos datos</li>
+                <li>✅ <strong>Acertar</strong> → Continúas pero aumenta tu DEUDA</li>
+                <li>❌ <strong>Fallar</strong> → GAME OVER</li>
+            </ul>
+            <h3>💣 SISTEMA DE DEUDA</h3>
+            <ul>
+                <li>Cada acierto añade +1 de deuda</li>
+                <li>La deuda reduce el tiempo disponible</li>
+                <li>La deuda añade ruido visual</li>
+                <li>Si la deuda llega a 10 → MUERTE AUTOMÁTICA</li>
+            </ul>
+            <p class="warning">⚠️ ESTRATEGIA: A veces conviene fallar a propósito para limpiar la deuda y sobrevivir más tiempo</p>
+        </div>
+        
+        <button id="start-btn">🎮 INICIAR JUEGO</button>
+    </div>
+    
+    <div id="game" style="display: none;">
+        <div id="stats">
+            <div class="stat" id="score-display">
+                Puntuación: <span id="score">0</span>
+            </div>
+            <div class="stat" id="debt-display">
+                Deuda: <span id="debt">0</span>/10
+            </div>
+            <div class="stat">
+                Pregunta: <span id="round">1</span>
+            </div>
+        </div>
+        
+        <div id="timer-bar">
+            <div id="timer-fill"></div>
+        </div>
+        
+        <div id="display-area">
+            <div class="noise" id="noise"></div>
+            <div id="data-content"></div>
+        </div>
+        
+        <div id="question-area"></div>
+        
+        <div id="answers"></div>
+    </div>
+    
+    <div id="game-over">
+        <div id="game-over-content">
+            <h2>💀 GAME OVER</h2>
+            <p id="death-reason"></p>
+            <p style="font-size: 36px; color: #00ff88; margin: 20px 0;">
+                Puntuación Final: <span id="final-score">0</span>
+            </p>
+            <p style="font-size: 24px;">
+                Preguntas Respondidas: <span id="final-round">0</span>
+            </p>
+            <button id="restart-btn">🔄 JUGAR DE NUEVO</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const baseTime = 8000; // 8 segundos base
+const maxDebt = 10;
+
+let score = 0;
+let memoryDebt = 0;
+let currentRound = 1;
+let currentData = {};
+let currentQuestion = null;
+let timerInterval = null;
+let questionStartTime = 0;
+let dataHistory = []; // Historial de todos los datos mostrados
+
+const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#fd79a8', '#fdcb6e', '#00b894'];
+const symbols = ['★', '◆', '●', '■', '▲', '♠', '♣', '♥', '♦', '☀', '☁', '☂', '⚡'];
+
+function startGame() {
+    score = 0;
+    memoryDebt = 0;
+    currentRound = 1;
+    dataHistory = [];
+    
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('game').style.display = 'block';
+    document.getElementById('game-over').style.display = 'none';
+    
+    updateStats();
+    showDataPhase();
+}
+
+function updateStats() {
+    document.getElementById('score').textContent = score;
+    document.getElementById('debt').textContent = memoryDebt;
+    document.getElementById('round').textContent = currentRound;
+    
+    const debtDisplay = document.getElementById('debt-display');
+    if(memoryDebt >= 7) {
+        debtDisplay.classList.add('danger');
+    } else {
+        debtDisplay.classList.remove('danger');
+    }
+    
+    // Actualizar ruido visual según la deuda
+    const noise = document.getElementById('noise');
+    noise.style.opacity = memoryDebt * 0.08;
+}
+
+function showDataPhase() {
+    const dataContent = document.getElementById('data-content');
+    const questionArea = document.getElementById('question-area');
+    const answersDiv = document.getElementById('answers');
+    
+    questionArea.textContent = 'Memoriza estos datos...';
+    answersDiv.innerHTML = '';
+    
+    // Generar datos aleatorios
+    const dataType = Math.floor(Math.random() * 3); // 0: número, 1: color, 2: símbolo
+    
+    if(dataType === 0) {
+        // Mostrar número
+        const number = Math.floor(Math.random() * 100);
+        currentData = { type: 'number', value: number };
+        dataContent.innerHTML = `<div class="data-item">${number}</div>`;
+    } else if(dataType === 1) {
+        // Mostrar color
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        currentData = { type: 'color', value: color };
+        dataContent.innerHTML = `<div class="color-box" style="background: ${color};"></div>`;
+    } else {
+        // Mostrar símbolo
+        const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+        currentData = { type: 'symbol', value: symbol };
+        dataContent.innerHTML = `<div class="symbol">${symbol}</div>`;
+    }
+    
+    // Guardar en el historial
+    dataHistory.push({ round: currentRound, ...currentData });
+    
+    // Mostrar datos por 3 segundos
+    setTimeout(() => {
+        dataContent.innerHTML = '';
+        showQuestionPhase();
+    }, 3000);
+}
+
+function showQuestionPhase() {
+    const questionArea = document.getElementById('question-area');
+    const answersDiv = document.getElementById('answers');
+    
+    // Generar pregunta según el tipo de dato
+    let question, answers, correctAnswer;
+    
+    // A partir de la pregunta 10, hay 50% de probabilidad de preguntar sobre el historial
+    if(currentRound >= 10 && dataHistory.length >= 3 && Math.random() > 0.5) {
+        // Pregunta sobre datos anteriores
+        const randomPastData = dataHistory[Math.floor(Math.random() * (dataHistory.length - 1))];
+        const roundNumber = randomPastData.round;
+        
+        if(randomPastData.type === 'number') {
+            question = `¿Cuál era el NÚMERO de la pregunta ${roundNumber}?`;
+            correctAnswer = randomPastData.value;
+            
+            // Generar opciones falsas
+            const options = [randomPastData.value];
+            while(options.length < 4) {
+                const fakeNumber = Math.floor(Math.random() * 100);
+                if(!options.includes(fakeNumber)) {
+                    options.push(fakeNumber);
+                }
+            }
+            options.sort(() => Math.random() - 0.5);
+            answers = options.map(n => ({ text: n.toString(), value: n }));
+            
+        } else if(randomPastData.type === 'color') {
+            question = `¿Cuál era el COLOR de la pregunta ${roundNumber}?`;
+            correctAnswer = randomPastData.value;
+            
+            // Generar opciones falsas
+            const options = [randomPastData.value];
+            while(options.length < 4) {
+                const fakeColor = colors[Math.floor(Math.random() * colors.length)];
+                if(!options.includes(fakeColor)) {
+                    options.push(fakeColor);
+                }
+            }
+            options.sort(() => Math.random() - 0.5);
+            answers = options.map(c => ({ 
+                text: `<div class="color-box" style="background: ${c}; width: 60px; height: 60px; display: inline-block;"></div>`, 
+                value: c 
+            }));
+            
+        } else {
+            // Símbolo
+            question = `¿Cuál era el SÍMBOLO de la pregunta ${roundNumber}?`;
+            correctAnswer = randomPastData.value;
+            
+            // Generar opciones falsas
+            const options = [randomPastData.value];
+            while(options.length < 4) {
+                const fakeSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+                if(!options.includes(fakeSymbol)) {
+                    options.push(fakeSymbol);
+                }
+            }
+            options.sort(() => Math.random() - 0.5);
+            answers = options.map(s => ({ text: s, value: s }));
+        }
+    } else if(currentData.type === 'number') {
+        const questionType = Math.floor(Math.random() * 4);
+        switch(questionType) {
+            case 0:
+                question = '¿El número era mayor que 50?';
+                correctAnswer = currentData.value > 50;
+                answers = [
+                    { text: 'SÍ', value: true },
+                    { text: 'NO', value: false }
+                ];
+                break;
+            case 1:
+                question = '¿El número era par?';
+                correctAnswer = currentData.value % 2 === 0;
+                answers = [
+                    { text: 'SÍ', value: true },
+                    { text: 'NO', value: false }
+                ];
+                break;
+            case 2:
+                question = '¿El número era mayor que 25?';
+                correctAnswer = currentData.value > 25;
+                answers = [
+                    { text: 'SÍ', value: true },
+                    { text: 'NO', value: false }
+                ];
+                break;
+            case 3:
+                const options = [
+                    currentData.value,
+                    Math.floor(Math.random() * 100),
+                    Math.floor(Math.random() * 100)
+                ].sort(() => Math.random() - 0.5);
+                question = '¿Cuál era el número?';
+                correctAnswer = currentData.value;
+                answers = options.map(n => ({ text: n.toString(), value: n }));
+                break;
+        }
+    } else if(currentData.type === 'color') {
+        const isWarmColor = ['#ff6b6b', '#f9ca24', '#fdcb6e'].includes(currentData.value);
+        const questionType = Math.floor(Math.random() * 2);
+        
+        if(questionType === 0) {
+            question = '¿El color era cálido (rojo/amarillo)?';
+            correctAnswer = isWarmColor;
+            answers = [
+                { text: 'SÍ', value: true },
+                { text: 'NO', value: false }
+            ];
+        } else {
+            const options = [currentData.value];
+            while(options.length < 3) {
+                const randomColor = colors[Math.floor(Math.random() * colors.length)];
+                if(!options.includes(randomColor)) {
+                    options.push(randomColor);
+                }
+            }
+            options.sort(() => Math.random() - 0.5);
+            question = '¿Cuál era el color?';
+            correctAnswer = currentData.value;
+            answers = options.map(c => ({ 
+                text: `<div class="color-box" style="background: ${c}; width: 60px; height: 60px; display: inline-block;"></div>`, 
+                value: c 
+            }));
+        }
+    } else {
+        // Símbolo
+        const options = [currentData.value];
+        while(options.length < 3) {
+            const randomSymbol = symbols[Math.floor(Math.random() * symbols.length)];
+            if(!options.includes(randomSymbol)) {
+                options.push(randomSymbol);
+            }
+        }
+        options.sort(() => Math.random() - 0.5);
+        question = '¿Cuál era el símbolo?';
+        correctAnswer = currentData.value;
+        answers = options.map(s => ({ text: s, value: s }));
+    }
+    
+    currentQuestion = { question, answers, correctAnswer };
+    
+    questionArea.textContent = question;
+    answersDiv.innerHTML = '';
+    
+    answers.forEach(answer => {
+        const btn = document.createElement('button');
+        btn.className = 'answer-btn';
+        btn.innerHTML = answer.text;
+        btn.onclick = () => checkAnswer(answer.value);
+        answersDiv.appendChild(btn);
+    });
+    
+    // Añadir botón de fallar a propósito si la deuda es alta
+    if(memoryDebt >= 5) {
+        const failBtn = document.createElement('button');
+        failBtn.className = 'answer-btn fail-on-purpose';
+        failBtn.textContent = '⚠️ FALLAR A PROPÓSITO';
+        failBtn.onclick = () => failOnPurpose();
+        answersDiv.appendChild(failBtn);
+    }
+    
+    startTimer();
+}
+
+function startTimer() {
+    const availableTime = Math.max(1000, baseTime - (memoryDebt * 700)); // Reduce 0.7s por cada deuda
+    questionStartTime = Date.now();
+    const timerFill = document.getElementById('timer-fill');
+    
+    timerFill.style.width = '100%';
+    
+    let elapsed = 0;
+    timerInterval = setInterval(() => {
+        elapsed = Date.now() - questionStartTime;
+        const percentage = Math.max(0, ((availableTime - elapsed) / availableTime) * 100);
+        timerFill.style.width = percentage + '%';
+        
+        if(elapsed >= availableTime) {
+            clearInterval(timerInterval);
+            gameOver('⏱️ Se acabó el tiempo!');
+        }
+    }, 50);
+}
+
+function checkAnswer(answer) {
+    clearInterval(timerInterval);
+    
+    if(answer === currentQuestion.correctAnswer) {
+        // Respuesta correcta
+        score += 10;
+        memoryDebt++;
+        
+        if(memoryDebt >= maxDebt) {
+            gameOver('💀 Tu deuda de memoria te ha matado!');
+            return;
+        }
+        
+        currentRound++;
+        updateStats();
+        
+        setTimeout(() => {
+            showDataPhase();
+        }, 1000);
+    } else {
+        gameOver('❌ Respuesta incorrecta!');
+    }
+}
+
+function failOnPurpose() {
+    clearInterval(timerInterval);
+    
+    // Reducir la deuda
+    const debtReduction = Math.min(3, memoryDebt);
+    memoryDebt = Math.max(0, memoryDebt - debtReduction);
+    
+    // Penalización pequeña en puntuación
+    score = Math.max(0, score - 5);
+    
+    currentRound++;
+    updateStats();
+    
+    document.getElementById('question-area').textContent = `⚠️ Fallaste a propósito. Deuda reducida en ${debtReduction}!`;
+    document.getElementById('answers').innerHTML = '';
+    
+    setTimeout(() => {
+        showDataPhase();
+    }, 2000);
+}
+
+function gameOver(reason) {
+    clearInterval(timerInterval);
+    
+    document.getElementById('death-reason').textContent = reason;
+    document.getElementById('final-score').textContent = score;
+    document.getElementById('final-round').textContent = currentRound - 1;
+    document.getElementById('game-over').style.display = 'flex';
+}
+
+document.getElementById('start-btn').onclick = startGame;
+document.getElementById('restart-btn').onclick = startGame;
+</script>
+
+</body>
+</html>

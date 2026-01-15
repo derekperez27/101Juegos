@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Blink Fog</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+button{
+    padding:10px 20px;
+    font-size:16px;
+    margin-top:10px;
+    cursor:pointer;
+}
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+#records h2 {
+    color: #00ff00;
+}
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #00ff00;
+}
+.record-rank {
+    font-weight: bold;
+    color: #00ff00;
+    margin-right: 10px;
+}
+.record-level {
+    color: #4CAF50;
+    font-weight: bold;
+}
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+#msg {
+    font-size: 20px;
+    font-weight: bold;
+    color: #ff0000;
+    min-height: 30px;
+}
+#timer {
+    font-size: 24px;
+    font-weight: bold;
+    color: #ffff00;
+}
+</style>
+</head>
+<body>
+
+<h1>🌫️ BLINK FOG</h1>
+<p>Nivel: <span id="level">1</span> | Tiempo: <span id="timer">10</span>s</p>
+<p id="msg"></p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<button id="restart" style="display:none">🔁 Volver a jugar</button>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const levelSpan = document.getElementById("level");
+const timerSpan = document.getElementById("timer");
+const msg = document.getElementById("msg");
+const restartBtn = document.getElementById("restart");
+
+const SIZE = 10;
+const CELL = 40;
+
+let visible = true;
+let running = false;
+let currentLevel = 1;
+let timeLeft = 0;
+let blinkInterval = 700;
+let timerInterval = null;
+let blinkTimer = null;
+
+let player = { x: 0, y: 9 };
+let goal = { x: 9, y: 0 };
+let walls = [];
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('blinkFogRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(level) {
+    const records = loadRecords();
+    records.push({
+        level: level,
+        date: new Date().toLocaleDateString()
+    });
+    records.sort((a, b) => b.level - a.level);
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('blinkFogRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-level">Nivel ${record.level}</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('blinkFogRecords');
+        displayRecords();
+    }
+}
+
+displayRecords();
+
+/* ===== GENERAR MAPA ===== */
+function hasPath(wallsSet) {
+    // BFS para verificar si existe camino de player a goal
+    const visited = new Set();
+    const queue = [{x: player.x, y: player.y}];
+    visited.add(`${player.x},${player.y}`);
+    
+    while(queue.length > 0) {
+        const pos = queue.shift();
+        
+        if(pos.x === goal.x && pos.y === goal.y) {
+            return true;
+        }
+        
+        const moves = [
+            {x: pos.x + 1, y: pos.y},
+            {x: pos.x - 1, y: pos.y},
+            {x: pos.x, y: pos.y + 1},
+            {x: pos.x, y: pos.y - 1}
+        ];
+        
+        for(let move of moves) {
+            const key = `${move.x},${move.y}`;
+            if(move.x >= 0 && move.x < SIZE && move.y >= 0 && move.y < SIZE &&
+               !visited.has(key) && !wallsSet.has(key)) {
+                visited.add(key);
+                queue.push(move);
+            }
+        }
+    }
+    
+    return false;
+}
+
+function generateWalls(){
+    walls.length = 0;
+    
+    // Generar paredes hasta que haya un camino válido
+    let attempts = 0;
+    let valid = false;
+    
+    while(!valid && attempts < 100) {
+        walls.length = 0;
+        const wallsSet = new Set();
+        
+        for(let y=0;y<SIZE;y++){
+            for(let x=0;x<SIZE;x++){
+                if(Math.random()<0.25 &&
+                   !(x===player.x && y===player.y) &&
+                   !(x===goal.x && y===goal.y)){
+                    walls.push({x,y});
+                    wallsSet.add(`${x},${y}`);
+                }
+            }
+        }
+        
+        valid = hasPath(wallsSet);
+        attempts++;
+    }
+    
+    // Si no se encuentra camino válido, crear uno simple
+    if(!valid) {
+        walls.length = 0;
+    }
+}
+
+/* ===== INIT ===== */
+function startGame() {
+    currentLevel = 1;
+    startLevel();
+}
+
+function startLevel() {
+    running = true;
+    visible = true;
+    msg.textContent = "";
+    restartBtn.style.display = "none";
+    
+    // Posiciones aleatorias pero válidas
+    player = { x: Math.floor(Math.random() * SIZE), y: Math.floor(Math.random() * SIZE) };
+    do {
+        goal = { x: Math.floor(Math.random() * SIZE), y: Math.floor(Math.random() * SIZE) };
+    } while(goal.x === player.x && goal.y === player.y);
+    
+    generateWalls();
+    
+    // Calcular tiempo y velocidad de blink según nivel
+    timeLeft = Math.max(8, 15 - Math.floor(currentLevel / 3));
+    blinkInterval = Math.max(300, 700 - (currentLevel * 30));
+    
+    levelSpan.textContent = currentLevel;
+    timerSpan.textContent = timeLeft;
+    
+    // Reiniciar timers
+    if(timerInterval) clearInterval(timerInterval);
+    if(blinkTimer) clearInterval(blinkTimer);
+    
+    // Timer de cuenta atrás
+    timerInterval = setInterval(() => {
+        if(!running) return;
+        timeLeft--;
+        timerSpan.textContent = timeLeft;
+        
+        if(timeLeft <= 0) {
+            die("Se acabó el tiempo");
+        }
+    }, 1000);
+    
+    // Blink timer
+    blinkTimer = setInterval(() => {
+        visible = !visible;
+    }, blinkInterval);
+}
+
+/* ===== INPUT ===== */
+/* ===== INPUT ===== */
+document.addEventListener("keydown", e=>{
+    if(!running) return;
+
+    let nx = player.x;
+    let ny = player.y;
+
+    if(e.key==="w") ny--;
+    if(e.key==="s") ny++;
+    if(e.key==="a") nx--;
+    if(e.key==="d") nx++;
+
+    if(nx<0||ny<0||nx>=SIZE||ny>=SIZE){
+        die("Te saliste del mapa");
+        return;
+    }
+
+    if(walls.some(w=>w.x===nx && w.y===ny)){
+        die("Chocaste con una pared");
+        return;
+    }
+
+    player.x = nx;
+    player.y = ny;
+
+    if(player.x===goal.x && player.y===goal.y){
+        levelComplete();
+    }
+});
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0,0,400,400);
+
+    if(visible || !running){
+        // grid
+        for(let y=0;y<SIZE;y++){
+            for(let x=0;x<SIZE;x++){
+                ctx.strokeStyle="#222";
+                ctx.strokeRect(x*CELL,y*CELL,CELL,CELL);
+            }
+        }
+
+        // walls
+        ctx.fillStyle="red";
+        walls.forEach(w=>{
+            ctx.fillRect(w.x*CELL,w.y*CELL,CELL,CELL);
+        });
+
+        // goal
+        ctx.fillStyle="lime";
+        ctx.fillRect(goal.x*CELL,goal.y*CELL,CELL,CELL);
+
+        // player
+        ctx.fillStyle="cyan";
+        ctx.fillRect(player.x*CELL,player.y*CELL,CELL,CELL);
+    }else{
+        // fog
+        ctx.fillStyle="black";
+        ctx.fillRect(0,0,400,400);
+    }
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ===== END ===== */
+function levelComplete(){
+    running = false;
+    if(timerInterval) clearInterval(timerInterval);
+    if(blinkTimer) clearInterval(blinkTimer);
+    
+    currentLevel++;
+    msg.textContent = `✅ ¡Nivel ${currentLevel - 1} completado! Siguiente...`;
+    
+    setTimeout(() => {
+        startLevel();
+    }, 1500);
+}
+
+function die(reason){
+    running = false;
+    if(timerInterval) clearInterval(timerInterval);
+    if(blinkTimer) clearInterval(blinkTimer);
+    
+    visible = true; // Mostrar mapa al morir
+    
+    saveRecord(currentLevel - 1);
+    
+    const records = loadRecords();
+    const isTopRecord = records.length > 0 && records[0].level === currentLevel - 1;
+    
+    if(isTopRecord && currentLevel > 1) {
+        msg.textContent = `🏆 ¡NUEVO RÉCORD! Nivel ${currentLevel - 1} | ${reason}`;
+    } else {
+        msg.textContent = `💀 ${reason} | Llegaste al nivel ${currentLevel}`;
+    }
+    
+    restartBtn.style.display = "inline-block";
+}
+
+/* ===== RESTART ===== */
+restartBtn.onclick = () => {
+    startGame();
+};
+
+/* ===== START ===== */
+startGame();
+loop();
+</script>
+
+</body>
+</html>

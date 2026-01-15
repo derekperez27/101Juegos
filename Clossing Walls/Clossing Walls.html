@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Closing Walls</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+button{
+    padding:10px 20px;
+    font-size:16px;
+    cursor:pointer;
+}
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+#records h2 {
+    color: #00ff00;
+}
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #00ff00;
+}
+.record-rank {
+    font-weight: bold;
+    color: #00ff00;
+    margin-right: 10px;
+}
+.record-time {
+    color: #4CAF50;
+    font-weight: bold;
+}
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+#msg {
+    font-size: 18px;
+    font-weight: bold;
+    min-height: 30px;
+}
+</style>
+</head>
+<body>
+
+<h1>🧱 CLOSING WALLS</h1>
+<p>Tiempo sobrevivido: <span id="time">0</span>s | <span id="phase">Buscando zona segura...</span></p>
+<p id="msg"></p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<br>
+<button id="restart" style="display:none">🔁 Volver a jugar</button>
+
+<div id="records">
+    <h2>🏆 Récords de Supervivencia</h2>
+    <div id="recordsList"></div>
+    <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const timeSpan = document.getElementById("time");
+const phaseSpan = document.getElementById("phase");
+const msg = document.getElementById("msg");
+const restartBtn = document.getElementById("restart");
+
+let running, time, phase, phaseTimer, safeZoneTime, cycleCount;
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('closingWallsRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(time) {
+    const records = loadRecords();
+    records.push({
+        time: time,
+        date: new Date().toLocaleDateString()
+    });
+    records.sort((a, b) => b.time - a.time);
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('closingWallsRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-time">${record.time}s</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('closingWallsRecords');
+        displayRecords();
+    }
+}
+
+displayRecords();
+
+/* ===== PLAYER ===== */
+let player;
+
+/* ===== WALLS ===== */
+let walls;
+
+/* ===== SAFE ZONE ===== */
+let safeZone;
+
+function generateSafeZone() {
+    // Generar zona segura aleatoria lejos del centro
+    const margin = 80;
+    const maxPos = 400 - margin;
+    
+    safeZone = {
+        x: margin + Math.random() * (maxPos - margin),
+        y: margin + Math.random() * (maxPos - margin),
+        size: 50
+    };
+}
+
+function isInSafeZone() {
+    return player.x + player.size > safeZone.x &&
+           player.x < safeZone.x + safeZone.size &&
+           player.y + player.size > safeZone.y &&
+           player.y < safeZone.y + safeZone.size;
+}
+
+/* ===== INPUT ===== */
+const keys = {};
+document.addEventListener("keydown",e=>{
+    keys[e.key.toLowerCase()]=true;
+});
+document.addEventListener("keyup",e=>{
+    keys[e.key.toLowerCase()]=false;
+});
+
+/* ===== START ===== */
+function start(){
+    running = true;
+    time = 0;
+    cycleCount = 0;
+    
+    player = {
+        x: 200,
+        y: 200,
+        size: 12,
+        speed: 3
+    };
+
+    walls = {
+        left: 0,
+        right: 400,
+        top: 0,
+        bottom: 400,
+        speed: 0.8  // Velocidad inicial ajustada
+    };
+    
+    generateSafeZone();
+    
+    // Empezar con fase de cierre
+    phase = 'closing';
+    phaseTimer = 0;
+    safeZoneTime = 8; // Tiempo inicial para llegar a zona segura
+    
+    msg.textContent = "";
+    restartBtn.style.display = "none";
+    updatePhaseDisplay();
+}
+
+function updatePhaseDisplay() {
+    if(phase === 'closing') {
+        phaseSpan.textContent = `⚠️ Paredes cerrándose (${safeZoneTime - phaseTimer}s para llegar)`;
+        phaseSpan.style.color = "#ff4444";
+    } else if(phase === 'safe') {
+        phaseSpan.textContent = "✅ En zona segura";
+        phaseSpan.style.color = "#44ff44";
+    } else if(phase === 'opening') {
+        phaseSpan.textContent = "🔄 Paredes abriéndose";
+        phaseSpan.style.color = "#ffff44";
+    }
+}
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    if(keys["w"]) player.y -= player.speed;
+    if(keys["s"]) player.y += player.speed;
+    if(keys["a"]) player.x -= player.speed;
+    if(keys["d"]) player.x += player.speed;
+    
+    // Mantener jugador dentro del canvas
+    player.x = Math.max(0, Math.min(400 - player.size, player.x));
+    player.y = Math.max(0, Math.min(400 - player.size, player.y));
+
+    // Gestión de fases
+    if(phase === 'closing') {
+        // Cerrar paredes
+        walls.left   += walls.speed;
+        walls.right  -= walls.speed;
+        walls.top    += walls.speed;
+        walls.bottom -= walls.speed;
+        
+        // Verificar si llegó a zona segura
+        if(isInSafeZone()) {
+            phase = 'safe';
+            phaseTimer = 0;
+            updatePhaseDisplay();
+        }
+        
+        // Colisión con paredes (si no está en zona segura)
+        if(!isInSafeZone() && (
+            player.x < walls.left ||
+            player.x + player.size > walls.right ||
+            player.y < walls.top ||
+            player.y + player.size > walls.bottom
+        )){
+            die();
+        }
+        
+    } else if(phase === 'safe') {
+        // Mantener paredes en posición
+        // Salir de zona segura después de 2 segundos
+        if(phaseTimer >= 2) {
+            phase = 'opening';
+            phaseTimer = 0;
+            updatePhaseDisplay();
+        }
+        
+    } else if(phase === 'opening') {
+        // Abrir paredes
+        walls.left   = Math.max(0, walls.left - walls.speed * 2);
+        walls.right  = Math.min(400, walls.right + walls.speed * 2);
+        walls.top    = Math.max(0, walls.top - walls.speed * 2);
+        walls.bottom = Math.min(400, walls.bottom + walls.speed * 2);
+        
+        // Cuando las paredes vuelvan a posición inicial
+        if(walls.left <= 0 && walls.right >= 400 && walls.top <= 0 && walls.bottom >= 400) {
+            // Nueva zona segura y reiniciar ciclo
+            cycleCount++;
+            generateSafeZone();
+            phase = 'closing';
+            phaseTimer = 0;
+            // Reducir tiempo disponible cada ciclo (mínimo 1 segundo)
+            safeZoneTime = Math.max(1, 8 - Math.floor(cycleCount / 2));
+            updatePhaseDisplay();
+        }
+    }
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0,0,400,400);
+    
+    // Zona segura
+    if(phase === 'closing' || phase === 'safe') {
+        ctx.fillStyle = phase === 'safe' ? "rgba(0,255,0,0.3)" : "rgba(0,255,0,0.2)";
+        ctx.fillRect(safeZone.x, safeZone.y, safeZone.size, safeZone.size);
+        ctx.strokeStyle = "#00ff00";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(safeZone.x, safeZone.y, safeZone.size, safeZone.size);
+        
+        // Texto "SAFE"
+        ctx.fillStyle = "#00ff00";
+        ctx.font = "bold 16px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("SAFE", safeZone.x + safeZone.size/2, safeZone.y + safeZone.size/2 + 5);
+    }
+
+    // Paredes
+    ctx.fillStyle="red";
+    ctx.fillRect(0,0,walls.left,400);
+    ctx.fillRect(walls.right,0,400-walls.right,400);
+    ctx.fillRect(0,0,400,walls.top);
+    ctx.fillRect(0,walls.bottom,400,400-walls.bottom);
+
+    // Jugador
+    ctx.fillStyle="cyan";
+    ctx.fillRect(player.x,player.y,player.size,player.size);
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ===== TIME & DIFFICULTY ===== */
+setInterval(()=>{
+    if(!running) return;
+
+    time++;
+    phaseTimer++;
+    timeSpan.textContent = time;
+    updatePhaseDisplay();
+    
+    // Muerte por tiempo límite en fase de cierre
+    if(phase === 'closing' && phaseTimer >= safeZoneTime && !isInSafeZone()) {
+        die();
+    }
+    
+    // Aumentar velocidad de paredes progresivamente (cada 5s, +0.2, hasta 4.0)
+    if(time % 5 === 0 && walls.speed < 4.0){
+        walls.speed += 0.2;
+    }
+},1000);
+
+/* ===== END ===== */
+function die(){
+    running = false;
+    
+    saveRecord(time);
+    
+    const records = loadRecords();
+    const isTopRecord = records.length > 0 && records[0].time === time;
+    
+    if(isTopRecord) {
+        msg.textContent = `🏆 ¡NUEVO RÉCORD! Sobreviviste ${time} segundos`;
+        msg.style.color = "#ffff00";
+    } else {
+        msg.textContent = `💀 Aplastado por las paredes | Sobreviviste ${time} segundos`;
+        msg.style.color = "#ff0000";
+    }
+    
+    restartBtn.style.display = "inline-block";
+}
+
+/* ===== RESTART ===== */
+restartBtn.onclick = start;
+
+start();
+loop();
+</script>
+
+</body>
+</html>

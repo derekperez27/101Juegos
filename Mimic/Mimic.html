@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>You Are The Enemy</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    text-align:center;
+    font-family:Arial;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+
+#records h2 {
+    color: #ff6600;
+}
+
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #ff6600;
+}
+
+.record-rank {
+    font-weight: bold;
+    color: #ff6600;
+    margin-right: 10px;
+}
+
+.record-level {
+    color: #ffd700;
+    font-weight: bold;
+}
+
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+
+button {
+    margin: 10px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+}
+
+#restartBtn {
+    background: #4CAF50;
+    color: white;
+}
+
+#clearRecordsBtn {
+    background: #d32f2f;
+    color: white;
+    padding: 8px 15px;
+    font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<h1>👁️ YOU ARE THE ENEMY</h1>
+<p>Nivel: <span id="level">1</span> | Modo: <span id="mode">Normal</span></p>
+<p id="msg">Tus movimientos controlan al enemigo</p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<button id="restartBtn" style="display:none;" onclick="restartGame()">Volver a Jugar</button>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button id="clearRecordsBtn" onclick="clearRecords()">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const levelSpan = document.getElementById("level");
+const modeSpan = document.getElementById("mode");
+const msg = document.getElementById("msg");
+
+let level = 1;
+let running = true;
+let mimicMode = 'normal'; // normal, inverted, mirror, delayed
+let moveQueue = []; // Para modo delayed
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('mimicRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(level) {
+    const records = loadRecords();
+    records.push({
+        level: level,
+        date: new Date().toLocaleDateString()
+    });
+    // Ordenar por nivel (mayor a menor)
+    records.sort((a, b) => b.level - a.level);
+    // Guardar solo los mejores 10
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('mimicRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-level">Nivel ${record.level}</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('mimicRecords');
+        displayRecords();
+    }
+}
+
+// Mostrar récords al cargar la página
+displayRecords();
+
+/* ===== PLAYER & ENEMY ===== */
+const player = { x:50, y:350, r:10 };
+const enemy  = { x:350, y:50, r:10 };
+
+let goal = {};
+let walls = [];
+
+/* ===== LEVEL ===== */
+function newLevel(){
+    walls = [];
+    moveQueue = [];
+    player.x = 50;
+    player.y = 350;
+    enemy.x = 350;
+    enemy.y = 50;
+
+    // Generar meta en posición aleatoria pero segura
+    let goalX, goalY, attempts = 0;
+    let safe = false;
+    
+    while(!safe && attempts < 100) {
+        goalX = Math.random() * 320 + 40;
+        goalY = Math.random() * 320 + 40;
+        
+        // Verificar distancia segura de jugador y enemigo
+        const minDist = 50;
+        if(Math.hypot(goalX - player.x, goalY - player.y) > minDist &&
+           Math.hypot(goalX - enemy.x, goalY - enemy.y) > minDist) {
+            safe = true;
+        }
+        attempts++;
+    }
+    
+    goal = { x: goalX || 350, y: goalY || 350, r: 12 };
+    
+    // Cambiar modo de mímico cada 3 niveles
+    if(level >= 3 && level % 3 === 0) {
+        const modes = ['inverted', 'mirror', 'delayed'];
+        mimicMode = modes[Math.floor(Math.random() * modes.length)];
+    } else if(level < 3) {
+        mimicMode = 'normal';
+    }
+    
+    // Actualizar UI según modo
+    if(mimicMode === 'normal') {
+        modeSpan.textContent = 'Normal';
+        msg.textContent = 'Tus movimientos controlan al enemigo';
+    } else if(mimicMode === 'inverted') {
+        modeSpan.textContent = 'Invertido';
+        msg.textContent = '⚠ El enemigo se mueve AL REVÉS';
+    } else if(mimicMode === 'mirror') {
+        modeSpan.textContent = 'Espejo';
+        msg.textContent = '⚠ El enemigo es tu ESPEJO';
+    } else if(mimicMode === 'delayed') {
+        modeSpan.textContent = 'Retrasado';
+        msg.textContent = '⚠ El enemigo copia con RETRASO';
+    }
+
+    // Generar paredes asegurando que no colisionen con jugador/enemigo/meta
+    const numWalls = Math.min(level + 4, 15);
+    for(let i=0;i<numWalls;i++){
+        let wallX, wallY, attempts = 0;
+        let safe = false;
+        const wallSize = Math.max(12 - level * 0.3, 6);
+        
+        while(!safe && attempts < 100) {
+            wallX = Math.random()*300+50;
+            wallY = Math.random()*300+50;
+            
+            // Verificar distancia segura de jugador, enemigo y meta
+            const minDist = 40;
+            if(Math.hypot(wallX - player.x, wallY - player.y) > minDist &&
+               Math.hypot(wallX - enemy.x, wallY - enemy.y) > minDist &&
+               Math.hypot(wallX - goal.x, wallY - goal.y) > minDist) {
+                safe = true;
+            }
+            attempts++;
+        }
+        
+        if(safe) {
+            walls.push({
+                x: wallX,
+                y: wallY,
+                r: wallSize
+            });
+        }
+    }
+
+    levelSpan.textContent = level;
+}
+
+/* ===== INPUT ===== */
+document.addEventListener("keydown",e=>{
+    if(!running) return;
+
+    let dx=0, dy=0;
+    if(e.key==="w" || e.key==="ArrowUp") dy=-20;
+    if(e.key==="s" || e.key==="ArrowDown") dy=20;
+    if(e.key==="a" || e.key==="ArrowLeft") dx=-20;
+    if(e.key==="d" || e.key==="ArrowRight") dx=20;
+
+    if(dx === 0 && dy === 0) return;
+
+    player.x += dx;
+    player.y += dy;
+
+    // Aplicar movimiento al enemigo según el modo
+    if(mimicMode === 'normal') {
+        // Copia exacta
+        enemy.x += dx;
+        enemy.y += dy;
+    } else if(mimicMode === 'inverted') {
+        // Movimiento invertido
+        enemy.x -= dx;
+        enemy.y -= dy;
+    } else if(mimicMode === 'mirror') {
+        // Espejo horizontal y vertical desde el centro
+        const centerX = 200, centerY = 200;
+        const playerDeltaX = dx;
+        const playerDeltaY = dy;
+        // El enemigo se mueve en espejo
+        enemy.x -= dx;
+        enemy.y -= dy;
+    } else if(mimicMode === 'delayed') {
+        // Añadir a cola de movimientos
+        moveQueue.push({dx, dy});
+        // Ejecutar movimiento retrasado (2 movimientos atrás)
+        if(moveQueue.length > 2) {
+            const delayedMove = moveQueue.shift();
+            enemy.x += delayedMove.dx;
+            enemy.y += delayedMove.dy;
+        }
+    }
+});
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    // límites
+    [player, enemy].forEach(p=>{
+        p.x = Math.max(0, Math.min(400, p.x));
+        p.y = Math.max(0, Math.min(400, p.y));
+    });
+
+    // colisión enemigo
+    if(Math.hypot(player.x-enemy.x,player.y-enemy.y) < player.r+enemy.r){
+        gameOver();
+    }
+
+    // paredes
+    walls.forEach(w=>{
+        if(
+            Math.hypot(player.x-w.x,player.y-w.y) < player.r+w.r ||
+            Math.hypot(enemy.x-w.x,enemy.y-w.y) < enemy.r+w.r
+        ){
+            gameOver();
+        }
+    });
+
+    // meta - tanto jugador como enemigo pueden llegar
+    if(Math.hypot(player.x-goal.x,player.y-goal.y) < player.r+goal.r ||
+       Math.hypot(enemy.x-goal.x,enemy.y-goal.y) < enemy.r+goal.r){
+        level++;
+        newLevel();
+    }
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0,0,400,400);
+    
+    // Línea conectando jugador y enemigo
+    ctx.strokeStyle = "rgba(255,100,0,0.3)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(player.x, player.y);
+    ctx.lineTo(enemy.x, enemy.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // meta
+    ctx.fillStyle="#00ff00";
+    ctx.beginPath();
+    ctx.arc(goal.x,goal.y,goal.r,0,Math.PI*2);
+    ctx.fill();
+    
+    // Borde de meta
+    ctx.strokeStyle = "#00ff00";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(goal.x, goal.y, goal.r + 3, 0, Math.PI*2);
+    ctx.stroke();
+
+    // paredes
+    ctx.fillStyle="#ff4444";
+    walls.forEach(w=>{
+        ctx.beginPath();
+        ctx.arc(w.x,w.y,w.r,0,Math.PI*2);
+        ctx.fill();
+    });
+
+    // enemigo
+    ctx.fillStyle="#ff6600";
+    ctx.beginPath();
+    ctx.arc(enemy.x,enemy.y,enemy.r,0,Math.PI*2);
+    ctx.fill();
+    
+    // Borde del enemigo
+    ctx.strokeStyle = "#ff6600";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(enemy.x, enemy.y, enemy.r + 2, 0, Math.PI*2);
+    ctx.stroke();
+
+    // jugador
+    ctx.fillStyle="cyan";
+    ctx.beginPath();
+    ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+    ctx.fill();
+    
+    // Borde del jugador
+    ctx.strokeStyle = "cyan";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r + 2, 0, Math.PI*2);
+    ctx.stroke();
+}
+
+/* ===== GAME OVER ===== */
+function gameOver(){
+    running=false;
+    saveRecord(level);
+    document.getElementById("restartBtn").style.display = "inline-block";
+    msg.textContent="💀 TE MATASTE A TI MISMO - Nivel alcanzado: " + level;
+}
+
+function restartGame() {
+    running = true;
+    level = 1;
+    mimicMode = 'normal';
+    moveQueue = [];
+    walls = [];
+    
+    levelSpan.textContent = 1;
+    modeSpan.textContent = 'Normal';
+    msg.textContent = 'Tus movimientos controlan al enemigo';
+    document.getElementById("restartBtn").style.display = "none";
+    
+    newLevel();
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+newLevel();
+loop();
+</script>
+
+</body>
+</html>

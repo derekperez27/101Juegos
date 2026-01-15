@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>3 en Raya</title>
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #222;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .game {
+            text-align: center;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+            gap: 5px;
+            margin: 20px auto;
+        }
+
+        .cell {
+            background: #333;
+            font-size: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+            .cell:hover {
+                background: #444;
+            }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        /* PANEL DE VICTORIA */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .panel {
+            background: #333;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        /* PANEL DE SELECCIÓN DE MODO */
+        .mode-selector {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .mode-panel {
+            background: #333;
+            padding: 40px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .mode-button {
+            display: block;
+            width: 250px;
+            padding: 15px 30px;
+            margin: 15px auto;
+            font-size: 18px;
+            background: #555;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .mode-button:hover {
+            background: #666;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- PANEL DE SELECCIÓN DE MODO -->
+    <div class="mode-selector" id="modeSelector">
+        <div class="mode-panel">
+            <h2>Selecciona el modo de juego</h2>
+            <button class="mode-button" onclick="startGame('machine')">🤖 Jugar vs Máquina</button>
+            <button class="mode-button" onclick="startGame('friend')">👥 Jugar vs Amigo</button>
+        </div>
+    </div>
+
+    <div class="game">
+        <h1>3 en Raya</h1>
+        <p id="status">Tu turno (❌)</p>
+
+        <div class="board" id="board">
+            <div class="cell"></div><div class="cell"></div><div class="cell"></div>
+            <div class="cell"></div><div class="cell"></div><div class="cell"></div>
+            <div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        </div>
+
+        <button onclick="resetGame()">Reiniciar</button>
+    </div>
+
+    <!-- PANEL DE VICTORIA -->
+    <div class="overlay" id="overlay">
+        <div class="panel">
+            <h2 id="resultText"></h2>
+            <button onclick="resetGame()">Jugar otra vez</button>
+        </div>
+    </div>
+
+    <script>
+        const cells = document.querySelectorAll(".cell");
+        const statusText = document.getElementById("status");
+        const overlay = document.getElementById("overlay");
+        const resultText = document.getElementById("resultText");
+        const modeSelector = document.getElementById("modeSelector");
+
+        let gameActive = false;
+        let gameMode = null; // 'machine' o 'friend'
+        let currentPlayer = "❌";
+        let player1 = "❌";
+        let player2 = "⭕";
+
+        const winConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6]
+        ];
+
+        function startGame(mode) {
+            gameMode = mode;
+            gameActive = true;
+            currentPlayer = player1;
+            modeSelector.style.display = "none";
+            updateStatus();
+        }
+
+        cells.forEach((cell, index) => {
+            cell.addEventListener("click", () => playerMove(index));
+        });
+
+        function playerMove(index) {
+            if (!gameActive || cells[index].textContent !== "") return;
+
+            cells[index].textContent = currentPlayer;
+
+            if (checkResult(currentPlayer)) return;
+
+            if (gameMode === 'machine') {
+                statusText.textContent = "Turno de la máquina...";
+                setTimeout(machineMove, 500);
+            } else {
+                // Modo 2 jugadores: alternar turno
+                currentPlayer = currentPlayer === player1 ? player2 : player1;
+                updateStatus();
+            }
+        }
+
+        function updateStatus() {
+            if (gameMode === 'machine') {
+                statusText.textContent = "Tu turno (❌)";
+            } else {
+                const playerName = currentPlayer === player1 ? "Jugador 1" : "Jugador 2";
+                statusText.textContent = `Turno de ${playerName} (${currentPlayer})`;
+            }
+        }
+
+        function machineMove() {
+            if (!gameActive) return;
+
+            let emptyCells = [];
+            cells.forEach((cell, index) => {
+                if (cell.textContent === "") emptyCells.push(index);
+            });
+
+            if (emptyCells.length === 0) return;
+
+            let randomIndex = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+            cells[randomIndex].textContent = player2;
+
+            checkResult(player2);
+            updateStatus();
+        }
+
+        function checkResult(symbol) {
+            for (let condition of winConditions) {
+                const [a, b, c] = condition;
+                if (
+                    cells[a].textContent === symbol &&
+                    cells[b].textContent === symbol &&
+                    cells[c].textContent === symbol
+                ) {
+                    let message;
+                    if (gameMode === 'machine') {
+                        message = symbol === player1 ? "¡Has ganado! 🎉" : "Gana la máquina 🤖";
+                    } else {
+                        const winner = symbol === player1 ? "Jugador 1" : "Jugador 2";
+                        message = `¡Gana ${winner}! 🎉`;
+                    }
+                    endGame(message);
+                    return true;
+                }
+            }
+
+            if ([...cells].every(cell => cell.textContent !== "")) {
+                endGame("¡Empate!");
+                return true;
+            }
+
+            return false;
+        }
+
+        function endGame(text) {
+            gameActive = false;
+            resultText.textContent = text;
+            overlay.style.display = "flex";
+        }
+
+        function resetGame() {
+            cells.forEach(cell => cell.textContent = "");
+            gameActive = false;
+            gameMode = null;
+            currentPlayer = player1;
+            overlay.style.display = "none";
+            modeSelector.style.display = "flex";
+        }
+    </script>
+
+</body>
+</html>

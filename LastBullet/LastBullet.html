@@ -1,0 +1,406 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Last Bullet – Levels</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: white;
+            font-family: Arial;
+            text-align: center;
+        }
+
+        canvas {
+            background: #000;
+            display: block;
+            margin: 20px auto;
+            border: 2px solid white;
+        }
+
+        #records {
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        #records h2 {
+            color: #00ff00;
+        }
+
+        #recordsList {
+            background: #222;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .record-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: #333;
+            border-radius: 5px;
+            border-left: 3px solid #00ff00;
+        }
+
+        .record-rank {
+            font-weight: bold;
+            color: #00ff00;
+            margin-right: 10px;
+        }
+
+        .record-level {
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        .no-records {
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🔫 LAST BULLET</h1>
+    <p>Nivel: <span id="level">1</span> | Tiempo: <span id="timer">10</span>s</p>
+    <p id="msg">Dispara con CLICK o ESPACIO - Solo 1 disparo por nivel</p>
+
+    <canvas id="c" width="400" height="400"></canvas>
+    <button id="restartBtn" style="display:none; margin: 10px; padding: 10px 20px; cursor: pointer; font-size: 16px;" onclick="restartGame()">Volver a Jugar</button>
+
+    <div id="records">
+        <h2>🏆 Récords</h2>
+        <div id="recordsList"></div>
+        <button onclick="clearRecords()" style="background: #d32f2f; color: white; padding: 8px 15px; cursor: pointer; border: none; border-radius: 5px; margin-top: 10px;">Borrar Récords</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("c");
+        const ctx = canvas.getContext("2d");
+        const levelSpan = document.getElementById("level");
+        const timerSpan = document.getElementById("timer");
+        const msg = document.getElementById("msg");
+
+        let level = 1;
+        let gameOver = false;
+        let canShoot = true;
+        let bulletMissed = false;
+        
+        // Mouse para apuntar
+        let mouseX = 200;
+        let mouseY = 200;
+        
+        // Temporizador
+        let timeLeft = 10;
+        let timerInterval = null;
+
+        /* ===== RÉCORDS ===== */
+        function loadRecords() {
+            const records = localStorage.getItem('lastBulletRecords');
+            return records ? JSON.parse(records) : [];
+        }
+
+        function saveRecord(level) {
+            const records = loadRecords();
+            records.push({
+                level: level,
+                date: new Date().toLocaleDateString()
+            });
+            // Ordenar por nivel (mayor a menor)
+            records.sort((a, b) => b.level - a.level);
+            // Guardar solo los mejores 10
+            const top10 = records.slice(0, 10);
+            localStorage.setItem('lastBulletRecords', JSON.stringify(top10));
+            displayRecords();
+        }
+
+        function displayRecords() {
+            const records = loadRecords();
+            const recordsList = document.getElementById('recordsList');
+            
+            if (records.length === 0) {
+                recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+                return;
+            }
+
+            recordsList.innerHTML = records.map((record, index) => {
+                let medal = '';
+                if (index === 0) medal = '🥇';
+                else if (index === 1) medal = '🥈';
+                else if (index === 2) medal = '🥉';
+                
+                return `
+                    <div class="record-item">
+                        <span class="record-rank">${medal} #${index + 1}</span>
+                        <span class="record-level">Nivel ${record.level}</span>
+                        <span style="color: #666; font-size: 12px;">${record.date}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function clearRecords() {
+            if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+                localStorage.removeItem('lastBulletRecords');
+                displayRecords();
+            }
+        }
+
+        // Mostrar récords al cargar la página
+        displayRecords();
+
+        /* ===== PLAYER ===== */
+        const player = {
+            x: 200,
+            y: 200,
+            r: 10
+        };
+
+        /* ===== BULLET ===== */
+        let bullet = null;
+
+        /* ===== ENEMY ===== */
+        let enemy = null;
+
+        /* ===== SPAWN ===== */
+        function spawnEnemy() {
+            enemy = {
+                x: Math.random() * 360 + 20,
+                y: Math.random() * 360 + 20,
+                r: Math.max(14 - level * 0.5, 6), // Más pequeño cada nivel
+                speed: 1 + level * 0.35, // Más rápido
+                angle: Math.random() * Math.PI * 2,
+                erratic: 0.3 + level * 0.05 // Más errático
+            };
+        }
+
+        /* ===== SHOOT ===== */
+        function shoot() {
+            if (bullet || gameOver || !canShoot) return;
+
+            // Calcular ángulo desde el jugador hacia el mouse
+            const dx = mouseX - player.x;
+            const dy = mouseY - player.y;
+            const angle = Math.atan2(dy, dx);
+
+            bullet = {
+                x: player.x,
+                y: player.y,
+                vx: Math.cos(angle) * 6,
+                vy: Math.sin(angle) * 6,
+                r: Math.max(6 - Math.floor(level / 5), 2),
+                bounces: 0,
+                maxBounces: 50
+            };
+            
+            canShoot = false;
+            bulletMissed = false;
+        }
+
+        /* ===== UPDATE ===== */
+        function update() {
+            if (gameOver) return;
+
+            // BULLET
+            if (bullet) {
+                bullet.x += bullet.vx;
+                bullet.y += bullet.vy;
+
+                // Rebotes con contador
+                if (bullet.x < bullet.r || bullet.x > 400 - bullet.r) {
+                    bullet.vx *= -1;
+                    bullet.bounces++;
+                }
+                if (bullet.y < bullet.r || bullet.y > 400 - bullet.r) {
+                    bullet.vy *= -1;
+                    bullet.bounces++;
+                }
+
+                // Si ha rebotado demasiado, considerar que falló
+                if (bullet.bounces > bullet.maxBounces) {
+                    endGame();
+                    return;
+                }
+            }
+
+            // ENEMY - Movimiento más errático progresivamente
+            if (enemy) {
+                enemy.angle += (Math.random() - 0.5) * enemy.erratic;
+                enemy.x += Math.cos(enemy.angle) * enemy.speed;
+                enemy.y += Math.sin(enemy.angle) * enemy.speed;
+
+                enemy.x = Math.max(enemy.r, Math.min(400 - enemy.r, enemy.x));
+                enemy.y = Math.max(enemy.r, Math.min(400 - enemy.r, enemy.y));
+            }
+
+            // HIT CHECK
+            if (bullet && enemy) {
+                const d = Math.hypot(bullet.x - enemy.x, bullet.y - enemy.y);
+                if (d < bullet.r + enemy.r) {
+                    nextLevel();
+                }
+            }
+        }
+
+        /* ===== DRAW ===== */
+        function draw() {
+            ctx.clearRect(0, 0, 400, 400);
+
+            // player
+            ctx.fillStyle = "cyan";
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Flecha de apuntado (solo si puede disparar)
+            if (canShoot && !gameOver) {
+                const dx = mouseX - player.x;
+                const dy = mouseY - player.y;
+                const angle = Math.atan2(dy, dx);
+                
+                // Línea desde el jugador
+                const lineLength = 25;
+                const lineEndX = player.x + Math.cos(angle) * lineLength;
+                const lineEndY = player.y + Math.sin(angle) * lineLength;
+                
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(player.x, player.y);
+                ctx.lineTo(lineEndX, lineEndY);
+                ctx.stroke();
+                
+                // Punta de flecha
+                const arrowSize = 8;
+                ctx.fillStyle = "white";
+                ctx.beginPath();
+                ctx.moveTo(lineEndX, lineEndY);
+                ctx.lineTo(
+                    lineEndX - arrowSize * Math.cos(angle - Math.PI / 6),
+                    lineEndY - arrowSize * Math.sin(angle - Math.PI / 6)
+                );
+                ctx.lineTo(
+                    lineEndX - arrowSize * Math.cos(angle + Math.PI / 6),
+                    lineEndY - arrowSize * Math.sin(angle + Math.PI / 6)
+                );
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // bullet
+            if (bullet) {
+                ctx.fillStyle = "yellow";
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, bullet.r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // enemy
+            if (enemy) {
+                ctx.fillStyle = "red";
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, enemy.r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        /* ===== NEXT LEVEL ===== */
+        function nextLevel() {
+            level++;
+            levelSpan.textContent = level;
+            bullet = null;
+            canShoot = true;
+            
+            // Resetear temporizador
+            stopTimer();
+            timeLeft = 10;
+            timerSpan.textContent = timeLeft;
+            startTimer();
+            
+            spawnEnemy();
+        }
+        
+        /* ===== TIMER ===== */
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerSpan.textContent = timeLeft;
+                
+                if (timeLeft <= 0) {
+                    stopTimer();
+                    endGame();
+                }
+            }, 1000);
+        }
+        
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+
+        /* ===== END GAME ===== */
+        function endGame() {
+            gameOver = true;
+            stopTimer();
+            saveRecord(level - 1);
+            document.getElementById("restartBtn").style.display = "inline-block";
+            msg.textContent = "💀 GAME OVER - Nivel alcanzado: " + (level - 1);
+        }
+
+        /* ===== RESTART ===== */
+        function restartGame() {
+            gameOver = false;
+            level = 1;
+            canShoot = true;
+            bullet = null;
+            bulletMissed = false;
+            
+            levelSpan.textContent = 1;
+            msg.textContent = "Dispara con CLICK o ESPACIO - Solo 1 disparo por nivel";
+            document.getElementById("restartBtn").style.display = "none";
+            
+            // Resetear temporizador
+            stopTimer();
+            timeLeft = 10;
+            timerSpan.textContent = timeLeft;
+            startTimer();
+            
+            spawnEnemy();
+        }
+
+        /* ===== GAME LOOP ===== */
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        /* ===== INPUT ===== */
+        document.addEventListener("keydown", e => {
+            if (e.code === "Space") shoot();
+        });
+        canvas.addEventListener("click", shoot);
+        
+        // Rastrear mouse para apuntar
+        canvas.addEventListener("mousemove", e => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = e.clientX - rect.left;
+            mouseY = e.clientY - rect.top;
+        });
+
+        /* ===== START ===== */
+        spawnEnemy();
+        startTimer();
+        loop();
+    </script>
+
+</body>
+</html>

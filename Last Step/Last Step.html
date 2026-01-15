@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Last Step</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+#info{
+    font-size:18px;
+    margin:10px;
+}
+button{
+    margin:10px;
+    padding:12px 25px;
+    font-size:16px;
+    background:#444;
+    color:white;
+    border:2px solid white;
+    cursor:pointer;
+    border-radius:5px;
+}
+button:hover{
+    background:#666;
+}
+</style>
+</head>
+<body>
+
+<h1>⏱️ LAST STEP ⏱️</h1>
+<div id="info">
+    <span>Nivel: <strong id="level">1</strong></span> | 
+    <span id="msg">Muévete o muere</span>
+</div>
+
+<canvas id="c" width="600" height="600"></canvas>
+
+<button id="restart" style="display:none;">🔄 Reintentar</button>
+
+<div style="margin-top:20px;">
+    <h3>🏆 TOP 10 RÉCORDS</h3>
+    <div id="records" style="font-size:14px;"></div>
+    <button id="clearRecords" style="font-size:14px; padding:8px 15px; margin-top:10px; background:#d32f2f;">🗑️ Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const levelSpan = document.getElementById("level");
+const msg = document.getElementById("msg");
+const restartBtn = document.getElementById("restart");
+const recordsDiv = document.getElementById("records");
+const clearRecordsBtn = document.getElementById("clearRecords");
+
+const CELL = 40;
+const COLS = 15;
+const ROWS = 15;
+
+let level = 1;
+let running = true;
+let lastMoveTime = 0;
+
+/* ===== PLAYER ===== */
+const player = {
+    x: 1,
+    y: 1,
+    size: 30,
+    speed: 1
+};
+
+/* ===== TILES ===== */
+let tiles = [];
+const keys = {};
+
+/* ===== LEVEL GENERATION ===== */
+function newLevel(){
+    tiles = [];
+    player.x = 1 * CELL + 5; // Centrar en la primera tile
+    player.y = 1 * CELL + 5;
+    running = true;
+    lastMoveTime = Date.now();
+    
+    // Generar camino serpenteante hacia la meta
+    generatePath();
+    
+    levelSpan.textContent = level;
+    msg.textContent = "¡Muévete rápido o caerás!";
+}
+
+function generatePath(){
+    const pathLength = 30 + level * 5; // Más largo cada nivel
+    const maxWidth = Math.max(1, 4 - Math.floor(level / 3)); // Caminos más estrechos
+    
+    let currentX = 1;
+    let currentY = 1;
+    
+    // Tile inicial
+    tiles.push({
+        x: currentX,
+        y: currentY,
+        state: 'solid', // solid | stepped | fading | gone
+        fadeTimer: 0,
+        fadeDelay: 1000 - (level * 30) // Más rápido cada nivel (mínimo 400ms)
+    });
+    
+    let direction = 'right';
+    const directions = ['right', 'down', 'left', 'up'];
+    
+    for(let i = 0; i < pathLength; i++){
+        // Cambiar dirección ocasionalmente
+        if(Math.random() < 0.3){
+            direction = directions[Math.floor(Math.random() * directions.length)];
+        }
+        
+        // Mover en la dirección actual
+        let nextX = currentX;
+        let nextY = currentY;
+        
+        switch(direction){
+            case 'right': nextX++; break;
+            case 'left': nextX--; break;
+            case 'down': nextY++; break;
+            case 'up': nextY--; break;
+        }
+        
+        // Validar límites
+        if(nextX < 0 || nextX >= COLS || nextY < 0 || nextY >= ROWS){
+            direction = directions[Math.floor(Math.random() * directions.length)];
+            continue;
+        }
+        
+        // Evitar tiles duplicadas
+        if(tiles.some(t => t.x === nextX && t.y === nextY)){
+            continue;
+        }
+        
+        currentX = nextX;
+        currentY = nextY;
+        
+        const fadeDelay = Math.max(400, 1000 - (level * 30));
+        
+        tiles.push({
+            x: currentX,
+            y: currentY,
+            state: 'solid',
+            fadeTimer: 0,
+            fadeDelay: fadeDelay
+        });
+        
+        // Añadir anchura al camino
+        if(maxWidth > 1){
+            const extraTiles = Math.floor(Math.random() * maxWidth);
+            for(let j = 0; j < extraTiles; j++){
+                const offsetX = Math.floor(Math.random() * 3) - 1;
+                const offsetY = Math.floor(Math.random() * 3) - 1;
+                const newX = currentX + offsetX;
+                const newY = currentY + offsetY;
+                
+                if(newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS){
+                    if(!tiles.some(t => t.x === newX && t.y === newY)){
+                        tiles.push({
+                            x: newX,
+                            y: newY,
+                            state: 'solid',
+                            fadeTimer: 0,
+                            fadeDelay: fadeDelay
+                        });
+                    }
+                }
+            }
+        }
+    }
+    
+    // Última tile es la meta
+    const lastTile = tiles[tiles.length - 1];
+    lastTile.isMeta = true;
+}
+
+/* ===== INPUT ===== */
+document.addEventListener("keydown", e => {
+    if(!running) return;
+    keys[e.key] = true;
+});
+
+document.addEventListener("keyup", e => {
+    keys[e.key] = false;
+});
+
+restartBtn.addEventListener("click", () => {
+    level = 1;
+    restartBtn.style.display = "none";
+    newLevel();
+});
+
+clearRecordsBtn.addEventListener("click", () => {
+    if(confirm("¿Seguro que quieres borrar todos los récords?")){
+        localStorage.removeItem('lastStepRecords');
+        displayRecords();
+    }
+});
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+    
+    const moveSpeed = 2;
+    let moved = false;
+    let newX = player.x;
+    let newY = player.y;
+    
+    // Movimiento
+    if(keys["w"] || keys["ArrowUp"]){
+        newY -= moveSpeed;
+        moved = true;
+    }
+    if(keys["s"] || keys["ArrowDown"]){
+        newY += moveSpeed;
+        moved = true;
+    }
+    if(keys["a"] || keys["ArrowLeft"]){
+        newX -= moveSpeed;
+        moved = true;
+    }
+    if(keys["d"] || keys["ArrowRight"]){
+        newX += moveSpeed;
+        moved = true;
+    }
+    
+    // Actualizar posición si se movió
+    if(moved){
+        player.x = newX;
+        player.y = newY;
+        lastMoveTime = Date.now();
+    }
+    
+    // Límites del canvas
+    player.x = Math.max(0, Math.min(600 - player.size, player.x));
+    player.y = Math.max(0, Math.min(600 - player.size, player.y));
+    
+    // Obtener celda actual
+    const gridX = Math.floor((player.x + player.size/2) / CELL);
+    const gridY = Math.floor((player.y + player.size/2) / CELL);
+    
+    // Buscar tile bajo el jugador
+    const currentTile = tiles.find(t => t.x === gridX && t.y === gridY && t.state !== 'gone');
+    
+    if(currentTile){
+        // Marcar como pisada si es sólida
+        if(currentTile.state === 'solid'){
+            currentTile.state = 'stepped';
+            currentTile.fadeTimer = Date.now();
+        }
+        
+        // Verificar si llegó a la meta
+        if(currentTile.isMeta){
+            level++;
+            newLevel();
+            return;
+        }
+    } else {
+        // No hay tile bajo el jugador - caída
+        gameOver();
+        return;
+    }
+    
+    // Actualizar tiles - desvanecer las pisadas
+    tiles.forEach(tile => {
+        if(tile.state === 'stepped'){
+            const elapsed = Date.now() - tile.fadeTimer;
+            if(elapsed > tile.fadeDelay){
+                tile.state = 'fading';
+            }
+        }
+        
+        if(tile.state === 'fading'){
+            const elapsed = Date.now() - tile.fadeTimer;
+            if(elapsed > tile.fadeDelay + 300){ // 300ms de animación
+                tile.state = 'gone';
+            }
+        }
+    });
+    
+    // Penalización por no moverse
+    if(Date.now() - lastMoveTime > 2000){
+        msg.textContent = "⚠️ ¡MUÉVETE O MORIRÁS!";
+    } else {
+        msg.textContent = `Nivel ${level} - ¡Sigue adelante!`;
+    }
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0, 0, 600, 600);
+    
+    // Dibujar tiles
+    tiles.forEach(tile => {
+        if(tile.state === 'gone') return;
+        
+        const screenX = tile.x * CELL;
+        const screenY = tile.y * CELL;
+        
+        // Color según estado
+        if(tile.isMeta){
+            // Meta - verde brillante
+            ctx.fillStyle = "#00ff00";
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "#00ff00";
+        } else if(tile.state === 'solid'){
+            ctx.fillStyle = "#4fc3f7";
+            ctx.shadowBlur = 0;
+        } else if(tile.state === 'stepped'){
+            ctx.fillStyle = "#ff9800";
+            ctx.shadowBlur = 0;
+        } else if(tile.state === 'fading'){
+            const elapsed = Date.now() - tile.fadeTimer - tile.fadeDelay;
+            const progress = elapsed / 300;
+            const alpha = 1 - progress;
+            ctx.fillStyle = `rgba(255, 152, 0, ${alpha})`;
+            ctx.shadowBlur = 0;
+        }
+        
+        ctx.fillRect(screenX + 2, screenY + 2, CELL - 4, CELL - 4);
+        ctx.shadowBlur = 0;
+        
+        // Borde
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(screenX + 2, screenY + 2, CELL - 4, CELL - 4);
+    });
+    
+    // Jugador
+    const playerScreenX = player.x;
+    const playerScreenY = player.y;
+    
+    ctx.fillStyle = "#ffeb3b";
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "#ffeb3b";
+    ctx.beginPath();
+    ctx.arc(playerScreenX + player.size/2, playerScreenY + player.size/2, player.size/2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    
+    // Dirección de movimiento
+    if(keys["w"] || keys["ArrowUp"]) drawArrow(playerScreenX + player.size/2, playerScreenY - 10, -Math.PI/2);
+    if(keys["s"] || keys["ArrowDown"]) drawArrow(playerScreenX + player.size/2, playerScreenY + player.size + 10, Math.PI/2);
+    if(keys["a"] || keys["ArrowLeft"]) drawArrow(playerScreenX - 10, playerScreenY + player.size/2, Math.PI);
+    if(keys["d"] || keys["ArrowRight"]) drawArrow(playerScreenX + player.size + 10, playerScreenY + player.size/2, 0);
+}
+
+function drawArrow(x, y, angle){
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.beginPath();
+    ctx.moveTo(8, 0);
+    ctx.lineTo(-4, -4);
+    ctx.lineTo(-4, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+/* ===== GAME OVER ===== */
+function gameOver(){
+    running = false;
+    msg.textContent = `💀 CAÍSTE AL VACÍO - Nivel ${level}`;
+    restartBtn.style.display = "inline-block";
+    saveRecord();
+}
+
+/* ===== RECORDS ===== */
+function saveRecord(){
+    let records = JSON.parse(localStorage.getItem('lastStepRecords') || '[]');
+    records.push({ level: level });
+    records.sort((a,b) => b.level - a.level);
+    records = records.slice(0, 10);
+    localStorage.setItem('lastStepRecords', JSON.stringify(records));
+    displayRecords();
+}
+
+function displayRecords(){
+    let records = JSON.parse(localStorage.getItem('lastStepRecords') || '[]');
+    if(records.length === 0){
+        recordsDiv.innerHTML = "<p style='color:#666;'>No hay récords aún</p>";
+        return;
+    }
+    
+    let html = "<table style='margin:0 auto; border-collapse:collapse;'>";
+    html += "<tr style='color:#aaa;'><th style='padding:5px;'>#</th><th style='padding:5px;'>Nivel</th></tr>";
+    
+    records.forEach((r, i) => {
+        const medal = i===0 ? "🥇" : i===1 ? "🥈" : i===2 ? "🥉" : (i+1);
+        html += `<tr style='border-top:1px solid #333;'>`;
+        html += `<td style='padding:5px;'>${medal}</td>`;
+        html += `<td style='padding:5px; color:#4fc3f7;'>Nivel ${r.level}</td>`;
+        html += `</tr>`;
+    });
+    
+    html += "</table>";
+    recordsDiv.innerHTML = html;
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+displayRecords();
+newLevel();
+loop();
+</script>
+
+</body>
+</html>

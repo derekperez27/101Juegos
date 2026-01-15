@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Flappy Bird - Mejorado</title>
+<style>
+body {
+    margin: 0;
+    background: linear-gradient(180deg, #4ec0ca 0%, #87ceeb 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Arial', sans-serif;
+}
+canvas {
+    background: linear-gradient(180deg, #4ec0ca 0%, #87ceeb 100%);
+    border: 4px solid #333;
+    box-shadow: 0 0 30px rgba(0,0,0,0.5);
+}
+</style>
+</head>
+<body>
+
+<canvas id="game" width="400" height="600"></canvas>
+
+<script>
+// ==========================================
+// CONFIGURACIÓN Y CONSTANTES
+// ==========================================
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const WIDTH = canvas.width;
+const HEIGHT = canvas.height;
+const GROUND_HEIGHT = 80;
+
+// Constantes de física
+const GRAVITY = 0.5;
+const JUMP_FORCE = -8.5;
+const MAX_VELOCITY = 10;
+const ROTATION_SPEED = 0.1;
+const MAX_ROTATION = Math.PI / 6;
+
+// Constantes de tubos
+const PIPE_WIDTH = 60;
+const PIPE_GAP = 130;
+const MIN_PIPE_HEIGHT = 80;
+const INITIAL_PIPE_SPEED = 2.5;
+const PIPE_SPEED_INCREMENT = 0.15;
+const MAX_PIPE_SPEED = 5;
+
+// Constantes visuales
+const BIRD_RADIUS = 16;
+const CLOUD_COUNT = 5;
+
+// ==========================================
+// CLASE BIRD - Pájaro con física mejorada
+// ==========================================
+class Bird {
+    constructor() {
+        this.x = 100;
+        this.y = HEIGHT / 2;
+        this.radius = BIRD_RADIUS;
+        this.velocity = 0;
+        this.rotation = 0;
+    }
+
+    jump() {
+        this.velocity = JUMP_FORCE;
+    }
+
+    update() {
+        // Aplicar gravedad
+        this.velocity += GRAVITY;
+        
+        // Limitar velocidad máxima
+        if (this.velocity > MAX_VELOCITY) {
+            this.velocity = MAX_VELOCITY;
+        }
+        
+        // Actualizar posición
+        this.y += this.velocity;
+        
+        // Actualizar rotación basada en velocidad
+        this.rotation = this.velocity * ROTATION_SPEED;
+        
+        // Limitar rotación
+        if (this.rotation > MAX_ROTATION) {
+            this.rotation = MAX_ROTATION;
+        } else if (this.rotation < -MAX_ROTATION) {
+            this.rotation = -MAX_ROTATION;
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+        
+        // Sombra
+        ctx.beginPath();
+        ctx.arc(2, 2, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.fill();
+        
+        // Cuerpo del pájaro
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "#FFD700";
+        ctx.fill();
+        ctx.strokeStyle = "#FFA500";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Ala
+        ctx.beginPath();
+        ctx.ellipse(-5, 3, 8, 5, -0.3, 0, Math.PI * 2);
+        ctx.fillStyle = "#FFA500";
+        ctx.fill();
+        
+        // Ojo
+        ctx.beginPath();
+        ctx.arc(5, -4, 4, 0, Math.PI * 2);
+        ctx.fillStyle = "white";
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(6, -4, 2, 0, Math.PI * 2);
+        ctx.fillStyle = "black";
+        ctx.fill();
+        
+        // Pico
+        ctx.beginPath();
+        ctx.moveTo(this.radius - 2, 0);
+        ctx.lineTo(this.radius + 8, -2);
+        ctx.lineTo(this.radius + 8, 2);
+        ctx.closePath();
+        ctx.fillStyle = "#FF6347";
+        ctx.fill();
+        
+        ctx.restore();
+    }
+
+    checkCollision(pipes, ground) {
+        // Colisión con suelo y techo
+        if (this.y + this.radius > HEIGHT - ground || this.y - this.radius < 0) {
+            return true;
+        }
+        
+        // Colisión con tubos
+        for (let pipe of pipes) {
+            if (this.x + this.radius > pipe.x && 
+                this.x - this.radius < pipe.x + PIPE_WIDTH) {
+                if (this.y - this.radius < pipe.topHeight || 
+                    this.y + this.radius > pipe.topHeight + PIPE_GAP) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+
+    reset() {
+        this.y = HEIGHT / 2;
+        this.velocity = 0;
+        this.rotation = 0;
+    }
+}
+
+// ==========================================
+// CLASE PIPE - Tubo con diseño mejorado
+// ==========================================
+class Pipe {
+    constructor(x, speed) {
+        this.x = x;
+        this.speed = speed;
+        this.topHeight = Math.random() * (HEIGHT - GROUND_HEIGHT - PIPE_GAP - MIN_PIPE_HEIGHT * 2) + MIN_PIPE_HEIGHT;
+        this.passed = false;
+    }
+
+    update() {
+        this.x -= this.speed;
+    }
+
+    draw() {
+        // Tubo superior
+        this.drawPipeSegment(this.x, 0, PIPE_WIDTH, this.topHeight, true);
+        
+        // Tubo inferior
+        const bottomY = this.topHeight + PIPE_GAP;
+        const bottomHeight = HEIGHT - GROUND_HEIGHT - bottomY;
+        this.drawPipeSegment(this.x, bottomY, PIPE_WIDTH, bottomHeight, false);
+    }
+
+    drawPipeSegment(x, y, width, height, isTop) {
+        // Cuerpo del tubo
+        const gradient = ctx.createLinearGradient(x, 0, x + width, 0);
+        gradient.addColorStop(0, "#3a9d3f");
+        gradient.addColorStop(0.5, "#4CAF50");
+        gradient.addColorStop(1, "#3a9d3f");
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, y, width, height);
+        
+        // Borde del tubo
+        ctx.strokeStyle = "#2d7a31";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, width, height);
+        
+        // Cabeza del tubo (borde decorativo)
+        const capHeight = 30;
+        const capWidth = width + 8;
+        const capX = x - 4;
+        
+        if (isTop) {
+            const capY = this.topHeight - capHeight;
+            
+            // Cabeza superior
+            const capGradient = ctx.createLinearGradient(capX, capY, capX + capWidth, capY);
+            capGradient.addColorStop(0, "#2d7a31");
+            capGradient.addColorStop(0.5, "#3a9d3f");
+            capGradient.addColorStop(1, "#2d7a31");
+            
+            ctx.fillStyle = capGradient;
+            ctx.fillRect(capX, capY, capWidth, capHeight);
+            ctx.strokeStyle = "#1b5e20";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(capX, capY, capWidth, capHeight);
+        } else {
+            const capY = this.topHeight + PIPE_GAP;
+            
+            // Cabeza inferior
+            const capGradient = ctx.createLinearGradient(capX, capY, capX + capWidth, capY);
+            capGradient.addColorStop(0, "#2d7a31");
+            capGradient.addColorStop(0.5, "#3a9d3f");
+            capGradient.addColorStop(1, "#2d7a31");
+            
+            ctx.fillStyle = capGradient;
+            ctx.fillRect(capX, capY, capWidth, capHeight);
+            ctx.strokeStyle = "#1b5e20";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(capX, capY, capWidth, capHeight);
+        }
+    }
+
+    isOffScreen() {
+        return this.x + PIPE_WIDTH < 0;
+    }
+}
+
+// ==========================================
+// CLASE CLOUD - Nubes decorativas
+// ==========================================
+class Cloud {
+    constructor() {
+        this.x = Math.random() * WIDTH;
+        this.y = Math.random() * (HEIGHT - GROUND_HEIGHT - 100);
+        this.size = Math.random() * 30 + 20;
+        this.speed = Math.random() * 0.3 + 0.2;
+    }
+
+    update() {
+        this.x -= this.speed;
+        if (this.x + this.size < 0) {
+            this.x = WIDTH + this.size;
+            this.y = Math.random() * (HEIGHT - GROUND_HEIGHT - 100);
+        }
+    }
+
+    draw() {
+        ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+        
+        // Dibujar tres círculos para formar una nube
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * 0.5, 0, Math.PI * 2);
+        ctx.arc(this.x + this.size * 0.5, this.y, this.size * 0.6, 0, Math.PI * 2);
+        ctx.arc(this.x + this.size, this.y, this.size * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+// ==========================================
+// CLASE GAME - Lógica principal
+// ==========================================
+class Game {
+    constructor() {
+        this.bird = new Bird();
+        this.pipes = [];
+        this.clouds = [];
+        this.score = 0;
+        this.highScore = parseInt(localStorage.getItem('flappyHighScore')) || 0;
+        this.gameOver = false;
+        this.started = false;
+        this.frame = 0;
+        this.pipeSpeed = INITIAL_PIPE_SPEED;
+        this.pipeSpawnInterval = 90;
+        this.groundOffset = 0;
+        this.flashEffect = 0;
+        
+        // Crear nubes
+        for (let i = 0; i < CLOUD_COUNT; i++) {
+            this.clouds.push(new Cloud());
+        }
+        
+        this.setupControls();
+    }
+
+    setupControls() {
+        document.addEventListener("keydown", e => {
+            if (e.code === "Space") {
+                e.preventDefault();
+                this.handleInput();
+            }
+        });
+        
+        canvas.addEventListener("click", () => this.handleInput());
+    }
+
+    handleInput() {
+        if (!this.started) {
+            this.started = true;
+            return;
+        }
+        
+        if (this.gameOver) {
+            this.reset();
+            return;
+        }
+        
+        this.bird.jump();
+    }
+
+    reset() {
+        this.bird.reset();
+        this.pipes = [];
+        this.score = 0;
+        this.gameOver = false;
+        this.started = false;
+        this.frame = 0;
+        this.pipeSpeed = INITIAL_PIPE_SPEED;
+        this.flashEffect = 0;
+    }
+
+    spawnPipe() {
+        this.pipes.push(new Pipe(WIDTH, this.pipeSpeed));
+    }
+
+    updateDifficulty() {
+        // Aumentar velocidad progresivamente
+        this.pipeSpeed = Math.min(
+            INITIAL_PIPE_SPEED + (this.score * PIPE_SPEED_INCREMENT),
+            MAX_PIPE_SPEED
+        );
+    }
+
+    update() {
+        if (!this.started || this.gameOver) return;
+        
+        this.frame++;
+        
+        // Actualizar pájaro
+        this.bird.update();
+        
+        // Actualizar nubes
+        this.clouds.forEach(cloud => cloud.update());
+        
+        // Generar tubos
+        if (this.frame % this.pipeSpawnInterval === 0) {
+            this.spawnPipe();
+        }
+        
+        // Actualizar tubos
+        this.pipes.forEach(pipe => {
+            pipe.update();
+            
+            // Incrementar puntuación
+            if (!pipe.passed && pipe.x + PIPE_WIDTH < this.bird.x) {
+                pipe.passed = true;
+                this.score++;
+                this.updateDifficulty();
+                
+                // Actualizar high score
+                if (this.score > this.highScore) {
+                    this.highScore = this.score;
+                    localStorage.setItem('flappyHighScore', this.highScore);
+                }
+            }
+        });
+        
+        // Eliminar tubos fuera de pantalla
+        this.pipes = this.pipes.filter(pipe => !pipe.isOffScreen());
+        
+        // Animar suelo
+        this.groundOffset -= this.pipeSpeed;
+        if (this.groundOffset <= -40) {
+            this.groundOffset = 0;
+        }
+        
+        // Verificar colisiones
+        if (this.bird.checkCollision(this.pipes, GROUND_HEIGHT)) {
+            this.gameOver = true;
+            this.flashEffect = 1;
+        }
+    }
+
+    drawBackground() {
+        // Gradiente de cielo
+        const gradient = ctx.createLinearGradient(0, 0, 0, HEIGHT - GROUND_HEIGHT);
+        gradient.addColorStop(0, "#4ec0ca");
+        gradient.addColorStop(1, "#87ceeb");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, WIDTH, HEIGHT - GROUND_HEIGHT);
+    }
+
+    drawGround() {
+        const groundY = HEIGHT - GROUND_HEIGHT;
+        
+        // Suelo con textura
+        ctx.fillStyle = "#DEB887";
+        ctx.fillRect(0, groundY, WIDTH, GROUND_HEIGHT);
+        
+        // Césped superior
+        ctx.fillStyle = "#9ACD32";
+        ctx.fillRect(0, groundY, WIDTH, 20);
+        
+        // Patrón de líneas en el suelo
+        ctx.strokeStyle = "#CD853F";
+        ctx.lineWidth = 2;
+        for (let x = this.groundOffset; x < WIDTH; x += 40) {
+            ctx.beginPath();
+            ctx.moveTo(x, groundY + 20);
+            ctx.lineTo(x, HEIGHT);
+            ctx.stroke();
+        }
+        
+        // Borde del césped
+        ctx.strokeStyle = "#6B8E23";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, groundY + 20);
+        ctx.lineTo(WIDTH, groundY + 20);
+        ctx.stroke();
+    }
+
+    drawUI() {
+        // Puntuación
+        ctx.fillStyle = "white";
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 4;
+        ctx.font = "bold 48px Arial";
+        ctx.textAlign = "center";
+        ctx.strokeText(this.score, WIDTH / 2, 60);
+        ctx.fillText(this.score, WIDTH / 2, 60);
+        
+        // High Score (pequeño)
+        ctx.font = "16px Arial";
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.fillText(`Mejor: ${this.highScore}`, WIDTH / 2, 85);
+        
+        // Pantalla de inicio
+        if (!this.started) {
+            ctx.fillStyle = "rgba(0,0,0,0.5)";
+            ctx.fillRect(0, HEIGHT / 2 - 80, WIDTH, 160);
+            
+            ctx.fillStyle = "white";
+            ctx.font = "bold 32px Arial";
+            ctx.fillText("FLAPPY BIRD", WIDTH / 2, HEIGHT / 2 - 30);
+            
+            ctx.font = "20px Arial";
+            ctx.fillText("Pulsa ESPACIO o Click", WIDTH / 2, HEIGHT / 2 + 10);
+            ctx.fillText("para empezar", WIDTH / 2, HEIGHT / 2 + 40);
+        }
+        
+        // Game Over
+        if (this.gameOver) {
+            // Efecto de flash
+            if (this.flashEffect > 0) {
+                ctx.fillStyle = `rgba(255, 0, 0, ${this.flashEffect * 0.3})`;
+                ctx.fillRect(0, 0, WIDTH, HEIGHT);
+                this.flashEffect -= 0.05;
+            }
+            
+            // Panel de Game Over
+            ctx.fillStyle = "rgba(0,0,0,0.7)";
+            ctx.fillRect(50, HEIGHT / 2 - 100, WIDTH - 100, 200);
+            
+            ctx.fillStyle = "#FF4444";
+            ctx.font = "bold 48px Arial";
+            ctx.fillText("GAME OVER", WIDTH / 2, HEIGHT / 2 - 40);
+            
+            ctx.fillStyle = "white";
+            ctx.font = "24px Arial";
+            ctx.fillText(`Puntuación: ${this.score}`, WIDTH / 2, HEIGHT / 2 + 10);
+            ctx.fillText(`Mejor: ${this.highScore}`, WIDTH / 2, HEIGHT / 2 + 45);
+            
+            ctx.font = "18px Arial";
+            ctx.fillStyle = "#FFD700";
+            ctx.fillText("Click o ESPACIO para reiniciar", WIDTH / 2, HEIGHT / 2 + 80);
+        }
+    }
+
+    draw() {
+        // Limpiar canvas
+        ctx.clearRect(0, 0, WIDTH, HEIGHT);
+        
+        // Dibujar elementos
+        this.drawBackground();
+        
+        // Dibujar nubes
+        this.clouds.forEach(cloud => cloud.draw());
+        
+        // Dibujar tubos
+        this.pipes.forEach(pipe => pipe.draw());
+        
+        // Dibujar suelo
+        this.drawGround();
+        
+        // Dibujar pájaro
+        this.bird.draw();
+        
+        // Dibujar UI
+        this.drawUI();
+    }
+
+    loop() {
+        this.update();
+        this.draw();
+        requestAnimationFrame(() => this.loop());
+    }
+}
+
+const game = new Game();
+game.loop();
+
+</script>
+
+</body>
+</html>
+
+
+
+

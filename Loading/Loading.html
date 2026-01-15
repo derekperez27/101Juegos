@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Loading...</title>
+<style>
+body{
+    margin:0;
+    background:#000;
+    color:white;
+    font-family:Arial;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+    flex-direction:column;
+    cursor: default;
+}
+#bar{
+    width:300px;
+    height:20px;
+    border:2px solid white;
+    margin-top:20px;
+}
+#fill{
+    height:100%;
+    width:0%;
+    background:white;
+    transition: width 0.3s;
+}
+#msg{
+    margin-top:15px;
+    opacity:0.8;
+}
+button{
+    margin-top:20px;
+    padding:10px 20px;
+    display:none;
+    cursor:pointer;
+}
+.fake-btn{
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    animation: pulse 1s infinite;
+}
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+#record{
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    color: #888;
+    font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<h1 id="title">LOADING...</h1>
+<div id="bar"><div id="fill"></div></div>
+<p id="percent">0%</p>
+<p id="msg">Inicializando</p>
+<div id="fakeButtons"></div>
+<button id="restart">🔁 Volver a intentar</button>
+<div id="record">Récord: 0%</div>
+
+<script>
+let progress = 0;
+let running = true;
+let speed = 0.15;
+let paused = false;
+let maxProgress = 0;
+let activeButtons = new Set(); // Rastrear botones activos
+
+const fill = document.getElementById("fill");
+const percent = document.getElementById("percent");
+const msg = document.getElementById("msg");
+const restart = document.getElementById("restart");
+const fakeButtons = document.getElementById("fakeButtons");
+const recordSpan = document.getElementById("record");
+
+// Cargar récord
+let record = localStorage.getItem('loadingRecord') || 0;
+recordSpan.textContent = `Récord: ${record}%`;
+
+const messages = [
+    "Cargando recursos...",
+    "Optimizando shaders...",
+    "ERROR: Memoria insuficiente",
+    "Sincronizando con servidor...",
+    "Conexión perdida. Reintentando...",
+    "Esto está tardando más de lo esperado...",
+    "ADVERTENCIA: Proceso detenido",
+    "Presiona ESPACIO para continuar",
+    "Haz click para acelerar carga",
+    "Sistema no responde",
+    "Verificando integridad...",
+    "No cierres esta ventana"
+];
+
+/* ===== INPUT (TRAMPAS) ===== */
+const errorMessages = [
+    "ERROR CRÍTICO: Proceso interrumpido inesperadamente",
+    "FALLO DEL SISTEMA: Reiniciando carga...",
+    "ERROR 0x80070005: Acceso denegado",
+    "Conexión perdida con el servidor. Reiniciando...",
+    "ERROR: Corrupción de datos detectada. Restableciendo..."
+];
+
+document.addEventListener("keydown", e=>{
+    if(!running) return;
+    const randomError = errorMessages[Math.floor(Math.random() * errorMessages.length)];
+    resetProgress(randomError);
+});
+
+document.addEventListener("click", e=>{
+    if(!running) return;
+    const randomError = errorMessages[Math.floor(Math.random() * errorMessages.length)];
+    resetProgress(randomError);
+});
+
+document.addEventListener("mousemove", e=>{
+    // Solo penalizar movimientos grandes (para evitar penalizar movimientos mínimos)
+    if(!running) return;
+    if(Math.random() < 0.001) { // 0.1% de probabilidad en cada movimiento
+        const randomError = errorMessages[Math.floor(Math.random() * errorMessages.length)];
+        resetProgress(randomError);
+    }
+});
+
+function resetProgress(reason){
+    if(progress > maxProgress) {
+        maxProgress = Math.floor(progress);
+    }
+    
+    progress = 0;
+    fill.style.width = "0%";
+    percent.textContent = "0%";
+    msg.textContent = "💀 " + reason + " | Máximo: " + maxProgress + "%";
+    msg.style.color = "#ff0000";
+    
+    setTimeout(() => {
+        msg.style.color = "white";
+    }, 2000);
+}
+
+function createFakeButton(text){
+    // No crear si ya existe ese botón
+    if(activeButtons.has(text)) return;
+    
+    const btn = document.createElement("button");
+    btn.textContent = text;
+    btn.className = "fake-btn";
+    btn.style.display = "inline-block";
+    fakeButtons.appendChild(btn);
+    activeButtons.add(text);
+    
+    setTimeout(() => {
+        btn.remove();
+        activeButtons.delete(text);
+    }, 8000); // Duran 8 segundos
+}
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    if(!paused) {
+        progress += speed;
+        fill.style.width = progress + "%";
+        percent.textContent = Math.floor(progress) + "%";
+    }
+
+    // Mensajes aleatorios menos frecuentes para que duren más
+    if(Math.random()<0.008){
+        msg.textContent = messages[Math.floor(Math.random()*messages.length)];
+    }
+    
+    // Botones falsos que aparecen
+    if(progress > 20 && Math.random() < 0.008) {
+        const fakeButtonTexts = [
+            "✅ Continuar",
+            "⚡ Acelerar carga",
+            "OK",
+            "❌ Cancelar",
+            "🔄 Reiniciar proceso",
+            "Aceptar"
+        ];
+        createFakeButton(fakeButtonTexts[Math.floor(Math.random()*fakeButtonTexts.length)]);
+    }
+
+    // Pausas falsas frecuentes
+    if(progress > 30 && progress < 95 && Math.random()<0.012 && !paused){
+        paused = true;
+        speed = 0;
+        const pauseMessages = [
+            "PROCESO DETENIDO - Presiona cualquier tecla",
+            "Sistema congelado. Haz click para reanudar",
+            "ERROR 404 - Click para continuar",
+            "Carga pausada. Presiona ENTER",
+            "Esperando respuesta del usuario..."
+        ];
+        msg.textContent = pauseMessages[Math.floor(Math.random()*pauseMessages.length)];
+        msg.style.color = "#ffff00";
+        
+        setTimeout(()=>{
+            if(running) {
+                paused = false;
+                speed = 0.15;
+                msg.textContent = "Reanudando...";
+                msg.style.color = "white";
+            }
+        }, 5000 + Math.random()*5000); // Pausas de 5-10 segundos
+    }
+    
+    // Pausas largas cerca del final
+    if(progress > 85 && progress < 99 && Math.random()<0.015 && !paused){
+        paused = true;
+        speed = 0;
+        msg.textContent = "99% - Instalando actualización crítica...";
+        msg.style.color = "#ff8800";
+        
+        setTimeout(()=>{
+            if(running) {
+                paused = false;
+                speed = 0.15;
+                msg.style.color = "white";
+            }
+        }, 6000); // Pausa de 6 segundos
+    }
+
+    if(progress >= 100){
+        win();
+    }
+
+    requestAnimationFrame(update);
+}
+
+/* ===== END ===== */
+function win(){
+    running = false;
+    progress = 100;
+    fill.style.width = "100%";
+    percent.textContent = "100%";
+    msg.textContent = "✔️ ¡FELICIDADES! Cargado correctamente. No tocaste nada.";
+    msg.style.color = "#00ff00";
+    document.getElementById("title").textContent = "COMPLETED";
+    
+    // Guardar récord
+    if(100 > record) {
+        localStorage.setItem('loadingRecord', 100);
+        recordSpan.textContent = "Récord: 100% 🏆";
+    }
+    
+    restart.textContent = "🎉 Jugar de nuevo";
+    restart.style.display="block";
+}
+
+/* ===== RESTART ===== */
+restart.onclick = ()=>{
+    // Guardar récord antes de recargar
+    if(maxProgress > record) {
+        localStorage.setItem('loadingRecord', maxProgress);
+    }
+    location.reload();
+};
+
+update();
+</script>
+
+</body>
+</html>

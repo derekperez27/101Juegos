@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Memory</title>
+
+<style>
+body {
+    margin: 0;
+    background: #222;
+    color: white;
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+.game {
+    text-align: center;
+}
+
+.board {
+    display: grid;
+    grid-template-columns: repeat(4, 80px);
+    gap: 10px;
+    margin: 20px auto;
+}
+
+.card {
+    width: 80px;
+    height: 80px;
+    background: #555;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 40px;
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+.card.revealed {
+    background: white;
+    color: black;
+}
+
+.card.matched {
+    background: #2ecc71;
+    color: black;
+    cursor: default;
+}
+
+.mode-selector {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.mode-selector h2 {
+    font-size: 32px;
+    margin-bottom: 30px;
+}
+
+.mode-selector button {
+    padding: 15px 30px;
+    margin: 10px;
+    font-size: 18px;
+    cursor: pointer;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    transition: background 0.3s;
+}
+
+.mode-selector button:hover {
+    background: #2980b9;
+}
+</style>
+</head>
+
+<body>
+
+<div class="mode-selector" id="modeSelector">
+    <h2>Selecciona modo de juego</h2>
+    <button onclick="startGame('cpu')">Jugador vs Máquina</button>
+    <button onclick="startGame('friend')">Jugador vs Amigo</button>
+</div>
+
+<div class="game" style="display:none;" id="gameContainer">
+    <h1>Memory</h1>
+    <p id="turn">Turno: Jugador 1</p>
+    <p><span id="player1Label">Jugador 1</span>: <span id="playerScore">0</span> | <span id="player2Label">Máquina</span>: <span id="cpuScore">0</span></p>
+
+    <div class="board" id="board"></div>
+    <button onclick="resetGame()" style="margin-top:20px;padding:10px 20px;cursor:pointer;">Nueva Partida</button>
+</div>
+
+<script>
+const symbols = ["🍎","🍌","🍇","🍓","🍍","🥝","🍉","🍒"];
+let cards = [];
+let first = null;
+let second = null;
+let lock = true;
+let playerTurn = true;
+let playerScore = 0;
+let cpuScore = 0;
+let gameMode = null; // 'cpu' o 'friend'
+
+const board = document.getElementById("board");
+const turnText = document.getElementById("turn");
+const pScore = document.getElementById("playerScore");
+const cScore = document.getElementById("cpuScore");
+
+function startGame(mode) {
+    gameMode = mode;
+    playerScore = 0;
+    cpuScore = 0;
+    playerTurn = true;
+    
+    document.getElementById("modeSelector").style.display = "none";
+    document.getElementById("gameContainer").style.display = "block";
+    
+    if (mode === 'friend') {
+        document.getElementById("player1Label").textContent = "Jugador 1";
+        document.getElementById("player2Label").textContent = "Jugador 2";
+        turnText.textContent = "Turno: Jugador 1";
+    } else {
+        document.getElementById("player1Label").textContent = "Jugador";
+        document.getElementById("player2Label").textContent = "Máquina";
+        turnText.textContent = "Turno: Jugador";
+    }
+    
+    pScore.textContent = 0;
+    cScore.textContent = 0;
+    
+    init();
+}
+
+function resetGame() {
+    document.getElementById("gameContainer").style.display = "none";
+    document.getElementById("modeSelector").style.display = "flex";
+}
+
+function init() {
+    const deck = [...symbols, ...symbols].sort(() => Math.random() - 0.5);
+    board.innerHTML = "";
+    cards = [];
+
+    deck.forEach(sym => {
+        const card = document.createElement("div");
+        card.className = "card revealed";
+        card.textContent = sym;
+        card.dataset.symbol = sym;
+        card.onclick = () => playerClick(card);
+        board.appendChild(card);
+        cards.push(card);
+    });
+
+    setTimeout(() => {
+        cards.forEach(c => {
+            c.classList.remove("revealed");
+            c.textContent = "";
+        });
+        lock = false;
+    }, 2000);
+}
+
+function playerClick(card) {
+    if (gameMode === 'cpu' && !playerTurn) return; // En modo CPU, no jugar en turno de máquina
+    if (lock || card.classList.contains("matched") || card.classList.contains("revealed")) return;
+
+    reveal(card);
+
+    if (!first) {
+        first = card;
+    } else {
+        second = card;
+        lock = true;
+        
+        if (gameMode === 'friend' && !playerTurn) {
+            // Jugador 2 acaba de hacer su segundo click
+            setTimeout(checkPlayer2Match, 600);
+        } else {
+            // Jugador 1 acaba de hacer su segundo click
+            setTimeout(checkPlayerMatch, 600);
+        }
+    }
+}
+
+function checkPlayerMatch() {
+    if (first.dataset.symbol === second.dataset.symbol) {
+        first.classList.add("matched");
+        second.classList.add("matched");
+        playerScore++;
+        pScore.textContent = playerScore;
+        resetSelection();
+        checkEnd();
+        // 👈 SIGUE EL TURNO DEL JUGADOR ACTUAL
+    } else {
+        setTimeout(() => {
+            hide(first);
+            hide(second);
+            resetSelection();
+            playerTurn = false;
+            
+            if (gameMode === 'friend') {
+                turnText.textContent = "Turno: Jugador 2";
+                // En modo amigo, el otro jugador es humano
+            } else {
+                turnText.textContent = "Turno: Máquina";
+                setTimeout(cpuMove, 800);
+            }
+        }, 600);
+    }
+}
+
+function checkPlayer2Match() {
+    if (first.dataset.symbol === second.dataset.symbol) {
+        first.classList.add("matched");
+        second.classList.add("matched");
+        cpuScore++;
+        cScore.textContent = cpuScore;
+        resetSelection();
+        checkEnd();
+        // 👈 SIGUE EL TURNO DEL JUGADOR 2
+    } else {
+        setTimeout(() => {
+            hide(first);
+            hide(second);
+            resetSelection();
+            playerTurn = true;
+            turnText.textContent = "Turno: Jugador 1";
+        }, 600);
+    }
+}
+
+function cpuMove() {
+    let available = cards.filter(c => !c.classList.contains("matched") && !c.classList.contains("revealed"));
+    if (available.length < 2) return checkEnd();
+
+    let c1 = available[Math.floor(Math.random() * available.length)];
+    reveal(c1);
+
+    setTimeout(() => {
+        let remaining = available.filter(c => c !== c1);
+        let c2 = remaining[Math.floor(Math.random() * remaining.length)];
+        reveal(c2);
+
+        if (c1.dataset.symbol === c2.dataset.symbol) {
+            c1.classList.add("matched");
+            c2.classList.add("matched");
+            cpuScore++;
+            cScore.textContent = cpuScore;
+            setTimeout(cpuMove, 800); // 👈 sigue jugando
+        } else {
+            setTimeout(() => {
+                hide(c1);
+                hide(c2);
+                playerTurn = true;
+                turnText.textContent = gameMode === 'friend' ? "Turno: Jugador 1" : "Turno: Jugador";
+            }, 600);
+        }
+    }, 600);
+}
+
+function reveal(card) {
+    card.classList.add("revealed");
+    card.textContent = card.dataset.symbol;
+}
+
+function hide(card) {
+    card.classList.remove("revealed");
+    card.textContent = "";
+}
+
+function resetSelection() {
+    first = null;
+    second = null;
+    lock = false;
+}
+
+function checkEnd() {
+    if (cards.every(c => c.classList.contains("matched"))) {
+        let result = "Empate 🤝";
+        if (gameMode === 'friend') {
+            if (playerScore > cpuScore) result = "¡Gana Jugador 1! 🎉";
+            if (cpuScore > playerScore) result = "¡Gana Jugador 2! 🎉";
+        } else {
+            if (playerScore > cpuScore) result = "¡Has ganado! 🎉";
+            if (cpuScore > playerScore) result = "Gana la máquina 🤖";
+        }
+        setTimeout(() => alert(result), 300);
+    }
+}
+</script>
+
+</body>
+</html>

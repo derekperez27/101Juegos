@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>♠️ TEXAS HOLD'EM POKER</title>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #0a3d0a 0%, #1a5f1a 100%);
+    color: #fff;
+    overflow-x: hidden;
+}
+
+#configScreen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+#configScreen h1 {
+    font-size: 48px;
+    margin-bottom: 40px;
+    text-shadow: 2px 2px 4px #000;
+}
+
+.config-option {
+    margin: 20px;
+    background: rgba(0,0,0,0.3);
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #ffd700;
+}
+
+.config-option label {
+    font-size: 20px;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 10px;
+}
+
+.config-option input {
+    width: 200px;
+    padding: 10px;
+    font-size: 18px;
+    border-radius: 5px;
+    border: 2px solid #333;
+}
+
+#startBtn {
+    padding: 20px 60px;
+    font-size: 28px;
+    font-weight: bold;
+    background: #ffd700;
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    margin-top: 30px;
+    transition: all 0.3s;
+}
+
+#startBtn:hover {
+    background: #ffed4e;
+    transform: scale(1.05);
+}
+
+#gameScreen {
+    display: none;
+    padding: 20px;
+}
+
+#table {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: linear-gradient(135deg, #0d6b0d 0%, #0f7f0f 50%, #0d6b0d 100%);
+    border-radius: 30px;
+    padding: 30px;
+    box-shadow: 0 15px 50px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.1);
+    border: 3px solid #1a8c1a;
+}
+
+#info {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+#pot {
+    font-size: 36px;
+    font-weight: bold;
+    color: #ffd700;
+    margin: 10px 0;
+    text-shadow: 0 0 10px rgba(255,215,0,0.5), 2px 2px 4px rgba(0,0,0,0.8);
+    padding: 10px 20px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 10px;
+    display: inline-block;
+}
+
+#communityCards {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 30px 0;
+    min-height: 140px;
+}
+
+.card {
+    width: 80px;
+    height: 120px;
+    background: linear-gradient(145deg, #ffffff, #f0f0f0);
+    border-radius: 10px;
+    border: 2px solid #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: bold;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.5);
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.5);
+}
+
+.card.back {
+    background: #1a1a7f;
+    background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,.1) 10px, rgba(255,255,255,.1) 20px);
+}
+
+.card.red {
+    color: #d00;
+}
+
+.card.black {
+    color: #000;
+}
+
+#players {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin: 30px 0;
+}
+
+.player {
+    background: linear-gradient(145deg, rgba(0,0,0,0.6), rgba(20,40,20,0.6));
+    border-radius: 15px;
+    padding: 20px;
+    border: 3px solid #444;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    transition: all 0.3s;
+}
+
+.player.active {
+    border-color: #ffd700;
+    box-shadow: 0 0 30px rgba(255,215,0,0.8), 0 5px 15px rgba(0,0,0,0.5);
+    background: linear-gradient(145deg, rgba(50,50,20,0.7), rgba(40,40,10,0.7));
+    transform: scale(1.02);
+}
+
+.player.folded {
+    opacity: 0.5;
+}
+
+.player.eliminated {
+    opacity: 0.3;
+    border-color: #f00;
+}
+
+.player-name {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.player-chips {
+    font-size: 18px;
+    color: #ffd700;
+    margin-bottom: 10px;
+}
+
+.player-bet {
+    font-size: 16px;
+    color: #4af;
+    margin-bottom: 10px;
+}
+
+.player-cards {
+    display: flex;
+    gap: 5px;
+    justify-content: center;
+}
+
+.player-cards .card {
+    width: 60px;
+    height: 90px;
+    font-size: 20px;
+}
+
+#actions {
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+button {
+    padding: 15px 30px;
+    font-size: 18px;
+    font-weight: bold;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#foldBtn {
+    background: #d00;
+    color: #fff;
+}
+
+#checkBtn {
+    background: #0a0;
+    color: #fff;
+}
+
+#callBtn {
+    background: #0af;
+    color: #fff;
+}
+
+#raiseBtn {
+    background: #fa0;
+    color: #000;
+}
+
+#allinBtn {
+    background: #f0f;
+    color: #fff;
+}
+
+#raiseControls {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+#raiseAmount {
+    width: 150px;
+    padding: 10px;
+    font-size: 16px;
+    border-radius: 5px;
+    border: 2px solid #333;
+}
+
+#confirmRaise {
+    padding: 10px 20px;
+    background: #fa0;
+    color: #000;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#message {
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    margin: 20px 0;
+    min-height: 30px;
+    color: #ffd700;
+}
+
+#gameOverScreen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+#gameOverScreen h1 {
+    font-size: 64px;
+    margin-bottom: 30px;
+}
+
+#gameOverScreen p {
+    font-size: 28px;
+    margin: 10px 0;
+}
+
+#restartBtn {
+    padding: 20px 60px;
+    font-size: 28px;
+    font-weight: bold;
+    background: #ffd700;
+    color: #000;
+    margin-top: 30px;
+}
+</style>
+</head>
+<body>
+
+<!-- PANTALLA DE CONFIGURACIÓN -->
+<div id="configScreen">
+    <h1>♠️♥️ TEXAS HOLD'EM POKER ♦️♣️</h1>
+    
+    <div style="font-size: 24px; margin: 20px; color: #ffd700; font-weight: bold;">
+        💰 Bankroll Total: $<span id="bankrollDisplay">10000</span>
+    </div>
+    
+    <div class="config-option">
+        <label>Número de oponentes (1-4):</label>
+        <input type="number" id="numOpponents" min="1" max="4" value="3">
+    </div>
+    
+    <div class="config-option">
+        <label>Dinero inicial (máx. 100,000):</label>
+        <input type="number" id="initialMoney" min="1000" max="100000" step="1000" value="10000">
+    </div>
+    
+    <button id="startBtn" onclick="startGame()">JUGAR</button>
+</div>
+
+<!-- PANTALLA DE JUEGO -->
+<div id="gameScreen">
+    <div id="table">
+        <div id="info">
+            <h2>♠️ TEXAS HOLD'EM POKER ♥️</h2>
+            <div id="pot">Bote: $0</div>
+            <div id="blinds" style="font-size: 18px; margin: 10px 0;"></div>
+        </div>
+        
+        <div id="communityCards"></div>
+        
+        <div id="players"></div>
+        
+        <div id="message"></div>
+        
+        <div id="actions">
+            <button id="foldBtn" onclick="playerFold()">TIRAR</button>
+            <button id="checkBtn" onclick="playerCheck()" disabled>PASAR</button>
+            <button id="callBtn" onclick="playerCall()" disabled>VER</button>
+            <button id="raiseBtn" onclick="showRaiseControls()">SUBIR</button>
+            <button id="allinBtn" onclick="playerAllIn()">ALL-IN</button>
+        </div>
+        
+        <div id="raiseControls">
+            <label>Cantidad:</label>
+            <input type="number" id="raiseAmount" min="0" step="100">
+            <button id="confirmRaise" onclick="playerRaise()">CONFIRMAR</button>
+            <button onclick="hideRaiseControls()" style="background: #888; color: #fff;">CANCELAR</button>
+        </div>
+    </div>
+</div>
+
+<!-- PANTALLA GAME OVER -->
+<div id="gameOverScreen">
+    <h1 id="gameOverTitle"></h1>
+    <p id="gameOverMessage"></p>
+    <button id="restartBtn" onclick="location.reload()">JUGAR DE NUEVO</button>
+</div>
+
+<script>
+// ========== CONFIGURACIÓN ==========
+let numPlayers = 4; // Jugador + oponentes
+let initialChips = 10000;
+let smallBlind = 0;
+let bigBlind = 0;
+let totalPlayerBankroll = 10000; // Bankroll total del jugador (persistente)
+
+// ========== BARAJA ==========
+const suits = ['♠', '♥', '♦', '♣'];
+const suitNames = ['picas', 'corazones', 'diamantes', 'treboles'];
+const values = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+const valueMap = {'2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14};
+
+let deck = [];
+
+function createDeck() {
+    deck = [];
+    for(let suit of suits) {
+        for(let value of values) {
+            deck.push({ value: value, suit: suit, numValue: valueMap[value] });
+        }
+    }
+    shuffleDeck();
+}
+
+function shuffleDeck() {
+    for(let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+}
+
+function dealCard() {
+    return deck.pop();
+}
+
+// ========== JUGADORES ==========
+let players = [];
+let currentPlayerIndex = 0;
+let dealerIndex = 0;
+
+function createPlayers() {
+    players = [];
+    
+    // Jugador humano
+    players.push({
+        name: 'TÚ',
+        chips: initialChips,
+        cards: [],
+        bet: 0,
+        folded: false,
+        allIn: false,
+        isHuman: true,
+        eliminated: false
+    });
+    
+    // Oponentes IA
+    for(let i = 1; i < numPlayers; i++) {
+        players.push({
+            name: `IA ${i}`,
+            chips: initialChips,
+            cards: [],
+            bet: 0,
+            folded: false,
+            allIn: false,
+            isHuman: false,
+            eliminated: false
+        });
+    }
+}
+
+// ========== JUEGO ==========
+let communityCards = [];
+let pot = 0;
+let currentBet = 0;
+let phase = 'preflop'; // preflop, flop, turn, river, showdown
+let roundBets = [];
+
+function startGame() {
+    const numOpp = parseInt(document.getElementById('numOpponents').value);
+    const money = parseInt(document.getElementById('initialMoney').value);
+    
+    if(numOpp < 1 || numOpp > 4) {
+        alert('Elige entre 1 y 4 oponentes');
+        return;
+    }
+    
+    if(money < 1000 || money > 100000) {
+        alert('El dinero debe estar entre 1,000 y 100,000');
+        return;
+    }
+    
+    // Cargar bankroll guardado
+    const saved = localStorage.getItem('pokerBankroll');
+    if(saved) {
+        totalPlayerBankroll = parseInt(saved);
+    }
+    
+    if(totalPlayerBankroll < money) {
+        alert(`No tienes suficientes fichas. Bankroll actual: $${totalPlayerBankroll}`);
+        return;
+    }
+    
+    numPlayers = numOpp + 1;
+    initialChips = money;
+    smallBlind = Math.floor(money * 0.025);
+    bigBlind = Math.floor(money * 0.05);
+    
+    document.getElementById('configScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'block';
+    
+    createPlayers();
+    newHand();
+}
+
+function newHand() {
+    // Actualizar bankroll total del jugador
+    if(players.length > 0) {
+        totalPlayerBankroll = totalPlayerBankroll - initialChips + players[0].chips;
+        localStorage.setItem('pokerBankroll', totalPlayerBankroll);
+    }
+    
+    // Eliminar jugadores sin fichas
+    players = players.filter(p => p.chips > 0 || p.isHuman);
+    players.forEach(p => {
+        if(p.chips <= 0 && !p.isHuman) {
+            p.eliminated = true;
+        }
+    });
+    
+    // Verificar condiciones de fin de juego
+    const activePlayers = players.filter(p => !p.eliminated);
+    if(activePlayers.length === 1) {
+        endGame(true); // Victoria
+        return;
+    }
+    
+    if(players[0].chips <= 0 || totalPlayerBankroll <= 0) {
+        endGame(false); // Derrota
+        return;
+    }
+    
+    // Resetear estado
+    createDeck();
+    communityCards = [];
+    pot = 0;
+    currentBet = 0;
+    phase = 'preflop';
+    roundBets = [];
+    
+    players.forEach(p => {
+        p.cards = [];
+        p.bet = 0;
+        p.folded = false;
+        p.allIn = false;
+        // IA establece un presupuesto para esta mano (10%-60% de sus fichas)
+        if(!p.isHuman) {
+            p.handBudget = Math.floor(p.chips * (0.1 + Math.random() * 0.5));
+            p.totalInvestedThisHand = 0;
+        }
+    });
+    
+    // Rotar dealer
+    do {
+        dealerIndex = (dealerIndex + 1) % players.length;
+    } while(players[dealerIndex].eliminated);
+    
+    // Repartir cartas
+    for(let i = 0; i < 2; i++) {
+        for(let player of players) {
+            if(!player.eliminated) {
+                player.cards.push(dealCard());
+            }
+        }
+    }
+    
+    // Ciegas
+    const sbIndex = getNextActivePlayer(dealerIndex);
+    const bbIndex = getNextActivePlayer(sbIndex);
+    
+    placeBet(sbIndex, Math.min(smallBlind, players[sbIndex].chips));
+    placeBet(bbIndex, Math.min(bigBlind, players[bbIndex].chips));
+    currentBet = bigBlind;
+    
+    currentPlayerIndex = getNextActivePlayer(bbIndex);
+    
+    updateUI();
+    
+    if(!players[currentPlayerIndex].isHuman) {
+        setTimeout(aiTurn, 1500);
+    }
+}
+
+function getNextActivePlayer(index) {
+    let next = (index + 1) % players.length;
+    while(players[next].folded || players[next].eliminated || players[next].allIn) {
+        next = (next + 1) % players.length;
+        if(next === index) return index; // Todos fuera
+    }
+    return next;
+}
+
+function placeBet(playerIndex, amount) {
+    const player = players[playerIndex];
+    const actualBet = Math.min(amount, player.chips);
+    player.chips -= actualBet;
+    player.bet += actualBet;
+    pot += actualBet;
+    
+    // Trackear inversión total de la IA
+    if(!player.isHuman) {
+        player.totalInvestedThisHand = (player.totalInvestedThisHand || 0) + actualBet;
+    }
+    
+    if(player.chips === 0) {
+        player.allIn = true;
+    }
+    
+    if(player.bet > currentBet) {
+        currentBet = player.bet;
+    }
+}
+
+function dealRemainingCommunityCards() {
+    // Repartir todas las cartas comunitarias que faltan
+    if(phase === 'preflop') {
+        // Flop: 3 cartas
+        communityCards.push(dealCard(), dealCard(), dealCard());
+        phase = 'flop';
+        updateUI();
+        
+        setTimeout(() => {
+            // Turn: 1 carta
+            communityCards.push(dealCard());
+            phase = 'turn';
+            updateUI();
+            
+            setTimeout(() => {
+                // River: 1 carta
+                communityCards.push(dealCard());
+                phase = 'river';
+                updateUI();
+                
+                setTimeout(() => {
+                    showdown();
+                }, 1500);
+            }, 1500);
+        }, 1500);
+    } else if(phase === 'flop') {
+        // Turn: 1 carta
+        communityCards.push(dealCard());
+        phase = 'turn';
+        updateUI();
+        
+        setTimeout(() => {
+            // River: 1 carta
+            communityCards.push(dealCard());
+            phase = 'river';
+            updateUI();
+            
+            setTimeout(() => {
+                showdown();
+            }, 1500);
+        }, 1500);
+    } else if(phase === 'turn') {
+        // River: 1 carta
+        communityCards.push(dealCard());
+        phase = 'river';
+        updateUI();
+        
+        setTimeout(() => {
+            showdown();
+        }, 1500);
+    } else {
+        // Ya estamos en river, ir directo a showdown
+        showdown();
+    }
+}
+
+function nextPhase() {
+    // Resetear apuestas de la ronda
+    players.forEach(p => p.bet = 0);
+    currentBet = 0;
+    
+    if(phase === 'preflop') {
+        // Flop: 3 cartas
+        communityCards.push(dealCard(), dealCard(), dealCard());
+        phase = 'flop';
+        showMessage('FLOP');
+    } else if(phase === 'flop') {
+        // Turn: 1 carta
+        communityCards.push(dealCard());
+        phase = 'turn';
+        showMessage('TURN');
+    } else if(phase === 'turn') {
+        // River: 1 carta
+        communityCards.push(dealCard());
+        phase = 'river';
+        showMessage('RIVER');
+    } else if(phase === 'river') {
+        // Showdown
+        showdown();
+        return;
+    }
+    
+    currentPlayerIndex = getNextActivePlayer(dealerIndex);
+    updateUI();
+    
+    if(!players[currentPlayerIndex].isHuman) {
+        setTimeout(aiTurn, 1500);
+    }
+}
+
+function checkRoundComplete() {
+    const activePlayers = players.filter(p => !p.folded && !p.eliminated);
+    
+    if(activePlayers.length === 1) {
+        // Solo queda un jugador, gana el bote
+        const winner = activePlayers[0];
+        winner.chips += pot;
+        showMessage(`${winner.name} gana $${pot}`);
+        setTimeout(newHand, 3000);
+        return true;
+    }
+    
+    // Verificar si todos han apostado lo mismo
+    const playersNotAllIn = activePlayers.filter(p => !p.allIn);
+    if(playersNotAllIn.length === 0) {
+        // Todos all-in, ir directo al showdown mostrando todas las cartas
+        showMessage('¡Todos ALL-IN! Mostrando cartas...');
+        updateUI();
+        setTimeout(() => dealRemainingCommunityCards(), 1500);
+        return true;
+    }
+    
+    // TODOS deben haber tenido turno Y apostado la misma cantidad
+    const allBetsEqual = playersNotAllIn.every(p => p.bet === currentBet);
+    const allPlayersActed = playersNotAllIn.every(p => roundBets.includes(players.indexOf(p)));
+    
+    if(allBetsEqual && allPlayersActed) {
+        roundBets = []; // Resetear para siguiente fase
+        nextPhase();
+        return true;
+    }
+    
+    return false;
+}
+
+function nextTurn() {
+    roundBets.push(currentPlayerIndex);
+    
+    if(!checkRoundComplete()) {
+        currentPlayerIndex = getNextActivePlayer(currentPlayerIndex);
+        updateUI();
+        
+        if(!players[currentPlayerIndex].isHuman) {
+            setTimeout(aiTurn, 1500);
+        }
+    }
+}
+
+// ========== ACCIONES DEL JUGADOR ==========
+function playerFold() {
+    players[0].folded = true;
+    showMessage('Has tirado tus cartas');
+    nextTurn();
+}
+
+function playerCheck() {
+    if(currentBet > players[0].bet) {
+        showMessage('No puedes pasar, debes igualar o tirar');
+        return;
+    }
+    showMessage('Pasas');
+    nextTurn();
+}
+
+function playerCall() {
+    const callAmount = currentBet - players[0].bet;
+    if(callAmount > players[0].chips) {
+        playerAllIn();
+        return;
+    }
+    placeBet(0, callAmount);
+    showMessage(`Ves con $${callAmount}`);
+    updateUI();
+    nextTurn();
+}
+
+function playerRaise() {
+    const amount = parseInt(document.getElementById('raiseAmount').value);
+    const totalBet = players[0].bet + amount;
+    
+    if(amount <= 0) {
+        showMessage('La cantidad debe ser mayor a 0');
+        return;
+    }
+    
+    if(totalBet <= currentBet) {
+        showMessage('Debes subir más que la apuesta actual');
+        return;
+    }
+    
+    if(amount > players[0].chips) {
+        showMessage('No tienes suficientes fichas');
+        return;
+    }
+    
+    placeBet(0, amount);
+    roundBets = []; // Resetear ronda de apuestas
+    showMessage(`Subes a $${totalBet}`);
+    hideRaiseControls();
+    updateUI();
+    nextTurn();
+}
+
+function playerAllIn() {
+    const amount = players[0].chips;
+    placeBet(0, amount);
+    showMessage(`¡ALL-IN con $${amount}!`);
+    updateUI();
+    nextTurn();
+}
+
+function showRaiseControls() {
+    document.getElementById('raiseControls').style.display = 'flex';
+    const minRaise = currentBet - players[0].bet + bigBlind;
+    document.getElementById('raiseAmount').min = minRaise;
+    document.getElementById('raiseAmount').value = minRaise;
+}
+
+function hideRaiseControls() {
+    document.getElementById('raiseControls').style.display = 'none';
+}
+
+// ========== IA ==========
+function aiTurn() {
+    const player = players[currentPlayerIndex];
+    const callAmount = currentBet - player.bet;
+    const handStrength = evaluateHandStrength(player.cards, communityCards);
+    const invested = player.totalInvestedThisHand || 0;
+    const budget = player.handBudget || player.chips;
+    const potOdds = pot > 0 ? callAmount / (pot + callAmount) : 0;
+    
+    // Factores de decisión
+    const isPreFlop = communityCards.length === 0;
+    const isLateStage = communityCards.length >= 4; // Turn o River
+    const potCommitted = invested > budget * 0.6; // Ya invirtió más del 60% de su presupuesto
+    const hasInvestedMuch = invested > player.chips * 0.3; // Invirtió más del 30% de sus fichas totales
+    
+    // Determinar umbrales según fase
+    let foldThreshold, callThreshold, raiseThreshold;
+    
+    if(isPreFlop) {
+        foldThreshold = 3;
+        callThreshold = 6;
+        raiseThreshold = 8;
+    } else if(isLateStage) {
+        foldThreshold = 15;
+        callThreshold = 30;
+        raiseThreshold = 50;
+    } else {
+        foldThreshold = 10;
+        callThreshold = 20;
+        raiseThreshold = 35;
+    }
+    
+    // CASO 1: Puede pasar gratis
+    if(callAmount === 0) {
+        // Solo sube con mano MUY fuerte y con baja probabilidad
+        if(handStrength >= raiseThreshold && Math.random() < 0.25) {
+            // Mano fuerte: subir (más conservador)
+            const raiseAmount = Math.min(
+                Math.floor(bigBlind * (1.5 + Math.random() * 2)),
+                budget - invested,
+                player.chips
+            );
+            if(raiseAmount > 0) {
+                placeBet(currentPlayerIndex, raiseAmount);
+                roundBets = [];
+                showMessage(`${player.name} sube a $${player.bet}`);
+            } else {
+                showMessage(`${player.name} pasa`);
+            }
+        } else {
+            // Pasar (más frecuente)
+            showMessage(`${player.name} pasa`);
+        }
+    } 
+    // CASO 2: Debe pagar para continuar
+    else {
+        const canAfford = callAmount <= player.chips;
+        const withinBudget = (invested + callAmount) <= budget;
+        const worthCalling = handStrength >= callThreshold || potCommitted || hasInvestedMuch;
+        
+        // Decisión de fold
+        if(!worthCalling && !potCommitted && !hasInvestedMuch) {
+            player.folded = true;
+            showMessage(`${player.name} tira sus cartas`);
+        }
+        // No puede pagar o excede presupuesto sin buena mano
+        else if(!canAfford || (!withinBudget && handStrength < raiseThreshold && !potCommitted)) {
+            // Si ya invirtió mucho, hace all-in, sino fold
+            if(potCommitted || hasInvestedMuch) {
+                placeBet(currentPlayerIndex, player.chips);
+                showMessage(`${player.name} va ALL-IN con $${player.chips}!`);
+            } else {
+                player.folded = true;
+                showMessage(`${player.name} tira sus cartas`);
+            }
+        }
+        // Mano muy fuerte: subir (solo 20% de las veces)
+        else if(handStrength >= raiseThreshold && Math.random() < 0.2) {
+            const raiseAmount = Math.min(
+                callAmount + Math.floor(pot * (0.2 + Math.random() * 0.3)),
+                budget - invested,
+                player.chips
+            );
+            placeBet(currentPlayerIndex, raiseAmount);
+            roundBets = [];
+            showMessage(`${player.name} sube a $${player.bet}`);
+        }
+        // Mano decente o pot committed: igualar
+        else {
+            const betAmount = Math.min(callAmount, player.chips);
+            placeBet(currentPlayerIndex, betAmount);
+            showMessage(`${player.name} ve con $${betAmount}`);
+        }
+    }
+    
+    updateUI();
+    setTimeout(nextTurn, 1500);
+}
+
+function evaluateHandStrength(playerCards, communityCards) {
+    // Evaluar la mano completa (cartas privadas + comunitarias)
+    const allCards = [...playerCards, ...communityCards];
+    if(allCards.length < 2) {
+        // Pre-flop: evaluar solo cartas privadas
+        const values = playerCards.map(c => c.numValue).sort((a, b) => b - a);
+        const isPair = values[0] === values[1];
+        const isHighCards = values[0] >= 11; // J o superior
+        
+        if(isPair && values[0] >= 10) return 9; // Pareja alta
+        if(isPair) return 7; // Pareja media/baja
+        if(isHighCards) return 6; // Cartas altas
+        if(values[0] >= 9) return 4; // Carta decente
+        return 2; // Cartas bajas
+    }
+    
+    // Evaluar mano completa
+    const hand = evaluateHand(allCards);
+    return hand.rank * 10 + (hand.kickers[0] / 14) * 5; // Rango + valor de carta alta
+}
+
+// ========== SHOWDOWN ==========
+function showdown() {
+    phase = 'showdown';
+    const activePlayers = players.filter(p => !p.folded && !p.eliminated);
+    
+    // Evaluar manos
+    const results = activePlayers.map(player => {
+        const allCards = [...player.cards, ...communityCards];
+        const hand = evaluateHand(allCards);
+        return { player, hand };
+    });
+    
+    // Ordenar por fuerza de mano
+    results.sort((a, b) => compareHands(b.hand, a.hand));
+    
+    // Encontrar ganadores (puede haber empates)
+    const winners = [results[0]];
+    for(let i = 1; i < results.length; i++) {
+        if(compareHands(results[i].hand, results[0].hand) === 0) {
+            winners.push(results[i]);
+        } else {
+            break;
+        }
+    }
+    
+    // Repartir bote
+    const winAmount = Math.floor(pot / winners.length);
+    winners.forEach(w => {
+        w.player.chips += winAmount;
+    });
+    
+    // Mostrar resultado
+    let msg = winners.length === 1 
+        ? `${winners[0].player.name} gana $${pot} con ${getHandName(winners[0].hand)}`
+        : `Empate: ${winners.map(w => w.player.name).join(', ')} se reparten $${pot}`;
+    
+    showMessage(msg);
+    updateUI(true); // Mostrar todas las cartas
+    
+    setTimeout(newHand, 5000);
+}
+
+// ========== EVALUACIÓN DE MANOS ==========
+function evaluateHand(cards) {
+    const sorted = [...cards].sort((a, b) => b.numValue - a.numValue);
+    
+    const values = sorted.map(c => c.numValue);
+    const suits = sorted.map(c => c.suit);
+    
+    const valueCounts = {};
+    values.forEach(v => valueCounts[v] = (valueCounts[v] || 0) + 1);
+    
+    const counts = Object.values(valueCounts).sort((a, b) => b - a);
+    const uniqueValues = Object.keys(valueCounts).map(Number).sort((a, b) => b - a);
+    
+    const isFlush = suits.every(s => s === suits[0]) && suits.length >= 5;
+    const isStraight = checkStraight(values);
+    
+    // Escalera de color
+    if(isFlush && isStraight) {
+        return { rank: 9, name: 'Escalera de Color', kickers: [Math.max(...values)] };
+    }
+    
+    // Poker (4 iguales)
+    if(counts[0] === 4) {
+        const fourKind = uniqueValues.find(v => valueCounts[v] === 4);
+        return { rank: 8, name: 'Poker', kickers: [fourKind, ...uniqueValues.filter(v => v !== fourKind)] };
+    }
+    
+    // Full (3 + 2)
+    if(counts[0] === 3 && counts[1] >= 2) {
+        const three = uniqueValues.find(v => valueCounts[v] === 3);
+        const pair = uniqueValues.find(v => valueCounts[v] >= 2 && v !== three);
+        return { rank: 7, name: 'Full', kickers: [three, pair] };
+    }
+    
+    // Color
+    if(isFlush) {
+        return { rank: 6, name: 'Color', kickers: uniqueValues.slice(0, 5) };
+    }
+    
+    // Escalera
+    if(isStraight) {
+        return { rank: 5, name: 'Escalera', kickers: [Math.max(...values)] };
+    }
+    
+    // Trío
+    if(counts[0] === 3) {
+        const three = uniqueValues.find(v => valueCounts[v] === 3);
+        return { rank: 4, name: 'Trío', kickers: [three, ...uniqueValues.filter(v => v !== three).slice(0, 2)] };
+    }
+    
+    // Doble pareja
+    if(counts[0] === 2 && counts[1] === 2) {
+        const pairs = uniqueValues.filter(v => valueCounts[v] === 2);
+        return { rank: 3, name: 'Doble Pareja', kickers: [...pairs, ...uniqueValues.filter(v => valueCounts[v] !== 2)[0]] };
+    }
+    
+    // Pareja
+    if(counts[0] === 2) {
+        const pair = uniqueValues.find(v => valueCounts[v] === 2);
+        return { rank: 2, name: 'Pareja', kickers: [pair, ...uniqueValues.filter(v => v !== pair).slice(0, 3)] };
+    }
+    
+    // Carta alta
+    return { rank: 1, name: 'Carta Alta', kickers: uniqueValues.slice(0, 5) };
+}
+
+function checkStraight(values) {
+    const unique = [...new Set(values)].sort((a, b) => b - a);
+    
+    for(let i = 0; i <= unique.length - 5; i++) {
+        let isStraight = true;
+        for(let j = 0; j < 4; j++) {
+            if(unique[i + j] - unique[i + j + 1] !== 1) {
+                isStraight = false;
+                break;
+            }
+        }
+        if(isStraight) return true;
+    }
+    
+    // Escalera con As bajo (A-2-3-4-5)
+    if(unique.includes(14) && unique.includes(2) && unique.includes(3) && unique.includes(4) && unique.includes(5)) {
+        return true;
+    }
+    
+    return false;
+}
+
+function compareHands(hand1, hand2) {
+    if(hand1.rank !== hand2.rank) {
+        return hand1.rank - hand2.rank;
+    }
+    
+    // Mismo rango, comparar kickers
+    for(let i = 0; i < Math.min(hand1.kickers.length, hand2.kickers.length); i++) {
+        if(hand1.kickers[i] !== hand2.kickers[i]) {
+            return hand1.kickers[i] - hand2.kickers[i];
+        }
+    }
+    
+    return 0; // Empate
+}
+
+function getHandName(hand) {
+    return hand.name;
+}
+
+// ========== UI ==========
+function updateUI(showAllCards = false) {
+    // Bote y ciegas
+    document.getElementById('pot').textContent = `Bote: $${pot}`;
+    document.getElementById('blinds').textContent = `Ciegas: $${smallBlind} / $${bigBlind} | Bankroll total: $${totalPlayerBankroll}`;
+    
+    // Cartas comunitarias
+    const commDiv = document.getElementById('communityCards');
+    commDiv.innerHTML = '';
+    communityCards.forEach(card => {
+        commDiv.innerHTML += createCardHTML(card);
+    });
+    
+    // Jugadores
+    const playersDiv = document.getElementById('players');
+    playersDiv.innerHTML = '';
+    
+    players.forEach((player, index) => {
+        const isActive = index === currentPlayerIndex && phase !== 'showdown';
+        const playerDiv = document.createElement('div');
+        playerDiv.className = 'player';
+        if(isActive) playerDiv.classList.add('active');
+        if(player.folded) playerDiv.classList.add('folded');
+        if(player.eliminated) playerDiv.classList.add('eliminated');
+        
+        let cardsHTML = '';
+        if(player.isHuman || showAllCards || phase === 'showdown') {
+            player.cards.forEach(card => {
+                cardsHTML += createCardHTML(card, true);
+            });
+        } else {
+            cardsHTML = '<div class="card back"></div><div class="card back"></div>';
+        }
+        
+        const dealerMark = index === dealerIndex ? ' 🔘' : '';
+        
+        playerDiv.innerHTML = `
+            <div class="player-name">${player.name}${dealerMark}</div>
+            <div class="player-chips">💰 $${player.chips}</div>
+            <div class="player-bet">Apuesta: $${player.bet}</div>
+            <div class="player-cards">${cardsHTML}</div>
+        `;
+        
+        playersDiv.appendChild(playerDiv);
+    });
+    
+    // Botones de acción
+    const isPlayerTurn = currentPlayerIndex === 0 && !players[0].folded && phase !== 'showdown';
+    const canCheck = currentBet === players[0].bet;
+    const callAmount = currentBet - players[0].bet;
+    
+    document.getElementById('foldBtn').disabled = !isPlayerTurn;
+    document.getElementById('checkBtn').disabled = !isPlayerTurn || !canCheck;
+    document.getElementById('callBtn').disabled = !isPlayerTurn || canCheck;
+    document.getElementById('raiseBtn').disabled = !isPlayerTurn || players[0].chips === 0;
+    document.getElementById('allinBtn').disabled = !isPlayerTurn || players[0].chips === 0;
+    
+    if(isPlayerTurn && !canCheck) {
+        document.getElementById('callBtn').textContent = `VER ($${callAmount})`;
+    } else {
+        document.getElementById('callBtn').textContent = 'VER';
+    }
+}
+
+function createCardHTML(card, small = false) {
+    const color = (card.suit === '♥' || card.suit === '♦') ? 'red' : 'black';
+    return `<div class="card ${color}">${card.value}${card.suit}</div>`;
+}
+
+function showMessage(msg) {
+    document.getElementById('message').textContent = msg;
+}
+
+function endGame(won) {
+    // Actualizar bankroll final
+    if(players.length > 0 && players[0]) {
+        totalPlayerBankroll = totalPlayerBankroll - initialChips + players[0].chips;
+    } else if(!won) {
+        totalPlayerBankroll = totalPlayerBankroll - initialChips;
+    }
+    localStorage.setItem('pokerBankroll', totalPlayerBankroll);
+    
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'flex';
+    
+    if(won) {
+        const profit = players[0].chips - initialChips;
+        document.getElementById('gameOverTitle').textContent = '🏆 ¡VICTORIA!';
+        document.getElementById('gameOverTitle').style.color = '#0f0';
+        document.getElementById('gameOverMessage').innerHTML = `
+            ¡Has ganado!<br>
+            Ganancia: $${profit > 0 ? '+' : ''}${profit}<br>
+            Bankroll total: $${totalPlayerBankroll}
+        `;
+    } else {
+        const loss = initialChips - (players[0] ? players[0].chips : 0);
+        document.getElementById('gameOverTitle').textContent = '💀 DERROTA';
+        document.getElementById('gameOverTitle').style.color = '#f00';
+        document.getElementById('gameOverMessage').innerHTML = `
+            Has perdido<br>
+            Pérdida: -$${loss}<br>
+            Bankroll total: $${totalPlayerBankroll}
+        `;
+    }
+}
+
+
+// Cargar bankroll al inicio
+window.onload = function() {
+    const saved = localStorage.getItem('pokerBankroll');
+    if(saved) {
+        totalPlayerBankroll = parseInt(saved);
+    }
+    
+    // Si está en 0 o negativo, resetear a $10,000
+    if(totalPlayerBankroll <= 0) {
+        totalPlayerBankroll = 10000;
+        localStorage.setItem('pokerBankroll', totalPlayerBankroll);
+    }
+    
+    document.getElementById('bankrollDisplay').textContent = totalPlayerBankroll;
+};
+</script>
+
+</body>
+</html>

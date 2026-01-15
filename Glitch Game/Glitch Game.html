@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Glitch Game</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+
+#records h2 {
+    color: #9900ff;
+}
+
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #9900ff;
+}
+
+.record-rank {
+    font-weight: bold;
+    color: #9900ff;
+    margin-right: 10px;
+}
+
+.record-level {
+    color: #ffd700;
+    font-weight: bold;
+}
+
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+
+button {
+    margin: 10px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+}
+
+#restartBtn {
+    background: #4CAF50;
+    color: white;
+}
+
+#clearRecordsBtn {
+    background: #d32f2f;
+    color: white;
+    padding: 8px 15px;
+    font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<h1>🌀 GLITCH GAME</h1>
+<p>Nivel: <span id="level">1</span> | Glitch: <span id="glitchTimer">-</span></p>
+<p id="msg">El mundo se romperá…</p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<button id="restartBtn" style="display:none;" onclick="restartGame()">Volver a Jugar</button>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button id="clearRecordsBtn" onclick="clearRecords()">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const levelSpan = document.getElementById("level");
+const glitchTimerSpan = document.getElementById("glitchTimer");
+const msg = document.getElementById("msg");
+
+let level = 1;
+let running = true;
+let glitchInterval = null;
+let glitchEndTime = 0;
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('glitchGameRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(level) {
+    const records = loadRecords();
+    records.push({
+        level: level,
+        date: new Date().toLocaleDateString()
+    });
+    // Ordenar por nivel (mayor a menor)
+    records.sort((a, b) => b.level - a.level);
+    // Guardar solo los mejores 10
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('glitchGameRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-level">Nivel ${record.level}</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('glitchGameRecords');
+        displayRecords();
+    }
+}
+
+// Mostrar récords al cargar la página
+displayRecords();
+
+/* ===== PLAYER ===== */
+const player = { x:200, y:360, size:12 };
+
+/* ===== MAP ===== */
+let obstacles = [];
+let goal = {};
+
+/* ===== GLITCH ===== */
+let glitch = {
+    invert:false,
+    offsetX:0,
+    offsetY:0,
+    invisibleWalls:false,
+    shake:0,
+    colorInvert:false,
+    rotation:0,
+    speedMultiplier:1,
+    currentType: -1
+};
+
+/* ===== LEVEL ===== */
+function newLevel(){
+    obstacles = [];
+    glitchReset();
+
+    // Resetear posición del jugador primero
+    player.x = 200;
+    player.y = 360;
+
+    goal = {
+        x: Math.random()*320+40,
+        y: 20,
+        size: 14
+    };
+
+    // Generar obstáculos asegurando que no colisionen con el jugador
+    for(let i=0;i<level+3;i++){
+        let obstacleX, obstacleY, attempts = 0;
+        let safe = false;
+        
+        while(!safe && attempts < 100) {
+            obstacleX = Math.random()*360+20;
+            obstacleY = Math.random()*250+100;
+            
+            // Verificar que no colisione con el jugador
+            if(Math.abs(obstacleX - player.x) >= player.size + 16 ||
+               Math.abs(obstacleY - player.y) >= player.size + 16) {
+                safe = true;
+            }
+            attempts++;
+        }
+        
+        if(safe) {
+            obstacles.push({
+                x: obstacleX,
+                y: obstacleY,
+                size: 16
+            });
+        }
+    }
+
+    levelSpan.textContent = level;
+}
+
+/* ===== GLITCHES ===== */
+function glitchReset(){
+    glitch.invert = false;
+    glitch.offsetX = 0;
+    glitch.offsetY = 0;
+    glitch.invisibleWalls = false;
+    glitch.shake = 0;
+    glitch.colorInvert = false;
+    glitch.rotation = 0;
+    glitch.speedMultiplier = 1;
+    glitch.currentType = -1;
+    msg.textContent = "El mundo se romperá…";
+}
+
+function triggerGlitch(){
+    glitchReset();
+    const type = Math.floor(Math.random()*8);
+    glitch.currentType = type;
+    
+    // Duración del glitch (2-4 segundos)
+    const duration = 2000 + Math.random() * 2000;
+    glitchEndTime = Date.now() + duration;
+
+    if(type===0){
+        glitch.invert = true;
+        msg.textContent = "⚠ CONTROLES INVERTIDOS";
+    }
+    else if(type===1){
+        glitch.offsetX = (Math.random()*60-30);
+        glitch.offsetY = (Math.random()*60-30);
+        msg.textContent = "⚠ DESPLAZAMIENTO VISUAL";
+    }
+    else if(type===2){
+        glitch.invisibleWalls = true;
+        msg.textContent = "⚠ PAREDES INVISIBLES";
+    }
+    else if(type===3){
+        // Teleport más largo pero seguro
+        let newX, newY, attempts = 0;
+        let safe = false;
+        
+        while(!safe && attempts < 50) {
+            // Teleport de mayor distancia (150-200 píxeles)
+            newX = player.x + (Math.random() * 400 - 200);
+            newY = player.y + (Math.random() * 400 - 200);
+            
+            // Mantener dentro de límites
+            newX = Math.max(player.size, Math.min(400 - player.size, newX));
+            newY = Math.max(player.size, Math.min(400 - player.size, newY));
+            
+            // Verificar colisión con obstáculos
+            safe = true;
+            for(let o of obstacles) {
+                if(Math.abs(newX - o.x) < player.size + o.size &&
+                   Math.abs(newY - o.y) < player.size + o.size) {
+                    safe = false;
+                    break;
+                }
+            }
+            attempts++;
+        }
+        
+        if(safe) {
+            player.x = newX;
+            player.y = newY;
+            msg.textContent = "⚠ TELEPORT";
+        } else {
+            // Si no encuentra posición segura, aplicar otro glitch
+            glitch.shake = 8;
+            msg.textContent = "⚠ TERREMOTO";
+        }
+    }
+    else if(type===4){
+        glitch.shake = 8;
+        msg.textContent = "⚠ TERREMOTO";
+    }
+    else if(type===5){
+        glitch.colorInvert = true;
+        msg.textContent = "⚠ COLORES INVERTIDOS";
+    }
+    else if(type===6){
+        glitch.rotation = (Math.random() * 20 - 10) * Math.PI / 180;
+        msg.textContent = "⚠ ROTACIÓN";
+    }
+    else if(type===7){
+        glitch.speedMultiplier = Math.random() > 0.5 ? 2 : 0.5;
+        msg.textContent = glitch.speedMultiplier > 1 ? "⚠ VELOCIDAD x2" : "⚠ CÁMARA LENTA";
+    }
+}
+
+function startGlitchInterval() {
+    if (glitchInterval) clearInterval(glitchInterval);
+    const interval = Math.max(2500 - level*200, 1200); // 1 segundo más frecuente
+    glitchInterval = setInterval(()=>{
+        if(running) triggerGlitch();
+    }, interval);
+}
+
+startGlitchInterval();
+
+/* ===== INPUT ===== */
+document.addEventListener("keydown",e=>{
+    if(!running) return;
+
+    let dx=0, dy=0;
+    if(e.key==="w" || e.key==="ArrowUp") dy=-25;
+    if(e.key==="s" || e.key==="ArrowDown") dy=25;
+    if(e.key==="a" || e.key==="ArrowLeft") dx=-25;
+    if(e.key==="d" || e.key==="ArrowRight") dx=25;
+
+    if(glitch.invert){
+        dx*=-1;
+        dy*=-1;
+    }
+    
+    dx *= glitch.speedMultiplier;
+    dy *= glitch.speedMultiplier;
+
+    player.x += dx;
+    player.y += dy;
+});
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+    
+    // Actualizar temporizador de glitch
+    if(glitchEndTime > 0) {
+        const timeLeft = Math.max(0, Math.ceil((glitchEndTime - Date.now()) / 1000));
+        glitchTimerSpan.textContent = timeLeft + "s";
+        
+        if(timeLeft === 0) {
+            glitchReset();
+            glitchEndTime = 0;
+        }
+    } else {
+        glitchTimerSpan.textContent = "-";
+    }
+    
+    // Decay del shake
+    if(glitch.shake > 0) {
+        glitch.shake *= 0.95;
+        if(glitch.shake < 0.1) glitch.shake = 0;
+    }
+
+    // límites
+    if(!glitch.invisibleWalls){
+        player.x = Math.max(player.size, Math.min(400 - player.size, player.x));
+        player.y = Math.max(player.size, Math.min(400 - player.size, player.y));
+    }
+
+    // colisiones
+    obstacles.forEach(o=>{
+        if(
+            Math.abs(player.x-o.x)<player.size+o.size &&
+            Math.abs(player.y-o.y)<player.size+o.size
+        ){
+            gameOver();
+        }
+    });
+
+    // meta
+    if(
+        Math.abs(player.x-goal.x)<player.size+goal.size &&
+        Math.abs(player.y-goal.y)<player.size+goal.size
+    ){
+        level++;
+        newLevel();
+        startGlitchInterval(); // Reiniciar intervalo con nueva velocidad
+    }
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0,0,400,400);
+
+    ctx.save();
+    
+    // Aplicar shake
+    if(glitch.shake > 0) {
+        ctx.translate(
+            (Math.random() - 0.5) * glitch.shake,
+            (Math.random() - 0.5) * glitch.shake
+        );
+    }
+    
+    // Aplicar offset
+    ctx.translate(glitch.offsetX, glitch.offsetY);
+    
+    // Aplicar rotación desde el centro
+    if(glitch.rotation !== 0) {
+        ctx.translate(200, 200);
+        ctx.rotate(glitch.rotation);
+        ctx.translate(-200, -200);
+    }
+    
+    // Inversión de colores
+    if(glitch.colorInvert) {
+        ctx.filter = 'invert(1)';
+    }
+
+    // meta
+    ctx.fillStyle="#00ff00";
+    ctx.fillRect(goal.x-goal.size, goal.y-goal.size, goal.size*2, goal.size*2);
+    
+    // Borde de meta pulsante
+    ctx.strokeStyle = "#00ff00";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(goal.x-goal.size-3, goal.y-goal.size-3, goal.size*2+6, goal.size*2+6);
+
+    // obstáculos
+    ctx.fillStyle="#ff4444";
+    if(!glitch.invisibleWalls) {
+        obstacles.forEach(o=>{
+            ctx.fillRect(o.x-o.size, o.y-o.size, o.size*2, o.size*2);
+        });
+    } else {
+        // Mostrar obstáculos semi-transparentes cuando están invisibles
+        ctx.globalAlpha = 0.1;
+        obstacles.forEach(o=>{
+            ctx.fillRect(o.x-o.size, o.y-o.size, o.size*2, o.size*2);
+        });
+        ctx.globalAlpha = 1;
+    }
+
+    // jugador
+    ctx.fillStyle="cyan";
+    ctx.fillRect(
+        player.x-player.size,
+        player.y-player.size,
+        player.size*2,
+        player.size*2
+    );
+    
+    // Borde del jugador
+    ctx.strokeStyle = "cyan";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(
+        player.x-player.size-2,
+        player.y-player.size-2,
+        player.size*2+4,
+        player.size*2+4
+    );
+
+    ctx.restore();
+}
+
+/* ===== GAME OVER ===== */
+function gameOver(){
+    running=false;
+    if (glitchInterval) clearInterval(glitchInterval);
+    saveRecord(level);
+    document.getElementById("restartBtn").style.display = "inline-block";
+    msg.textContent="💀 EL GLITCH TE MATÓ - Nivel alcanzado: " + level;
+}
+
+function restartGame() {
+    running = true;
+    level = 1;
+    glitchEndTime = 0;
+    obstacles = [];
+    player.x = 200;
+    player.y = 360;
+    
+    glitchReset();
+    levelSpan.textContent = 1;
+    glitchTimerSpan.textContent = "-";
+    msg.textContent = "El mundo se romperá…";
+    document.getElementById("restartBtn").style.display = "none";
+    
+    newLevel();
+    startGlitchInterval();
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+newLevel();
+loop();
+</script>
+
+</body>
+</html>

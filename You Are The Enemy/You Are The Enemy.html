@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>You Are The Enemy</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+
+#records h2 {
+    color: #ff9900;
+}
+
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #ff9900;
+}
+
+.record-rank {
+    font-weight: bold;
+    color: #ff9900;
+    margin-right: 10px;
+}
+
+.record-level {
+    color: #ffd700;
+    font-weight: bold;
+}
+
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+
+button {
+    margin: 10px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+}
+
+#restartBtn {
+    background: #4CAF50;
+    color: white;
+}
+
+#clearRecordsBtn {
+    background: #d32f2f;
+    color: white;
+    padding: 8px 15px;
+    font-size: 14px;
+}
+</style>
+</head>
+<body>
+
+<h1>👁️ YOU ARE THE ENEMY</h1>
+<p>Nivel: <span id="level">1</span> | Tiempo: <span id="time">0</span>s</p>
+<p id="msg">Atrapa al jugador - usa WASD o Flechas</p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<button id="restartBtn" style="display:none;" onclick="restartGame()">Volver a Jugar</button>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button id="clearRecordsBtn" onclick="clearRecords()">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const levelSpan = document.getElementById("level");
+const timeSpan = document.getElementById("time");
+const msg = document.getElementById("msg");
+
+let level = 1;
+let running = true;
+let time = 0;
+let timeInterval = null;
+
+// Rastreo de teclas presionadas
+const keys = {
+    w: false,
+    s: false,
+    a: false,
+    d: false,
+    ArrowUp: false,
+    ArrowDown: false,
+    ArrowLeft: false,
+    ArrowRight: false
+};
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('catcherRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(level) {
+    const records = loadRecords();
+    records.push({
+        level: level,
+        date: new Date().toLocaleDateString()
+    });
+    // Ordenar por nivel (mayor a menor)
+    records.sort((a, b) => b.level - a.level);
+    // Guardar solo los mejores 10
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('catcherRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-level">Nivel ${record.level}</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('catcherRecords');
+        displayRecords();
+    }
+}
+
+// Mostrar récords al cargar la página
+displayRecords();
+
+/* ===== ENTIDADES ===== */
+const enemy = { x:200, y:200, r:10, speed:6 }; // Mucho más rápido para mejor control
+const player = { 
+    x:50, 
+    y:50, 
+    r:8, 
+    speed:2,
+    erraticTimer: 0,
+    erraticAngle: 0
+};
+
+/* ===== NIVEL ===== */
+function newLevel(){
+    enemy.x = 200;
+    enemy.y = 200;
+    
+    // Generar posición del jugador lejos del enemigo
+    let playerX, playerY, attempts = 0;
+    do {
+        playerX = Math.random()*300+50;
+        playerY = Math.random()*300+50;
+        attempts++;
+    } while(Math.hypot(playerX - enemy.x, playerY - enemy.y) < 150 && attempts < 50);
+    
+    player.x = playerX;
+    player.y = playerY;
+    player.speed = 2 + level * 0.3; // Más rápido cada nivel
+    player.erraticTimer = 0;
+    player.erraticAngle = 0;
+    
+    // Resetear tiempo
+    time = 0;
+    timeSpan.textContent = 0;
+
+    levelSpan.textContent = level;
+}
+
+/* ===== INPUT (TÚ ERES EL ENEMIGO) ===== */
+document.addEventListener("keydown",e=>{
+    if(!running) return;
+    if(e.key in keys) {
+        keys[e.key] = true;
+    }
+});
+
+document.addEventListener("keyup",e=>{
+    if(e.key in keys) {
+        keys[e.key] = false;
+    }
+});
+
+// Aplicar movimiento basado en teclas presionadas
+function moveEnemy() {
+    const moveSpeed = enemy.speed;
+    
+    if(keys.w || keys.ArrowUp) enemy.y -= moveSpeed;
+    if(keys.s || keys.ArrowDown) enemy.y += moveSpeed;
+    if(keys.a || keys.ArrowLeft) enemy.x -= moveSpeed;
+    if(keys.d || keys.ArrowRight) enemy.x += moveSpeed;
+}
+
+/* ===== IA DEL JUGADOR (HUYE) ===== */
+function movePlayer(){
+    const dx = player.x - enemy.x;
+    const dy = player.y - enemy.y;
+    const dist = Math.hypot(dx,dy);
+    
+    if(dist>0){
+        // Dirección base: huir del enemigo
+        let moveAngle = Math.atan2(dy, dx);
+        
+        // Si el enemigo está muy cerca, huir más agresivamente
+        let speedMultiplier = 1;
+        if(dist < 80) {
+            speedMultiplier = 1.3 + (80 - dist) / 100; // Hasta 2.1x velocidad cuando está muy cerca
+        }
+        
+        // Evitar quedar atrapado en esquinas (suave)
+        const margin = 40;
+        const edgePush = 0.3; // Factor de corrección suave
+        
+        if(player.x < margin) {
+            // Cerca del borde izquierdo, empujar suavemente a la derecha
+            moveAngle += edgePush * (1 - player.x / margin);
+        } else if(player.x > 400 - margin) {
+            // Cerca del borde derecho, empujar suavemente a la izquierda
+            moveAngle -= edgePush * (1 - (400 - player.x) / margin);
+        }
+        
+        if(player.y < margin) {
+            // Cerca del borde superior, empujar suavemente hacia abajo
+            const angle = Math.atan2(1, 0);
+            moveAngle = moveAngle * 0.7 + angle * 0.3;
+        } else if(player.y > 400 - margin) {
+            // Cerca del borde inferior, empujar suavemente hacia arriba
+            const angle = Math.atan2(-1, 0);
+            moveAngle = moveAngle * 0.7 + angle * 0.3;
+        }
+        
+        // Incrementar erraticidad con el nivel (reducido para menos vibración)
+        const erraticness = 0.15 + (level * 0.04);
+        
+        // Cambiar dirección errática menos frecuentemente para movimiento suave
+        const changeFrequency = dist < 100 ? 25 : 40;
+        player.erraticTimer++;
+        if(player.erraticTimer > changeFrequency) {
+            player.erraticAngle = (Math.random() - 0.5) * Math.PI * erraticness;
+            player.erraticTimer = 0;
+        }
+        
+        // Añadir componente errático suavemente
+        moveAngle += player.erraticAngle * 0.5;
+        
+        // Movimiento final con velocidad adaptativa
+        const finalSpeed = player.speed * speedMultiplier;
+        player.x += Math.cos(moveAngle) * finalSpeed;
+        player.y += Math.sin(moveAngle) * finalSpeed;
+    }
+}
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    moveEnemy();
+    movePlayer();
+
+    // límites
+    [enemy,player].forEach(p=>{
+        p.x = Math.max(p.r, Math.min(400 - p.r, p.x));
+        p.y = Math.max(p.r, Math.min(400 - p.r, p.y));
+    });
+
+    // atrapar jugador
+    if(Math.hypot(enemy.x-player.x,enemy.y-player.y) < enemy.r+player.r){
+        level++;
+        newLevel();
+    }
+
+    // perder por tiempo
+    if(time>10){
+        gameOver();
+    }
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0,0,400,400);
+
+    // jugador (huye)
+    ctx.fillStyle="cyan";
+    ctx.beginPath();
+    ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+    ctx.fill();
+    
+    // Borde del jugador
+    ctx.strokeStyle = "cyan";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.r + 2, 0, Math.PI*2);
+    ctx.stroke();
+
+    // enemigo (TÚ)
+    ctx.fillStyle="#ff9900";
+    ctx.beginPath();
+    ctx.arc(enemy.x,enemy.y,enemy.r,0,Math.PI*2);
+    ctx.fill();
+    
+    // Borde del enemigo
+    ctx.strokeStyle = "#ff9900";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(enemy.x, enemy.y, enemy.r + 2, 0, Math.PI*2);
+    ctx.stroke();
+    
+    // Línea de persecución
+    const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
+    if(dist < 100) {
+        ctx.strokeStyle = `rgba(255,150,0,${1 - dist/100})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(enemy.x, enemy.y);
+        ctx.lineTo(player.x, player.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+}
+
+/* ===== TIEMPO ===== */
+function startTimer() {
+    if(timeInterval) clearInterval(timeInterval);
+    timeInterval = setInterval(()=>{
+        if(running){
+            time++;
+            timeSpan.textContent = time;
+        }
+    }, 1000);
+}
+
+startTimer();
+
+/* ===== GAME OVER ===== */
+function gameOver(){
+    running=false;
+    if(timeInterval) clearInterval(timeInterval);
+    saveRecord(level);
+    document.getElementById("restartBtn").style.display = "inline-block";
+    msg.textContent="💀 NO LOGRASTE ATRAPARLO - Nivel alcanzado: " + level;
+}
+
+function restartGame() {
+    running = true;
+    level = 1;
+    time = 0;
+    
+    enemy.x = 200;
+    enemy.y = 200;
+    
+    levelSpan.textContent = 1;
+    timeSpan.textContent = 0;
+    msg.textContent = "Atrapa al jugador - usa WASD o Flechas";
+    document.getElementById("restartBtn").style.display = "none";
+    
+    startTimer();
+    newLevel();
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+newLevel();
+loop();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Mini HaxBall - Mejorado</title>
+<style>
+body {
+    margin: 0;
+    background: #1b5e20;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Arial', sans-serif;
+}
+canvas {
+    background: #2e7d32;
+    border: 4px solid white;
+    box-shadow: 0 0 20px rgba(0,0,0,0.5);
+}
+#menu {
+    position: absolute;
+    background: rgba(0,0,0,0.9);
+    padding: 40px;
+    border-radius: 10px;
+    border: 3px solid white;
+    text-align: center;
+}
+#menu h1 {
+    color: white;
+    margin-bottom: 30px;
+    font-size: 48px;
+}
+#menu button {
+    display: block;
+    width: 300px;
+    padding: 15px;
+    margin: 15px auto;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    border: 3px solid white;
+    border-radius: 5px;
+    background: #2e7d32;
+    color: white;
+    transition: all 0.3s;
+}
+#menu button:hover {
+    background: #1b5e20;
+    transform: scale(1.05);
+}
+#restartBtn {
+    position: absolute;
+    top: 60%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 15px 40px;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    border: 3px solid white;
+    border-radius: 5px;
+    background: #2e7d32;
+    color: white;
+    display: none;
+    transition: all 0.3s;
+}
+#restartBtn:hover {
+    background: #1b5e20;
+    transform: translateX(-50%) scale(1.05);
+}
+</style>
+</head>
+<body>
+
+<div id="menu">
+    <h1>⚽ HAXBALL ⚽</h1>
+    <button onclick="startGame('friend')">Jugar vs Amigo</button>
+    <button onclick="startGame('ai')">Jugar vs Máquina</button>
+</div>
+
+<button id="restartBtn" onclick="restartGame()">🔄 Volver a Jugar</button>
+
+<canvas id="game" width="900" height="500" style="display:none;"></canvas>
+
+<script>
+// ==========================================
+// CONFIGURACIÓN Y CONSTANTES
+// ==========================================
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const WIDTH = canvas.width;
+const HEIGHT = canvas.height;
+
+// Constantes del campo
+const GOAL_WIDTH = 15;
+const GOAL_HEIGHT = 140;
+const GOAL_DEPTH = 25;
+const CENTER_CIRCLE_RADIUS = 80;
+const PENALTY_AREA_WIDTH = 150;
+const PENALTY_AREA_HEIGHT = 280;
+
+// Constantes de física
+const FRICTION = 0.92;              // Fricción general
+const BALL_FRICTION = 0.985;        // Fricción específica de la pelota
+const BOUNCE_DAMPING = 0.75;        // Amortiguación en rebotes de paredes
+const COLLISION_RESTITUTION = 0.8;  // Elasticidad en colisiones
+const MAX_SPEED = 15;               // Velocidad máxima de la pelota
+
+// Constantes de jugadores
+const PLAYER_RADIUS = 18;
+const PLAYER_ACCELERATION = 0.8;    // Aceleración progresiva
+const PLAYER_MAX_SPEED = 6.5;       // Velocidad máxima normal
+const PLAYER_BOOST_MULTIPLIER = 1.8; // Multiplicador de boost
+const BOOST_DURATION = 180;         // Duración del boost en frames (3 segundos a 60fps)
+const BOOST_COOLDOWN = 240;         // Cooldown del boost en frames (4 segundos)
+
+// Constantes de pelota
+const BALL_RADIUS = 10;
+const BALL_MASS = 1;
+const PLAYER_MASS = 3;
+
+// Input del teclado
+let keys = {};
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+// ==========================================
+// CLASE PLAYER - Jugador con física mejorada
+// ==========================================
+class Player {
+    constructor(x, y, color, controls, name) {
+        // Posición
+        this.x = x;
+        this.y = y;
+        
+        // Física
+        this.vx = 0;
+        this.vy = 0;
+        this.radius = PLAYER_RADIUS;
+        this.mass = PLAYER_MASS;
+        
+        // Visual
+        this.color = color;
+        this.name = name;
+        
+        // Controles
+        this.controls = controls;
+        
+        // Boost
+        this.boosting = false;
+        this.boostTimer = 0;
+        this.boostCooldown = 0;
+    }
+
+    // Aplicar aceleración progresiva basada en input
+    applyInput() {
+        let ax = 0;
+        let ay = 0;
+
+        // Calcular dirección de aceleración
+        if (keys[this.controls.up]) ay -= 1;
+        if (keys[this.controls.down]) ay += 1;
+        if (keys[this.controls.left]) ax -= 1;
+        if (keys[this.controls.right]) ax += 1;
+
+        // Normalizar vector diagonal
+        const magnitude = Math.hypot(ax, ay);
+        if (magnitude > 0) {
+            ax /= magnitude;
+            ay /= magnitude;
+        }
+
+        // Aplicar aceleración con multiplicador de boost
+        let acceleration = PLAYER_ACCELERATION;
+        if (this.boosting) {
+            acceleration *= PLAYER_BOOST_MULTIPLIER;
+        }
+
+        this.vx += ax * acceleration;
+        this.vy += ay * acceleration;
+
+        // Limitar velocidad máxima
+        let maxSpeed = PLAYER_MAX_SPEED;
+        if (this.boosting) {
+            maxSpeed *= PLAYER_BOOST_MULTIPLIER;
+        }
+
+        const speed = Math.hypot(this.vx, this.vy);
+        if (speed > maxSpeed) {
+            this.vx = (this.vx / speed) * maxSpeed;
+            this.vy = (this.vy / speed) * maxSpeed;
+        }
+    }
+
+    // Actualizar boost
+    updateBoost() {
+        // Activar boost
+        if (keys[this.controls.boost] && !this.boosting && this.boostCooldown <= 0) {
+            this.boosting = true;
+            this.boostTimer = BOOST_DURATION;
+        }
+
+        // Temporizador de boost activo
+        if (this.boosting) {
+            this.boostTimer--;
+            if (this.boostTimer <= 0) {
+                this.boosting = false;
+                this.boostCooldown = BOOST_COOLDOWN;
+            }
+        }
+
+        // Temporizador de cooldown
+        if (this.boostCooldown > 0) {
+            this.boostCooldown--;
+        }
+    }
+
+    // Actualizar física y posición
+    update() {
+        this.applyInput();
+        this.updateBoost();
+
+        // Aplicar fricción
+        this.vx *= FRICTION;
+        this.vy *= FRICTION;
+
+        // Actualizar posición
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Colisión con paredes (con rebote)
+        this.handleWallCollisions();
+    }
+
+    // Manejar colisiones con paredes
+    handleWallCollisions() {
+        // Paredes superior e inferior
+        if (this.y - this.radius < 0) {
+            this.y = this.radius;
+            this.vy *= -BOUNCE_DAMPING;
+        }
+        if (this.y + this.radius > HEIGHT) {
+            this.y = HEIGHT - this.radius;
+            this.vy *= -BOUNCE_DAMPING;
+        }
+
+        // Paredes laterales (considerando porterías)
+        const goalTop = HEIGHT / 2 - GOAL_HEIGHT / 2;
+        const goalBottom = HEIGHT / 2 + GOAL_HEIGHT / 2;
+
+        // Pared izquierda
+        if (this.x - this.radius < 0) {
+            // Fuera de la zona de portería
+            if (this.y < goalTop || this.y > goalBottom) {
+                this.x = this.radius;
+                this.vx *= -BOUNCE_DAMPING;
+            }
+        }
+
+        // Pared derecha
+        if (this.x + this.radius > WIDTH) {
+            // Fuera de la zona de portería
+            if (this.y < goalTop || this.y > goalBottom) {
+                this.x = WIDTH - this.radius;
+                this.vx *= -BOUNCE_DAMPING;
+            }
+        }
+    }
+
+    // Dibujar jugador
+    draw() {
+        // Sombra
+        ctx.beginPath();
+        ctx.arc(this.x + 2, this.y + 2, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.fill();
+
+        // Jugador
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Indicador de boost activo
+        if (this.boosting) {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI * 2);
+            ctx.strokeStyle = "yellow";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+        }
+    }
+
+    // Dibujar barra de cooldown de boost
+    drawBoostBar() {
+        const barWidth = 60;
+        const barHeight = 8;
+        const barX = this.x - barWidth / 2;
+        const barY = this.y - this.radius - 15;
+
+        // Fondo de la barra
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+
+        // Barra de progreso
+        if (this.boosting) {
+            // Boost activo - barra amarilla decreciente
+            const progress = this.boostTimer / BOOST_DURATION;
+            ctx.fillStyle = "yellow";
+            ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+        } else if (this.boostCooldown > 0) {
+            // Cooldown - barra azul creciente
+            const progress = 1 - (this.boostCooldown / BOOST_COOLDOWN);
+            ctx.fillStyle = "cyan";
+            ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+        } else {
+            // Disponible - barra verde completa
+            ctx.fillStyle = "lime";
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+        }
+
+        // Borde de la barra
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, barY, barWidth, barHeight);
+    }
+}
+
+// ==========================================
+// CLASE BALL - Pelota con física realista
+// ==========================================
+class Ball {
+    constructor() {
+        this.radius = BALL_RADIUS;
+        this.mass = BALL_MASS;
+        this.reset();
+    }
+
+    reset() {
+        this.x = WIDTH / 2;
+        this.y = HEIGHT / 2;
+        this.vx = 0;
+        this.vy = 0;
+    }
+
+    update() {
+        // Aplicar fricción
+        this.vx *= BALL_FRICTION;
+        this.vy *= BALL_FRICTION;
+
+        // Limitar velocidad máxima
+        const speed = Math.hypot(this.vx, this.vy);
+        if (speed > MAX_SPEED) {
+            this.vx = (this.vx / speed) * MAX_SPEED;
+            this.vy = (this.vy / speed) * MAX_SPEED;
+        }
+
+        // Actualizar posición
+        this.x += this.vx;
+        this.y += this.vy;
+
+        // Colisión con paredes
+        this.handleWallCollisions();
+    }
+
+    handleWallCollisions() {
+        const goalTop = HEIGHT / 2 - GOAL_HEIGHT / 2;
+        const goalBottom = HEIGHT / 2 + GOAL_HEIGHT / 2;
+
+        // Paredes superior e inferior
+        if (this.y - this.radius <= 0) {
+            this.y = this.radius;
+            this.vy *= -BOUNCE_DAMPING;
+        }
+        if (this.y + this.radius >= HEIGHT) {
+            this.y = HEIGHT - this.radius;
+            this.vy *= -BOUNCE_DAMPING;
+        }
+
+        // Pared izquierda (fuera de portería)
+        if (this.x - this.radius <= 0) {
+            if (this.y < goalTop || this.y > goalBottom) {
+                this.x = this.radius;
+                this.vx *= -BOUNCE_DAMPING;
+            }
+        }
+
+        // Pared derecha (fuera de portería)
+        if (this.x + this.radius >= WIDTH) {
+            if (this.y < goalTop || this.y > goalBottom) {
+                this.x = WIDTH - this.radius;
+                this.vx *= -BOUNCE_DAMPING;
+            }
+        }
+    }
+
+    draw() {
+        // Sombra
+        ctx.beginPath();
+        ctx.arc(this.x + 2, this.y + 2, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.fill();
+
+        // Pelota
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "white";
+        ctx.fill();
+        ctx.strokeStyle = "#ddd";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Detalles de la pelota (círculos internos)
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius - 4, 0, Math.PI * 2);
+        ctx.strokeStyle = "#ccc";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
+}
+
+// ==========================================
+// SISTEMA DE FÍSICA - Colisiones realistas
+// ==========================================
+class Physics {
+    // Detectar y resolver colisión entre jugador y pelota
+    static handlePlayerBallCollision(player, ball) {
+        const dx = ball.x - player.x;
+        const dy = ball.y - player.y;
+        const distance = Math.hypot(dx, dy);
+        const minDistance = player.radius + ball.radius;
+
+        if (distance < minDistance) {
+            // Vector normal de colisión
+            const nx = dx / distance;
+            const ny = dy / distance;
+
+            // Separar objetos para evitar overlap
+            const overlap = minDistance - distance;
+            const totalMass = player.mass + ball.mass;
+            
+            player.x -= nx * overlap * (ball.mass / totalMass);
+            player.y -= ny * overlap * (ball.mass / totalMass);
+            ball.x += nx * overlap * (player.mass / totalMass);
+            ball.y += ny * overlap * (player.mass / totalMass);
+
+            // Velocidad relativa
+            const dvx = ball.vx - player.vx;
+            const dvy = ball.vy - player.vy;
+
+            // Velocidad relativa en la dirección de colisión
+            const relativeVelocity = dvx * nx + dvy * ny;
+
+            // No procesar si se están alejando
+            if (relativeVelocity > 0) return;
+
+            // Impulso de colisión (conservación de momento)
+            const impulse = -(1 + COLLISION_RESTITUTION) * relativeVelocity;
+            const impulseMagnitude = impulse / totalMass;
+
+            // Aplicar impulso a la pelota (el jugador es más pesado y se mueve menos)
+            ball.vx += impulseMagnitude * player.mass * nx;
+            ball.vy += impulseMagnitude * player.mass * ny;
+            
+            player.vx -= impulseMagnitude * ball.mass * nx;
+            player.vy -= impulseMagnitude * ball.mass * ny;
+
+            // Añadir velocidad del jugador a la pelota (patada)
+            const kickPower = 0.4;
+            ball.vx += player.vx * kickPower;
+            ball.vy += player.vy * kickPower;
+        }
+    }
+
+    // Detectar y resolver colisión entre dos jugadores
+    static handlePlayerPlayerCollision(player1, player2) {
+        const dx = player2.x - player1.x;
+        const dy = player2.y - player1.y;
+        const distance = Math.hypot(dx, dy);
+        const minDistance = player1.radius + player2.radius;
+
+        if (distance < minDistance && distance > 0) {
+            // Vector normal
+            const nx = dx / distance;
+            const ny = dy / distance;
+
+            // Separar jugadores
+            const overlap = minDistance - distance;
+            player1.x -= nx * overlap * 0.5;
+            player1.y -= ny * overlap * 0.5;
+            player2.x += nx * overlap * 0.5;
+            player2.y += ny * overlap * 0.5;
+
+            // Intercambio de velocidades (simplificado, masas iguales)
+            const dvx = player2.vx - player1.vx;
+            const dvy = player2.vy - player1.vy;
+            const relativeVelocity = dvx * nx + dvy * ny;
+
+            if (relativeVelocity > 0) return;
+
+            const restitution = 0.5;
+            const impulse = -(1 + restitution) * relativeVelocity * 0.5;
+
+            player1.vx -= impulse * nx;
+            player1.vy -= impulse * ny;
+            player2.vx += impulse * nx;
+            player2.vy += impulse * ny;
+        }
+    }
+}
+
+// ==========================================
+// SISTEMA DE RENDERIZADO - Dibujar campo
+// ==========================================
+class Renderer {
+    static drawField() {
+        // Césped con textura de líneas
+        ctx.fillStyle = "#2e7d32";
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // Líneas verticales decorativas (césped)
+        ctx.strokeStyle = "rgba(46,125,50,0.3)";
+        ctx.lineWidth = 20;
+        for (let x = 0; x < WIDTH; x += 40) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, HEIGHT);
+            ctx.stroke();
+        }
+
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 3;
+
+        // Borde del campo
+        ctx.strokeRect(0, 0, WIDTH, HEIGHT);
+
+        // Línea central
+        ctx.beginPath();
+        ctx.moveTo(WIDTH / 2, 0);
+        ctx.lineTo(WIDTH / 2, HEIGHT);
+        ctx.stroke();
+
+        // Círculo central
+        ctx.beginPath();
+        ctx.arc(WIDTH / 2, HEIGHT / 2, CENTER_CIRCLE_RADIUS, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Punto central
+        ctx.beginPath();
+        ctx.arc(WIDTH / 2, HEIGHT / 2, 5, 0, Math.PI * 2);
+        ctx.fillStyle = "white";
+        ctx.fill();
+
+        // Áreas de penalti
+        this.drawPenaltyArea("left");
+        this.drawPenaltyArea("right");
+
+        // Porterías
+        this.drawGoal("left");
+        this.drawGoal("right");
+    }
+
+    static drawPenaltyArea(side) {
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 3;
+
+        const areaY = HEIGHT / 2 - PENALTY_AREA_HEIGHT / 2;
+        
+        if (side === "left") {
+            ctx.strokeRect(0, areaY, PENALTY_AREA_WIDTH, PENALTY_AREA_HEIGHT);
+            // Punto de penalti
+            ctx.beginPath();
+            ctx.arc(PENALTY_AREA_WIDTH / 2, HEIGHT / 2, 4, 0, Math.PI * 2);
+            ctx.fillStyle = "white";
+            ctx.fill();
+        } else {
+            ctx.strokeRect(WIDTH - PENALTY_AREA_WIDTH, areaY, PENALTY_AREA_WIDTH, PENALTY_AREA_HEIGHT);
+            // Punto de penalti
+            ctx.beginPath();
+            ctx.arc(WIDTH - PENALTY_AREA_WIDTH / 2, HEIGHT / 2, 4, 0, Math.PI * 2);
+            ctx.fillStyle = "white";
+            ctx.fill();
+        }
+    }
+
+    static drawGoal(side) {
+        const goalY = HEIGHT / 2 - GOAL_HEIGHT / 2;
+
+        // Fondo de la portería con color distintivo
+        if (side === "left") {
+            ctx.fillStyle = "rgba(255, 82, 82, 0.3)"; // Rojo semi-transparente
+            ctx.fillRect(0, goalY, GOAL_WIDTH, GOAL_HEIGHT);
+            ctx.fillStyle = "rgba(0,0,0,0.4)";
+            ctx.fillRect(-GOAL_DEPTH, goalY, GOAL_DEPTH, GOAL_HEIGHT);
+        } else {
+            ctx.fillStyle = "rgba(68, 138, 255, 0.3)"; // Azul semi-transparente
+            ctx.fillRect(WIDTH - GOAL_WIDTH, goalY, GOAL_WIDTH, GOAL_HEIGHT);
+            ctx.fillStyle = "rgba(0,0,0,0.4)";
+            ctx.fillRect(WIDTH, goalY, GOAL_DEPTH, GOAL_HEIGHT);
+        }
+
+        // Marco de la portería
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 4;
+        ctx.fillStyle = "#ffeb3b";
+
+        if (side === "left") {
+            // Poste superior
+            ctx.fillRect(-GOAL_DEPTH, goalY - 5, GOAL_DEPTH, 8);
+            ctx.strokeRect(-GOAL_DEPTH, goalY - 5, GOAL_DEPTH, 8);
+            
+            // Poste inferior
+            ctx.fillRect(-GOAL_DEPTH, goalY + GOAL_HEIGHT - 3, GOAL_DEPTH, 8);
+            ctx.strokeRect(-GOAL_DEPTH, goalY + GOAL_HEIGHT - 3, GOAL_DEPTH, 8);
+            
+            // Poste trasero
+            ctx.strokeRect(-GOAL_DEPTH, goalY, 4, GOAL_HEIGHT);
+            
+            // Red (líneas diagonales)
+            ctx.strokeStyle = "rgba(255,255,255,0.3)";
+            ctx.lineWidth = 1;
+            for (let i = goalY; i < goalY + GOAL_HEIGHT; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(-GOAL_DEPTH, i);
+                ctx.lineTo(0, i);
+                ctx.stroke();
+            }
+        } else {
+            // Poste superior
+            ctx.fillRect(WIDTH, goalY - 5, GOAL_DEPTH, 8);
+            ctx.strokeRect(WIDTH, goalY - 5, GOAL_DEPTH, 8);
+            
+            // Poste inferior
+            ctx.fillRect(WIDTH, goalY + GOAL_HEIGHT - 3, GOAL_DEPTH, 8);
+            ctx.strokeRect(WIDTH, goalY + GOAL_HEIGHT - 3, GOAL_DEPTH, 8);
+            
+            // Poste trasero
+            ctx.strokeRect(WIDTH + GOAL_DEPTH - 4, goalY, 4, GOAL_HEIGHT);
+            
+            // Red
+            ctx.strokeStyle = "rgba(255,255,255,0.3)";
+            ctx.lineWidth = 1;
+            for (let i = goalY; i < goalY + GOAL_HEIGHT; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(WIDTH, i);
+                ctx.lineTo(WIDTH + GOAL_DEPTH, i);
+                ctx.stroke();
+            }
+        }
+    }
+
+    static drawScore(scoreRed, scoreBlue) {
+        ctx.fillStyle = "white";
+        ctx.font = "bold 40px Arial";
+        ctx.textAlign = "center";
+        
+        // Marcador con fondo
+        const scoreText = `${scoreRed} - ${scoreBlue}`;
+        const textWidth = ctx.measureText(scoreText).width;
+        
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(WIDTH / 2 - textWidth / 2 - 20, 10, textWidth + 40, 50);
+        
+        ctx.fillStyle = "white";
+        ctx.fillText(scoreText, WIDTH / 2, 48);
+    }
+
+    static drawWinner(winner) {
+        // Fondo oscuro
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+        // Texto de victoria
+        ctx.fillStyle = winner === "red" ? "#ff5252" : "#448aff";
+        ctx.font = "bold 60px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("¡VICTORIA!", WIDTH / 2, HEIGHT / 2 - 30);
+
+        ctx.fillStyle = "white";
+        ctx.font = "30px Arial";
+        ctx.fillText(`Jugador ${winner === "red" ? "Rojo" : "Azul"} gana`, WIDTH / 2, HEIGHT / 2 + 20);
+    }
+
+    static drawControls() {
+        ctx.fillStyle = "rgba(0,0,0,0.5)";
+        ctx.fillRect(10, HEIGHT - 80, 280, 70);
+        
+        ctx.fillStyle = "white";
+        ctx.font = "14px Arial";
+        ctx.textAlign = "left";
+        ctx.fillText("Rojo: WASD + Espacio (boost)", 20, HEIGHT - 55);
+        ctx.fillText("Azul: Flechas + Shift (boost)", 20, HEIGHT - 30);
+    }
+}
+
+// ==========================================
+// SISTEMA DE JUEGO - Lógica principal
+// ==========================================
+class Game {
+    constructor(vsAI = false) {
+        // Crear jugadores
+        this.playerRed = new Player(200, HEIGHT / 2, "#ff5252", {
+            up: "w", down: "s", left: "a", right: "d", boost: " "
+        }, "Rojo");
+
+        this.playerBlue = new Player(WIDTH - 200, HEIGHT / 2, "#448aff", {
+            up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight", boost: "Shift"
+        }, "Azul");
+
+        // Crear pelota
+        this.ball = new Ball();
+
+        // Marcador
+        this.scoreRed = 0;
+        this.scoreBlue = 0;
+        this.maxScore = 5;
+
+        // Estado del juego
+        this.gameOver = false;
+        this.winner = null;
+        this.vsAI = vsAI;
+
+        // Inicio del loop
+        this.loop();
+    }
+
+    checkGoal() {
+        const goalTop = HEIGHT / 2 - GOAL_HEIGHT / 2;
+        const goalBottom = HEIGHT / 2 + GOAL_HEIGHT / 2;
+
+        // Gol en portería izquierda (punto para azul)
+        if (this.ball.x < -GOAL_DEPTH && 
+            this.ball.y > goalTop && 
+            this.ball.y < goalBottom) {
+            this.scoreBlue++;
+            this.resetAfterGoal();
+        }
+
+        // Gol en portería derecha (punto para rojo)
+        if (this.ball.x > WIDTH + GOAL_DEPTH && 
+            this.ball.y > goalTop && 
+            this.ball.y < goalBottom) {
+            this.scoreRed++;
+            this.resetAfterGoal();
+        }
+    }
+
+    resetAfterGoal() {
+        this.ball.reset();
+        this.playerRed.x = 200;
+        this.playerRed.y = HEIGHT / 2;
+        this.playerRed.vx = 0;
+        this.playerRed.vy = 0;
+        this.playerBlue.x = WIDTH - 200;
+        this.playerBlue.y = HEIGHT / 2;
+        this.playerBlue.vx = 0;
+        this.playerBlue.vy = 0;
+
+        // Verificar victoria
+        if (this.scoreRed >= this.maxScore) {
+            this.gameOver = true;
+            this.winner = "red";
+            document.getElementById('restartBtn').style.display = 'block';
+        } else if (this.scoreBlue >= this.maxScore) {
+            this.gameOver = true;
+            this.winner = "blue";
+            document.getElementById('restartBtn').style.display = 'block';
+        }
+    }
+
+    updateAI() {
+        if (!this.vsAI) return;
+
+        // IA simple: seguir la pelota
+        const dx = this.ball.x - this.playerBlue.x;
+        const dy = this.ball.y - this.playerBlue.y;
+        const distance = Math.hypot(dx, dy);
+
+        // Simular inputs del jugador azul
+        if (distance > 30) {
+            if (dy < -10) keys[this.playerBlue.controls.up] = true;
+            else keys[this.playerBlue.controls.up] = false;
+            
+            if (dy > 10) keys[this.playerBlue.controls.down] = true;
+            else keys[this.playerBlue.controls.down] = false;
+            
+            if (dx < -10) keys[this.playerBlue.controls.left] = true;
+            else keys[this.playerBlue.controls.left] = false;
+            
+            if (dx > 10) keys[this.playerBlue.controls.right] = true;
+            else keys[this.playerBlue.controls.right] = false;
+
+            // Usar boost si está lejos
+            if (distance > 200 && this.playerBlue.boostCooldown <= 0) {
+                keys[this.playerBlue.controls.boost] = true;
+            } else {
+                keys[this.playerBlue.controls.boost] = false;
+            }
+        } else {
+            // Detener si está cerca
+            keys[this.playerBlue.controls.up] = false;
+            keys[this.playerBlue.controls.down] = false;
+            keys[this.playerBlue.controls.left] = false;
+            keys[this.playerBlue.controls.right] = false;
+            keys[this.playerBlue.controls.boost] = false;
+        }
+    }
+
+    update() {
+        if (this.gameOver) return;
+
+        // Actualizar IA si es necesario
+        this.updateAI();
+
+        // Actualizar jugadores
+        this.playerRed.update();
+        this.playerBlue.update();
+
+        // Actualizar pelota
+        this.ball.update();
+
+        // Física de colisiones
+        Physics.handlePlayerBallCollision(this.playerRed, this.ball);
+        Physics.handlePlayerBallCollision(this.playerBlue, this.ball);
+        Physics.handlePlayerPlayerCollision(this.playerRed, this.playerBlue);
+
+        // Verificar goles
+        this.checkGoal();
+    }
+
+    draw() {
+        // Limpiar canvas
+        ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+        // Dibujar campo
+        Renderer.drawField();
+
+        // Dibujar objetos
+        this.ball.draw();
+        this.playerRed.draw();
+        this.playerBlue.draw();
+
+        // Dibujar marcador
+        Renderer.drawScore(this.scoreRed, this.scoreBlue);
+
+        // Dibujar controles
+        Renderer.drawControls();
+
+        // Dibujar pantalla de victoria
+        if (this.gameOver) {
+            Renderer.drawWinner(this.winner);
+        }
+    }
+
+    loop() {
+        this.update();
+        this.draw();
+        requestAnimationFrame(() => this.loop());
+    }
+}
+
+// ==========================================
+// INICIAR JUEGO
+// ==========================================
+let game = null;
+
+function startGame(mode) {
+    // Ocultar menú y mostrar canvas
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('game').style.display = 'block';
+    document.getElementById('restartBtn').style.display = 'none';
+    
+    // Iniciar juego
+    const vsAI = (mode === 'ai');
+    game = new Game(vsAI);
+}
+
+function restartGame() {
+    // Limpiar inputs de teclado
+    keys = {};
+    
+    // Ocultar canvas y botón de reinicio
+    document.getElementById('game').style.display = 'none';
+    document.getElementById('restartBtn').style.display = 'none';
+    
+    // Mostrar menú
+    document.getElementById('menu').style.display = 'block';
+    
+    // Destruir juego actual
+    game = null;
+}
+
+</script>
+
+</body>
+</html>

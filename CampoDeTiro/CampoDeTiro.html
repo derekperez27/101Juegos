@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Practice Shoot</title>
+    <style>
+        body {
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+        }
+
+        h1 {
+            margin: 10px;
+        }
+
+        #game {
+            position: relative;
+            width: 800px;
+            height: 500px;
+            margin: auto;
+            border: 2px solid white;
+            background: #000;
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        .target {
+            position: absolute;
+            background: red;
+            border-radius: 50%;
+            box-shadow: 0 0 10px red;
+        }
+
+        #info {
+            margin: 10px;
+        }
+
+        button {
+            padding: 8px 15px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+        }
+
+        #records {
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        #records h2 {
+            color: #ffd700;
+        }
+
+        #recordsList {
+            background: #222;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .record-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: #333;
+            border-radius: 5px;
+            border-left: 3px solid #ffd700;
+        }
+
+        .record-rank {
+            font-weight: bold;
+            color: #ffd700;
+            margin-right: 10px;
+        }
+
+        .record-time {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .record-difficulty {
+            color: #999;
+            font-size: 14px;
+        }
+
+        .no-records {
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Practice Shoot</h1>
+
+    <div id="info">
+        <p>Objetivos: <span id="hits">0</span> / 20</p>
+        <p>Balas: <span id="ammo">30</span></p>
+        <p>Tiempo: <span id="time">0.0</span> s</p>
+        <p id="reload"></p>
+        <button onclick="startGame('easy')">Fácil</button>
+        <button onclick="startGame('medium')">Media</button>
+        <button onclick="startGame('hard')">Difícil</button>
+    </div>
+
+    <div id="game"></div>
+
+    <div id="records">
+        <h2>🏆 Récords</h2>
+        <div id="recordsList"></div>
+        <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récords</button>
+    </div>
+
+    <script>
+        const game = document.getElementById("game");
+        const hitsSpan = document.getElementById("hits");
+        const ammoSpan = document.getElementById("ammo");
+        const reloadText = document.getElementById("reload");
+        const timeSpan = document.getElementById("time");
+
+        /* ===== AUDIO ===== */
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(freq, duration = 0.1) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.frequency.value = freq;
+            osc.type = "square";
+            gain.gain.value = 0.1;
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        /* ===== VARIABLES ===== */
+        let hits = 0;
+        let ammo = 30;
+        let reloading = false;
+        let targetSize = 60;
+        let startTime = 0;
+        let timerInterval = null;
+        let currentDifficulty = '';
+
+        /* ===== RÉCORDS ===== */
+        function loadRecords() {
+            const records = localStorage.getItem('shootingRecords');
+            return records ? JSON.parse(records) : [];
+        }
+
+        function saveRecord(time, difficulty) {
+            const records = loadRecords();
+            records.push({
+                time: parseFloat(time),
+                difficulty: difficulty,
+                date: new Date().toLocaleDateString()
+            });
+            // Ordenar por tiempo (menor a mayor)
+            records.sort((a, b) => a.time - b.time);
+            // Guardar solo los mejores 10
+            const top10 = records.slice(0, 10);
+            localStorage.setItem('shootingRecords', JSON.stringify(top10));
+            displayRecords();
+        }
+
+        function displayRecords() {
+            const records = loadRecords();
+            const recordsList = document.getElementById('recordsList');
+            
+            if (records.length === 0) {
+                recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+                return;
+            }
+
+            recordsList.innerHTML = records.map((record, index) => `
+                <div class="record-item">
+                    <span class="record-rank">#${index + 1}</span>
+                    <span class="record-time">${record.time.toFixed(1)}s</span>
+                    <span class="record-difficulty">${getDifficultyName(record.difficulty)}</span>
+                    <span style="color: #666; font-size: 12px;">${record.date}</span>
+                </div>
+            `).join('');
+        }
+
+        function getDifficultyName(diff) {
+            const names = { 'easy': '🟢 Fácil', 'medium': '🟡 Media', 'hard': '🔴 Difícil' };
+            return names[diff] || diff;
+        }
+
+        function clearRecords() {
+            if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+                localStorage.removeItem('shootingRecords');
+                displayRecords();
+                playSound(150, 0.2);
+            }
+        }
+
+        // Mostrar récords al cargar la página
+        displayRecords();
+
+        /* ===== START ===== */
+        function startGame(difficulty) {
+            game.innerHTML = "";
+            hits = 0;
+            ammo = 30;
+            reloading = false;
+            reloadText.textContent = "";
+            hitsSpan.textContent = hits;
+            ammoSpan.textContent = ammo;
+            timeSpan.textContent = "0.0";
+            currentDifficulty = difficulty;
+
+            if (difficulty === "easy") targetSize = 70;
+            if (difficulty === "medium") targetSize = 50;
+            if (difficulty === "hard") targetSize = 30;
+
+            startTime = performance.now();
+            clearInterval(timerInterval);
+            timerInterval = setInterval(updateTime, 100);
+
+            spawnTarget();
+        }
+
+        /* ===== TIEMPO ===== */
+        function updateTime() {
+            const elapsed = (performance.now() - startTime) / 1000;
+            timeSpan.textContent = elapsed.toFixed(1);
+        }
+
+        /* ===== OBJETIVO ===== */
+        function spawnTarget() {
+            if (hits >= 20) {
+                clearInterval(timerInterval);
+                playSound(200, 0.3);
+                const finalTime = timeSpan.textContent;
+                saveRecord(finalTime, currentDifficulty);
+                alert(`¡COMPLETADO! 🎯\nTiempo: ${finalTime} segundos\nDificultad: ${getDifficultyName(currentDifficulty)}`);
+                return;
+            }
+
+            const target = document.createElement("div");
+            target.className = "target";
+            target.style.width = targetSize + "px";
+            target.style.height = targetSize + "px";
+            target.style.left = Math.random() * (game.clientWidth - targetSize) + "px";
+            target.style.top = Math.random() * (game.clientHeight - targetSize) + "px";
+
+            target.onclick = e => {
+                e.stopPropagation();
+                if (reloading) return;
+
+                hits++;
+                hitsSpan.textContent = hits;
+                playSound(800, 0.08); // impacto
+                game.removeChild(target);
+                spawnTarget();
+            };
+
+            game.appendChild(target);
+        }
+
+        /* ===== DISPARO ===== */
+        game.addEventListener("click", () => {
+            if (reloading) return;
+
+            ammo--;
+            ammoSpan.textContent = ammo;
+            playSound(400, 0.05); // disparo
+
+            if (ammo <= 0) reload();
+        });
+
+        /* ===== RECARGA ===== */
+        function reload() {
+            reloading = true;
+            reloadText.textContent = "Recargando...";
+            playSound(150, 0.3);
+
+            setTimeout(() => {
+                ammo = 30;
+                ammoSpan.textContent = ammo;
+                reloadText.textContent = "";
+                reloading = false;
+                playSound(300, 0.15);
+            }, 2000);
+        }
+    </script>
+
+</body>
+</html>

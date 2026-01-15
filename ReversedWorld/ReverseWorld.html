@@ -1,0 +1,312 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Inverted World</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        #game {
+            width: 400px;
+            height: 400px;
+            margin: 20px auto;
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            gap: 2px;
+        }
+
+        .cell {
+            background: #222;
+        }
+
+        .player {
+            background: cyan;
+        }
+
+        .obstacle {
+            background: red;
+        }
+
+        .goal {
+            background: lime;
+        }
+
+        #records {
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        #records h2 {
+            color: #00ff00;
+        }
+
+        #recordsList {
+            background: #222;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .record-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: #333;
+            border-radius: 5px;
+            border-left: 3px solid #00ff00;
+        }
+
+        .record-rank {
+            font-weight: bold;
+            color: #00ff00;
+            margin-right: 10px;
+        }
+
+        .record-level {
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        .record-time {
+            color: #4CAF50;
+        }
+
+        .no-records {
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🔄 Inverted World</h1>
+    <p>Nivel: <span id="level">1</span> | Tiempo: <span id="time">0</span>s</p>
+    <div id="game"></div>
+    <p id="msg"></p>
+    <button id="restart" style="display:none" onclick="restart()">Volver a jugar</button>
+
+    <div id="records">
+        <h2>🏆 Récords</h2>
+        <div id="recordsList"></div>
+        <button onclick="clearRecords()" style="background: #d32f2f; color: white; padding: 8px 15px; cursor: pointer; border: none; border-radius: 5px; margin-top: 10px;">Borrar Récords</button>
+    </div>
+
+    <script>
+        const SIZE = 10;
+        const game = document.getElementById("game");
+        const timeSpan = document.getElementById("time");
+        const levelSpan = document.getElementById("level");
+        const msg = document.getElementById("msg");
+
+        let grid = [];
+        let obstacles = [];
+        let player = {};
+        let goal = {};
+        let time = 0;
+        let level = 1;
+        let running = true;
+
+        /* ===== RÉCORDS ===== */
+        function loadRecords() {
+            const records = localStorage.getItem('reversedWorldRecords');
+            return records ? JSON.parse(records) : [];
+        }
+
+        function saveRecord(level, time) {
+            const records = loadRecords();
+            records.push({
+                level: level,
+                time: time,
+                date: new Date().toLocaleDateString()
+            });
+            // Ordenar: primero por nivel (mayor a menor), luego por tiempo (menor a mayor)
+            records.sort((a, b) => {
+                if (b.level !== a.level) {
+                    return b.level - a.level; // Mayor nivel primero
+                }
+                return a.time - b.time; // Si empatan en nivel, menor tiempo primero
+            });
+            // Guardar solo los mejores 10
+            const top10 = records.slice(0, 10);
+            localStorage.setItem('reversedWorldRecords', JSON.stringify(top10));
+            displayRecords();
+        }
+
+        function displayRecords() {
+            const records = loadRecords();
+            const recordsList = document.getElementById('recordsList');
+            
+            if (records.length === 0) {
+                recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+                return;
+            }
+
+            recordsList.innerHTML = records.map((record, index) => {
+                let medal = '';
+                if (index === 0) medal = '🥇';
+                else if (index === 1) medal = '🥈';
+                else if (index === 2) medal = '🥉';
+                
+                return `
+                    <div class="record-item">
+                        <span class="record-rank">${medal} #${index + 1}</span>
+                        <span class="record-level">Nivel ${record.level}</span>
+                        <span class="record-time">${record.time}s</span>
+                        <span style="color: #666; font-size: 12px;">${record.date}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function clearRecords() {
+            if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+                localStorage.removeItem('reversedWorldRecords');
+                displayRecords();
+            }
+        }
+
+        // Mostrar récords al cargar la página
+        displayRecords();
+
+        /* ===== GRID ===== */
+        function createGrid() {
+            game.innerHTML = "";
+            grid = [];
+            for (let i = 0; i < SIZE * SIZE; i++) {
+                const d = document.createElement("div");
+                d.className = "cell";
+                game.appendChild(d);
+                grid.push(d);
+            }
+        }
+        function idx(x, y) {
+            return y * SIZE + x;
+        }
+
+        /* ===== NIVEL SEGURO ===== */
+        function generateLevel() {
+            obstacles = [];
+
+            player = { x: 0, y: SIZE - 1 };
+            goal = { x: SIZE - 1, y: 0 };
+
+            // camino garantizado
+            let x = player.x;
+            let y = player.y;
+            const safe = [{ x, y }];
+
+            while (x !== goal.x || y !== goal.y) {
+                if (Math.random() < 0.5 && x < goal.x) x++;
+                else if (y > goal.y) y--;
+                safe.push({ x, y });
+            }
+
+            // obstáculos que NO rompen el camino
+            while (obstacles.length < 18) {
+                const ox = Math.floor(Math.random() * SIZE);
+                const oy = Math.floor(Math.random() * SIZE);
+
+                if (
+                    safe.some(p => p.x === ox && p.y === oy) ||
+                    (ox === player.x && oy === player.y)
+                ) continue;
+
+                obstacles.push({ x: ox, y: oy });
+            }
+
+            render();
+        }
+
+        /* ===== RENDER ===== */
+        function render() {
+            grid.forEach(c => c.className = "cell");
+
+            obstacles.forEach(o =>
+                grid[idx(o.x, o.y)].classList.add("obstacle")
+            );
+
+            grid[idx(goal.x, goal.y)].classList.add("goal");
+            grid[idx(player.x, player.y)].classList.add("player");
+        }
+
+        /* ===== MOVIMIENTO (INVERTIDO) ===== */
+        function move(dx, dy) {
+            if (!running) return;
+
+            const nx = player.x + dx;
+            const ny = player.y + dy;
+
+            if (nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE) return;
+
+            if (obstacles.some(o => o.x === nx && o.y === ny)) {
+                gameOver();
+                return;
+            }
+
+            player.x = nx;
+            player.y = ny;
+
+            if (player.x === goal.x && player.y === goal.y) {
+                level++;
+                levelSpan.textContent = level;
+                generateLevel(); // 🟩 nuevo nivel
+                return;
+            }
+
+            render();
+        }
+
+        /* ===== INPUT INVERTIDO ===== */
+        document.addEventListener("keydown", e => {
+            if (e.key === "w") move(0, 1);
+            if (e.key === "s") move(0, -1);
+            if (e.key === "a") move(1, 0);
+            if (e.key === "d") move(-1, 0);
+        });
+
+        /* ===== TIEMPO ===== */
+        setInterval(() => {
+            if (running) {
+                time++;
+                timeSpan.textContent = time;
+            }
+        }, 1000);
+
+        /* ===== GAME OVER ===== */
+        function gameOver() {
+            running = false;
+            saveRecord(level, time);
+            msg.textContent = "💀 GAME OVER - Nivel alcanzado: " + level;
+            document.getElementById("restart").style.display = "inline-block";
+        }
+
+        /* ===== RESTART ===== */
+        function restart() {
+            running = true;
+            time = 0;
+            level = 1;
+            timeSpan.textContent = 0;
+            levelSpan.textContent = 1;
+            msg.textContent = "";
+            document.getElementById("restart").style.display = "none";
+            generateLevel();
+        }
+
+        /* ===== START ===== */
+        createGrid();
+        generateLevel();
+    </script>
+
+</body>
+</html>

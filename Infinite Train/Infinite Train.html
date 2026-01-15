@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>3 Lane Runner</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+#records h2 {
+    color: #00ff00;
+}
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #00ff00;
+}
+.record-rank {
+    font-weight: bold;
+    color: #00ff00;
+    margin-right: 10px;
+}
+.record-time {
+    color: #4CAF50;
+    font-weight: bold;
+}
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+button {
+    padding: 8px 15px;
+    font-size: 16px;
+    margin: 5px;
+    cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<h1>🏃‍♂️ Infinite Runner</h1>
+<p>Tiempo: <span id="time">0</span>s</p>
+<p>Velocidad: <span id="speedDisplay">4.0</span></p>
+<p id="msg"></p>
+<p style="color:#888; font-size:12px;">A/D o ←/→: Cambiar carril | R: Reiniciar</p>
+
+<canvas id="c" width="360" height="500"></canvas>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const timeSpan = document.getElementById("time");
+const speedDisplay = document.getElementById("speedDisplay");
+const msg = document.getElementById("msg");
+
+const LANES = [60, 160, 260];
+let speed = 4;
+let time = 0;
+let running = true;
+let spawnInterval = 900;
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('infiniteRunnerRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(time) {
+    const records = loadRecords();
+    records.push({
+        time: time,
+        date: new Date().toLocaleDateString()
+    });
+    // Ordenar por tiempo (mayor a menor)
+    records.sort((a, b) => b.time - a.time);
+    // Guardar solo los mejores 10
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('infiniteRunnerRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-time">${record.time}s</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('infiniteRunnerRecords');
+        displayRecords();
+    }
+}
+
+// Mostrar récords al cargar la página
+displayRecords();
+
+/* ===== PLAYER ===== */
+const player = {
+    lane: 1,
+    y: 400,
+    w: 30,
+    h: 40
+};
+
+/* ===== OBSTACLES ===== */
+let obstacles = [];
+
+function spawnObstacle(){
+    const lane = Math.floor(Math.random()*3);
+    
+    obstacles.push({
+        lane,
+        y: -40
+    });
+    
+    // Spawns dobles ocasionales para mayor dificultad
+    if(time > 10 && Math.random() < 0.15){
+        let lane2 = Math.floor(Math.random()*3);
+        while(lane2 === lane) lane2 = Math.floor(Math.random()*3);
+        obstacles.push({
+            lane: lane2,
+            y: -60
+        });
+    }
+}
+
+/* ===== INPUT ===== */
+document.addEventListener("keydown",e=>{
+    if(!running) {
+        if(e.key === "r" || e.key === "R") restart();
+        return;
+    }
+
+    if((e.key==="a" || e.key==="A" || e.key==="ArrowLeft") && player.lane>0) player.lane--;
+    if((e.key==="d" || e.key==="D" || e.key==="ArrowRight") && player.lane<2) player.lane++;
+});
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    // obstáculos
+    obstacles.forEach(o=> o.y += speed);
+
+    // colisiones
+    obstacles.forEach(o=>{
+        if(o.lane === player.lane && o.y > player.y-20 && o.y < player.y+40){
+            die();
+        }
+    });
+
+    obstacles = obstacles.filter(o=>o.y<520);
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0,0,360,500);
+
+    // carriles
+    ctx.strokeStyle="#333";
+    ctx.beginPath();
+    ctx.moveTo(120,0); ctx.lineTo(120,500);
+    ctx.moveTo(240,0); ctx.lineTo(240,500);
+    ctx.stroke();
+
+    // jugador
+    ctx.fillStyle="cyan";
+    ctx.fillRect(LANES[player.lane]-15, player.y, 30, 40);
+
+    // obstáculos
+    ctx.fillStyle="red";
+    obstacles.forEach(o=>{
+        ctx.fillRect(LANES[o.lane]-15, o.y, 30, 30);
+    });
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ===== TIEMPO Y DIFICULTAD ===== */
+let spawnTimer;
+let timeTimer = setInterval(()=>{
+    if(running){
+        time++;
+        timeSpan.textContent = time;
+        
+        // Aumentar velocidad cada 5 segundos
+        if(time%5===0) {
+            speed += 0.3;
+            speedDisplay.textContent = speed.toFixed(1);
+        }
+        
+        // Aumentar frecuencia de spawn cada 10 segundos
+        if(time%10===0 && spawnInterval > 400){
+            spawnInterval -= 50;
+            clearInterval(spawnTimer);
+            spawnTimer = setInterval(()=>{
+                if(running) spawnObstacle();
+            }, spawnInterval);
+        }
+    }
+},1000);
+
+spawnTimer = setInterval(()=>{
+    if(running) spawnObstacle();
+},spawnInterval);
+
+/* ===== GAME OVER ===== */
+function die(){
+    running=false;
+    
+    // Guardar récord
+    saveRecord(time);
+    
+    const records = loadRecords();
+    const isTopRecord = records.length > 0 && records[0].time === time;
+    
+    if(isTopRecord){
+        msg.innerHTML="🏆 ¡NUEVO RÉCORD! 💀 GAME OVER<br><span style='font-size:14px;'>Tiempo: " + time + "s - Presiona R para reiniciar</span>";
+    } else {
+        msg.innerHTML="💀 GAME OVER<br><span style='font-size:14px;'>Tiempo: " + time + "s - Presiona R para reiniciar</span>";
+    }
+}
+
+/* ===== REINICIO ===== */
+function restart(){
+    // Resetear variables
+    speed = 4;
+    time = 0;
+    spawnInterval = 900;
+    obstacles = [];
+    running = true;
+    
+    player.lane = 1;
+    player.y = 400;
+    
+    timeSpan.textContent = 0;
+    speedDisplay.textContent = "4.0";
+    msg.textContent = "";
+    
+    // Reiniciar spawn timer
+    clearInterval(spawnTimer);
+    spawnTimer = setInterval(()=>{
+        if(running) spawnObstacle();
+    }, spawnInterval);
+}
+
+loop();
+</script>
+
+</body>
+</html>

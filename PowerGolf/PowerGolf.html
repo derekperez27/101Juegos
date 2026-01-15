@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Power Golf</title>
+<style>
+body{
+    margin:0;
+    background:#2d4a2d;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#4a7c4a;
+    display:block;
+    margin:20px auto;
+    border:3px solid #fff;
+}
+button{
+    padding:10px 20px;
+    font-size:16px;
+    cursor:pointer;
+    margin:5px;
+}
+.mode-btn{
+    background:#4a7c4a;
+    color:white;
+    border:2px solid #fff;
+    padding:8px 16px;
+    font-weight:bold;
+    transition:all 0.3s;
+}
+.mode-btn:hover{
+    background:#5a8c5a;
+}
+.mode-btn.active{
+    background:#ffff00;
+    color:#000;
+}
+#info{
+    font-size:18px;
+    font-weight:bold;
+    margin:10px;
+}
+#records {
+    margin: 20px auto;
+    max-width: 600px;
+}
+#records h2 {
+    color: #ffff00;
+}
+#recordsList {
+    background: #2d4a2d;
+    border: 2px solid #fff;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #3a5a3a;
+    border-radius: 5px;
+    border-left: 3px solid #ffff00;
+}
+.record-rank {
+    font-weight: bold;
+    color: #ffff00;
+    margin-right: 10px;
+}
+.record-score {
+    color: #4CAF50;
+    font-weight: bold;
+}
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+</style>
+</head>
+<body>
+
+<h1>⛳ POWER GOLF</h1>
+
+<div id="menu" style="margin: 20px;">
+    <div style="margin-bottom: 15px;">
+        <label style="font-size: 16px; margin-right: 10px;">Modo de Juego:</label>
+        <button id="modeVsAI" class="mode-btn active" onclick="setGameMode('vsAI')">🤖 VS IA</button>
+        <button id="modeVs2P" class="mode-btn" onclick="setGameMode('vs2P')">👥 2 JUGADORES</button>
+    </div>
+    <div>
+        <label style="font-size: 16px; margin-right: 10px;">Tipo de Mapas:</label>
+        <button id="modeNormal" class="mode-btn active" onclick="setMapMode('normal')">📋 NORMALES</button>
+        <button id="modeRandom" class="mode-btn" onclick="setMapMode('random')">🎲 ALEATORIOS</button>
+    </div>
+    <div id="randomLevelsSelector" style="margin-top: 10px; display: none;">
+        <label style="font-size: 16px; margin-right: 10px;">Número de Niveles:</label>
+        <input type="number" id="numRandomLevels" min="1" max="20" value="5" style="width: 60px; padding: 5px; font-size: 14px;">
+    </div>
+</div>
+
+<p id="info">Nivel 1 | Jugador 1: 0 golpes | Jugador 2: 0 golpes</p>
+<p id="msg">Tu turno - Usa ← → para ángulo, ESPACIO para potencia</p>
+
+<canvas id="c" width="800" height="400"></canvas>
+
+<div>
+    <button id="restart" style="display:none">🔁 Siguiente nivel</button>
+</div>
+
+<div id="records">
+    <h2>🏆 Récords (Victoria total)</h2>
+    <div id="recordsList"></div>
+    <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const infoSpan = document.getElementById("info");
+const msg = document.getElementById("msg");
+const restartBtn = document.getElementById("restart");
+
+let currentLevel = 1;
+let playerStrokes = 0;
+let aiStrokes = 0;
+let totalPlayerStrokes = 0;
+let totalAIStrokes = 0;
+let turn = 'player'; // 'player' o 'ai'
+let gameState = 'aiming'; // 'aiming', 'charging', 'ball_moving', 'ai_turn', 'level_complete', 'game_over'
+let gameMode = 'vsAI'; // 'vsAI' o 'vs2P'
+let mapMode = 'normal'; // 'normal' o 'random'
+let player1Finished = false;
+let player2Finished = false;
+let aiFinished = false;
+let player1InHole = false;
+let player2InHole = false;
+let aiInHole = false;
+let maxRandomLevels = 5;
+let randomLevelsData = []; // Almacenar mapas aleatorios generados
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('powerGolfRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(totalStrokes, levels) {
+    const records = loadRecords();
+    records.push({
+        strokes: totalStrokes,
+        levels: levels,
+        date: new Date().toLocaleDateString()
+    });
+    records.sort((a, b) => a.strokes - b.strokes);
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('powerGolfRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-score">${record.strokes} golpes (${record.levels} niveles)</span>
+                <span style="color: #888; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('powerGolfRecords');
+        displayRecords();
+    }
+}
+
+displayRecords();
+
+/* ===== MODO DE JUEGO ===== */
+function setGameMode(mode) {
+    gameMode = mode;
+    document.getElementById('modeVsAI').classList.toggle('active', mode === 'vsAI');
+    document.getElementById('modeVs2P').classList.toggle('active', mode === 'vs2P');
+    
+    // Reiniciar juego con nuevo modo
+    currentLevel = 1;
+    totalPlayerStrokes = 0;
+    totalAIStrokes = 0;
+    randomLevelsData = [];
+    loadLevel();
+}
+
+function setMapMode(mode) {
+    mapMode = mode;
+    document.getElementById('modeNormal').classList.toggle('active', mode === 'normal');
+    document.getElementById('modeRandom').classList.toggle('active', mode === 'random');
+    
+    // Mostrar/ocultar selector de niveles aleatorios
+    const randomSelector = document.getElementById('randomLevelsSelector');
+    if(mode === 'random') {
+        randomSelector.style.display = 'block';
+        maxRandomLevels = parseInt(document.getElementById('numRandomLevels').value);
+    } else {
+        randomSelector.style.display = 'none';
+    }
+    
+    // Reiniciar juego con nuevo modo
+    currentLevel = 1;
+    totalPlayerStrokes = 0;
+    totalAIStrokes = 0;
+    randomLevelsData = [];
+    loadLevel();
+}
+
+/* ===== NIVELES ===== */
+const levels = [
+    // Nivel 1: Simple
+    {
+        ball: {x: 100, y: 350},
+        hole: {x: 700, y: 350},
+        walls: []
+    },
+    // Nivel 2: Con pared
+    {
+        ball: {x: 100, y: 350},
+        hole: {x: 700, y: 350},
+        walls: [{x: 400, y: 250, w: 20, h: 150}]
+    },
+    // Nivel 3: Dos paredes
+    {
+        ball: {x: 100, y: 350},
+        hole: {x: 700, y: 200},
+        walls: [
+            {x: 300, y: 250, w: 20, h: 150},
+            {x: 550, y: 100, w: 20, h: 150}
+        ]
+    },
+    // Nivel 4: Pasillo
+    {
+        ball: {x: 100, y: 350},
+        hole: {x: 700, y: 100},
+        walls: [
+            {x: 350, y: 0, w: 20, h: 200},
+            {x: 550, y: 200, w: 20, h: 200}
+        ]
+    },
+    // Nivel 5: Laberinto
+    {
+        ball: {x: 100, y: 350},
+        hole: {x: 700, y: 350},
+        walls: [
+            {x: 250, y: 0, w: 20, h: 250},
+            {x: 450, y: 150, w: 20, h: 250},
+            {x: 650, y: 0, w: 20, h: 250}
+        ]
+    }
+];
+
+/* ===== GENERACIÓN DE MAPAS RANDOM ===== */
+function generateRandomLevel() {
+    // Posición aleatoria para la bola (zona izquierda)
+    const ballX = 50 + Math.random() * 150;
+    const ballY = 100 + Math.random() * 200;
+    
+    // Posición aleatoria para el hoyo (zona derecha)
+    const holeX = 600 + Math.random() * 150;
+    const holeY = 100 + Math.random() * 200;
+    
+    // Generar paredes aleatorias
+    const numWalls = 2 + Math.floor(Math.random() * 4); // 2-5 paredes
+    const walls = [];
+    
+    for(let i = 0; i < numWalls; i++) {
+        const isVertical = Math.random() > 0.5;
+        
+        if(isVertical) {
+            const x = 200 + Math.random() * 400;
+            const y = Math.random() * 250;
+            const h = 100 + Math.random() * 150;
+            walls.push({x: x, y: y, w: 20, h: h});
+        } else {
+            const x = 200 + Math.random() * 300;
+            const y = Math.random() * 300;
+            const w = 100 + Math.random() * 150;
+            walls.push({x: x, y: y, w: w, h: 20});
+        }
+    }
+    
+    return {
+        ball: {x: ballX, y: ballY},
+        hole: {x: holeX, y: holeY},
+        walls: walls
+    };
+}
+
+/* ===== GAME STATE ===== */
+let playerBall, aiBall, hole, walls, angle, power, powerDirection, aimArrow;
+
+function loadLevel() {
+    let level;
+    
+    if(mapMode === 'random') {
+        // Actualizar número máximo de niveles aleatorios
+        maxRandomLevels = parseInt(document.getElementById('numRandomLevels').value);
+        
+        // Si no existe el nivel en el array, generarlo y guardarlo
+        if(!randomLevelsData[currentLevel - 1]) {
+            randomLevelsData[currentLevel - 1] = generateRandomLevel();
+        }
+        level = randomLevelsData[currentLevel - 1];
+    } else {
+        // En modo normal, si se acaban los niveles, generar aleatorios
+        if(currentLevel > levels.length) {
+            if(!randomLevelsData[currentLevel - 1]) {
+                randomLevelsData[currentLevel - 1] = generateRandomLevel();
+            }
+            level = randomLevelsData[currentLevel - 1];
+        } else {
+            level = levels[currentLevel - 1];
+        }
+    }
+    
+    playerBall = {
+        x: level.ball.x,
+        y: level.ball.y,
+        vx: 0,
+        vy: 0,
+        radius: 8,
+        color: "#4169E1" // Azul
+    };
+    
+    aiBall = {
+        x: level.ball.x,
+        y: level.ball.y,
+        vx: 0,
+        vy: 0,
+        radius: 8,
+        color: "#DC143C" // Rojo
+    };
+    
+    hole = {
+        x: level.hole.x,
+        y: level.hole.y,
+        radius: 15
+    };
+    
+    walls = JSON.parse(JSON.stringify(level.walls));
+    
+    angle = 0;
+    power = 0;
+    powerDirection = 1;
+    
+    aimArrow = {
+        length: 50,
+        maxLength: 100
+    };
+    
+    playerStrokes = 0;
+    aiStrokes = 0;
+    turn = 'player';
+    gameState = 'aiming';
+    player1Finished = false;
+    player2Finished = false;
+    aiFinished = false;
+    player1InHole = false;
+    player2InHole = false;
+    aiInHole = false;
+    
+    updateInfo();
+    msg.textContent = "Turno Jugador 1 - Usa ← → para ángulo, ESPACIO para potencia";
+    msg.style.color = "#4169E1";
+    restartBtn.style.display = "none";
+}
+
+function updateInfo() {
+    const maxLevel = mapMode === 'normal' ? levels.length : maxRandomLevels;
+    const opponent = gameMode === 'vsAI' ? 'IA' : 'Jugador 2';
+    infoSpan.textContent = `Nivel ${currentLevel}/${maxLevel} | Jugador 1: ${playerStrokes} golpes | ${opponent}: ${aiStrokes} golpes`;
+}
+
+/* ===== INPUT ===== */
+const keys = {};
+document.addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
+    
+    if(gameState === 'aiming') {
+        // No permitir input si el jugador actual ya terminó
+        if(turn === 'player' && player1Finished) return;
+        if(turn === 'ai' && player2Finished && gameMode === 'vs2P') return;
+        if(turn === 'ai' && aiFinished && gameMode === 'vsAI') return;
+        
+        if(e.key === ' ') {
+            gameState = 'charging';
+            power = 5;
+            powerDirection = 1;
+        }
+    }
+});
+
+document.addEventListener("keyup", e => {
+    if(e.key === ' ' && gameState === 'charging') {
+        // No permitir disparar si el jugador actual ya terminó
+        if(turn === 'player' && player1Finished) return;
+        if(turn === 'ai' && player2Finished && gameMode === 'vs2P') return;
+        if(turn === 'ai' && aiFinished && gameMode === 'vsAI') return;
+        
+        shoot();
+    }
+    keys[e.key.toLowerCase()] = false;
+});
+
+/* ===== PHYSICS ===== */
+function shoot() {
+    const maxPower = 15;
+    // Asegurar potencia mínima del 5%
+    const actualPower = (Math.max(5, power) / 100) * maxPower;
+    
+    if(turn === 'player') {
+        playerBall.vx = Math.cos(angle) * actualPower;
+        playerBall.vy = Math.sin(angle) * actualPower;
+        playerStrokes++;
+        
+        // Verificar límite de 12 golpes
+        if(playerStrokes >= 12) {
+            player1Finished = true;
+            msg.textContent = "⚠️ Jugador 1 alcanzó 12 golpes - Puedes pasar al siguiente nivel";
+            msg.style.color = "#ff8800";
+            gameState = 'level_complete';
+            totalPlayerStrokes += playerStrokes;
+            if(aiFinished || player2Finished) {
+                totalAIStrokes += aiStrokes;
+            }
+            restartBtn.textContent = "➡️ Siguiente nivel";
+            restartBtn.style.display = "inline-block";
+        }
+    } else {
+        aiBall.vx = Math.cos(angle) * actualPower;
+        aiBall.vy = Math.sin(angle) * actualPower;
+        aiStrokes++;
+        
+        // Verificar límite de 12 golpes para J2/IA
+        if(aiStrokes >= 12) {
+            if(gameMode === 'vsAI') {
+                aiFinished = true;
+                msg.textContent = "⚠️ IA alcanzó 12 golpes - Puedes pasar al siguiente nivel";
+            } else {
+                player2Finished = true;
+                msg.textContent = "⚠️ Jugador 2 alcanzó 12 golpes - Puedes pasar al siguiente nivel";
+            }
+            msg.style.color = "#ff8800";
+            gameState = 'level_complete';
+            totalAIStrokes += aiStrokes;
+            if(player1Finished) {
+                totalPlayerStrokes += playerStrokes;
+            }
+            restartBtn.textContent = "➡️ Siguiente nivel";
+            restartBtn.style.display = "inline-block";
+        }
+    }
+    
+    gameState = 'ball_moving';
+    updateInfo();
+}
+
+function updateBall() {
+    const ball = turn === 'player' ? playerBall : aiBall;
+    
+    // Física
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+    
+    // Fricción
+    ball.vx *= 0.985;
+    ball.vy *= 0.985;
+    
+    // Límites del canvas
+    if(ball.x - ball.radius < 0) {
+        ball.x = ball.radius;
+        ball.vx = -ball.vx * 0.7;
+    }
+    if(ball.x + ball.radius > 800) {
+        ball.x = 800 - ball.radius;
+        ball.vx = -ball.vx * 0.7;
+    }
+    if(ball.y - ball.radius < 0) {
+        ball.y = ball.radius;
+        ball.vy = -ball.vy * 0.7;
+    }
+    if(ball.y + ball.radius > 400) {
+        ball.y = 400 - ball.radius;
+        ball.vy = -ball.vy * 0.7;
+    }
+    
+    // Colisión con paredes
+    walls.forEach(wall => {
+        if(ball.x + ball.radius > wall.x && 
+           ball.x - ball.radius < wall.x + wall.w &&
+           ball.y + ball.radius > wall.y && 
+           ball.y - ball.radius < wall.y + wall.h) {
+            
+            // Determinar lado de colisión
+            const overlapLeft = ball.x + ball.radius - wall.x;
+            const overlapRight = wall.x + wall.w - (ball.x - ball.radius);
+            const overlapTop = ball.y + ball.radius - wall.y;
+            const overlapBottom = wall.y + wall.h - (ball.y - ball.radius);
+            
+            const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+            
+            if(minOverlap === overlapLeft) {
+                ball.x = wall.x - ball.radius;
+                ball.vx = -Math.abs(ball.vx) * 0.7;
+            } else if(minOverlap === overlapRight) {
+                ball.x = wall.x + wall.w + ball.radius;
+                ball.vx = Math.abs(ball.vx) * 0.7;
+            } else if(minOverlap === overlapTop) {
+                ball.y = wall.y - ball.radius;
+                ball.vy = -Math.abs(ball.vy) * 0.7;
+            } else {
+                ball.y = wall.y + wall.h + ball.radius;
+                ball.vy = Math.abs(ball.vy) * 0.7;
+            }
+        }
+    });
+    
+    // Verificar si está en el hoyo
+    const distToHole = Math.hypot(ball.x - hole.x, ball.y - hole.y);
+    if(distToHole < hole.radius - 2) {
+        // La bola entra en el hoyo
+        ball.vx = 0;
+        ball.vy = 0;
+        ball.x = hole.x;
+        ball.y = hole.y;
+        
+        if(turn === 'player') {
+            player1Finished = true;
+            player1InHole = true;
+            checkLevelComplete();
+        } else {
+            if(gameMode === 'vsAI') {
+                aiFinished = true;
+                aiInHole = true;
+                checkLevelComplete();
+            } else {
+                player2Finished = true;
+                player2InHole = true;
+                checkLevelComplete();
+            }
+        }
+        return;
+    }
+    
+    // Detener si la velocidad es muy baja
+    if(Math.abs(ball.vx) < 0.05 && Math.abs(ball.vy) < 0.05) {
+        ball.vx = 0;
+        ball.vy = 0;
+        
+        // Verificar si alcanzó el límite de golpes
+        if(turn === 'player' && playerStrokes >= 12 && !player1Finished) {
+            player1Finished = true;
+            checkLevelComplete();
+            return;
+        }
+        
+        if(turn === 'ai' && aiStrokes >= 12) {
+            if(gameMode === 'vsAI' && !aiFinished) {
+                aiFinished = true;
+                checkLevelComplete();
+                return;
+            } else if(gameMode === 'vs2P' && !player2Finished) {
+                player2Finished = true;
+                checkLevelComplete();
+                return;
+            }
+        }
+        
+        if(turn === 'player') {
+            // Turno del oponente (IA o Jugador 2)
+            turn = 'ai';
+            // Si el jugador 2/IA ya terminó, volver al jugador 1
+            if((player2Finished && gameMode === 'vs2P') || (aiFinished && gameMode === 'vsAI')) {
+                turn = 'player';
+                gameState = 'aiming';
+                msg.textContent = "Turno Jugador 1 - Usa ← → para ángulo, ESPACIO para potencia";
+                msg.style.color = "#4169E1";
+            } else if(gameMode === 'vsAI') {
+                gameState = 'ai_turn';
+                msg.textContent = "Turno de la IA...";
+                msg.style.color = "#ff6666";
+                setTimeout(aiTurn, 1000);
+            } else {
+                gameState = 'aiming';
+                msg.textContent = "Turno Jugador 2 - Usa ← → para ángulo, ESPACIO para potencia";
+                msg.style.color = "#ff6666";
+            }
+        } else {
+            // Turno del jugador 1
+            turn = 'player';
+            // Si el jugador 1 ya terminó, volver al jugador 2/IA
+            if(player1Finished && gameMode === 'vs2P') {
+                turn = 'ai';
+                gameState = 'aiming';
+                msg.textContent = "Turno Jugador 2 - Usa ← → para ángulo, ESPACIO para potencia";
+                msg.style.color = "#ff6666";
+            } else if(player1Finished && gameMode === 'vsAI') {
+                turn = 'ai';
+                gameState = 'ai_turn';
+                msg.textContent = "Turno de la IA...";
+                msg.style.color = "#ff6666";
+                setTimeout(aiTurn, 1000);
+            } else {
+                gameState = 'aiming';
+                msg.textContent = "Turno Jugador 1 - Usa ← → para ángulo, ESPACIO para potencia";
+                msg.style.color = "#4169E1";
+            }
+        }
+    }
+}
+
+/* ===== AI ===== */
+// Detectar si una línea intersecta con una pared
+function lineIntersectsWall(x1, y1, x2, y2, wall) {
+    // Expandir la pared para tener en cuenta el radio de la bola
+    const padding = (turn === 'player' ? playerBall.radius : aiBall.radius) + 5;
+    const wx = wall.x - padding;
+    const wy = wall.y - padding;
+    const ww = wall.w + padding * 2;
+    const wh = wall.h + padding * 2;
+    
+    // Comprobar intersección con los 4 lados del rectángulo
+    const edges = [
+        {x1: wx, y1: wy, x2: wx + ww, y2: wy}, // Top
+        {x1: wx + ww, y1: wy, x2: wx + ww, y2: wy + wh}, // Right
+        {x1: wx, y1: wy + wh, x2: wx + ww, y2: wy + wh}, // Bottom
+        {x1: wx, y1: wy, x2: wx, y2: wy + wh} // Left
+    ];
+    
+    for(let edge of edges) {
+        if(lineSegmentsIntersect(x1, y1, x2, y2, edge.x1, edge.y1, edge.x2, edge.y2)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function lineSegmentsIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+    const denom = ((y4 - y3) * (x2 - x1)) - ((x4 - x3) * (y2 - y1));
+    if(denom === 0) return false;
+    
+    const ua = (((x4 - x3) * (y1 - y3)) - ((y4 - y3) * (x1 - x3))) / denom;
+    const ub = (((x2 - x1) * (y1 - y3)) - ((y2 - y1) * (x1 - x3))) / denom;
+    
+    return (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1);
+}
+
+// Detectar si un tiro choca con obstáculos
+function pathIsClear(startX, startY, angle, power) {
+    const steps = 100;
+    let x = startX;
+    let y = startY;
+    let vx = Math.cos(angle) * power;
+    let vy = Math.sin(angle) * power;
+    const ballRadius = (turn === 'player' ? playerBall.radius : aiBall.radius);
+    
+    for(let i = 0; i < steps; i++) {
+        x += vx;
+        y += vy;
+        vx *= 0.98;
+        vy *= 0.98;
+        
+        // Verificar colisión con cada pared
+        for(let wall of walls) {
+            if(x + ballRadius > wall.x && 
+               x - ballRadius < wall.x + wall.w &&
+               y + ballRadius > wall.y && 
+               y - ballRadius < wall.y + wall.h) {
+                return false;
+            }
+        }
+        
+        // Si llegamos cerca del hoyo, el camino es bueno
+        const distToHole = Math.hypot(x - hole.x, y - hole.y);
+        if(distToHole < hole.radius) {
+            return true;
+        }
+        
+        // Verificar límites del canvas
+        if(x < ballRadius || x > 800 - ballRadius || y < ballRadius || y > 400 - ballRadius) {
+            // Permitir rebotes en bordes si va hacia el hoyo
+            const distToHoleAfter = Math.hypot(x - hole.x, y - hole.y);
+            const distToHoleBefore = Math.hypot(startX - hole.x, startY - hole.y);
+            if(distToHoleAfter > distToHoleBefore) {
+                return false;
+            }
+        }
+        
+        // Si la velocidad es muy baja, verificar si está cerca del hoyo
+        if(Math.abs(vx) < 0.1 && Math.abs(vy) < 0.1) {
+            const finalDist = Math.hypot(x - hole.x, y - hole.y);
+            return finalDist < hole.radius * 3;
+        }
+    }
+    
+    return false;
+}
+
+// Encontrar un punto de rebote para esquivar obstáculos
+function findBouncePoint() {
+    const testAngles = [];
+    // Generar ángulos de prueba en todas las direcciones
+    for(let i = 0; i < 24; i++) {
+        testAngles.push((Math.PI * 2 * i) / 24);
+    }
+    
+    const dx = hole.x - aiBall.x;
+    const dy = hole.y - aiBall.y;
+    const distance = Math.hypot(dx, dy);
+    
+    // Probar diferentes potencias y ángulos
+    const testPowers = [];
+    for(let p = 5; p <= 15; p += 1.5) {
+        testPowers.push(p);
+    }
+    
+    for(let angle of testAngles) {
+        for(let power of testPowers) {
+            if(pathIsClear(aiBall.x, aiBall.y, angle, power)) {
+                return {angle, power};
+            }
+        }
+    }
+    
+    return null;
+}
+
+function aiTurn() {
+    // Calcular ángulo directo hacia el hoyo
+    const dx = hole.x - aiBall.x;
+    const dy = hole.y - aiBall.y;
+    const distance = Math.hypot(dx, dy);
+    let targetAngle = Math.atan2(dy, dx);
+    let targetPower;
+    
+    // Error basado en nivel (más difícil = menos error)
+    const errorFactor = Math.max(0.02, 1 - (currentLevel * 0.15));
+    
+    // ===== ESTRATEGIAS ESPECÍFICAS POR NIVEL =====
+    // Usar estrategias manuales para niveles predefinidos
+    if(mapMode === 'normal' && currentLevel >= 1 && currentLevel <= 5) {
+        const strategy = getLevelStrategy(currentLevel);
+        if(strategy) {
+            targetAngle = strategy.angle;
+            targetPower = strategy.power;
+        } else {
+            // Calcular normalmente si no hay estrategia
+            targetPower = calculatePower(distance);
+        }
+    } else {
+        // Para niveles aleatorios o superiores, usar IA automática
+        targetPower = calculatePower(distance);
+        
+        // Verificar si el camino directo está despejado
+        let directPathClear = pathIsClear(aiBall.x, aiBall.y, targetAngle, targetPower);
+        
+        if(!directPathClear) {
+            // Buscar alternativas
+            const alternative = findAlternativePath(targetAngle, targetPower);
+            if(alternative) {
+                targetAngle = alternative.angle;
+                targetPower = alternative.power;
+            }
+        }
+    }
+    
+    // Aplicar pequeño error para que no sea perfecto
+    const angleError = (Math.random() - 0.5) * 0.15 * errorFactor;
+    targetAngle += angleError;
+    
+    const powerError = (Math.random() - 0.5) * 1.0 * errorFactor;
+    targetPower = Math.max(3, Math.min(15, targetPower + powerError));
+    
+    // Aplicar tiro
+    aiBall.vx = Math.cos(targetAngle) * targetPower;
+    aiBall.vy = Math.sin(targetAngle) * targetPower;
+    
+    gameState = 'ball_moving';
+    aiStrokes++;
+    
+    // Verificar límite de 12 golpes
+    if(aiStrokes >= 12) {
+        if(gameMode === 'vsAI') {
+            aiFinished = true;
+            msg.textContent = "⚠️ IA alcanzó 12 golpes - Puedes pasar al siguiente nivel";
+        } else {
+            player2Finished = true;
+            msg.textContent = "⚠️ Jugador 2 alcanzó 12 golpes - Puedes pasar al siguiente nivel";
+        }
+        msg.style.color = "#ff8800";
+        gameState = 'level_complete';
+        totalAIStrokes += aiStrokes;
+        if(player1Finished) {
+            totalPlayerStrokes += playerStrokes;
+        }
+        restartBtn.textContent = "➡️ Siguiente nivel";
+        restartBtn.style.display = "inline-block";
+    }
+    
+    updateInfo();
+}
+
+// Calcular potencia según distancia
+function calculatePower(distance) {
+    const randomFactor = 0.65 + (Math.random() * 0.50); // Entre 0.65 y 1.15
+    let power;
+    
+    // A MENOR distancia, MENOR potencia (divisores MUY grandes para potencia suave)
+    // A MAYOR distancia, MAYOR potencia (divisores más pequeños)
+    if(distance < 15) {
+        power = (distance / 20) * randomFactor;
+    } else if(distance < 30) {
+        power = (distance / 25) * randomFactor;
+    } else if(distance < 50) {
+        power = (distance / 30) * randomFactor;
+    } else if(distance < 75) {
+        power = (distance / 35) * randomFactor;
+    } else if(distance < 100) {
+        power = (distance / 40) * randomFactor;
+    } else if(distance < 150) {
+        power = (distance / 45) * randomFactor;
+    } else if(distance < 200) {
+        power = (distance / 50) * randomFactor;
+    } else if(distance < 300) {
+        power = (distance / 55) * randomFactor;
+    } else if(distance < 400) {
+        power = (distance / 60) * randomFactor;
+    } else if(distance < 500) {
+        power = (distance / 65) * randomFactor;
+    } else {
+        power = 10;
+    }
+    
+    return Math.max(2, Math.min(15, power));
+}
+
+// Estrategias específicas para cada nivel
+function getLevelStrategy(level) {
+    const dx = hole.x - aiBall.x;
+    const dy = hole.y - aiBall.y;
+    const distance = Math.hypot(dx, dy);
+    const directAngle = Math.atan2(dy, dx);
+    
+    switch(level) {
+        case 1:
+            // Nivel 1: Sin obstáculos, tiro directo
+            return {
+                angle: directAngle,
+                power: calculatePower(distance)
+            };
+            
+        case 2:
+            // Nivel 2: Pared vertical en x:400
+            // Pelota en (100,350), hoyo en (700,350)
+            // Si la pelota está a la izquierda de la pared, tirar con arco
+            if(aiBall.x < 380) {
+                // Primer tiro: pasar por arriba o por abajo de la pared
+                if(aiBall.y > 320) {
+                    // Tirar hacia arriba-derecha con arco alto
+                    return {
+                        angle: -0.4, // Hacia arriba
+                        power: 12
+                    };
+                } else {
+                    // Ya pasó la pared o está arriba, tirar directo al hoyo
+                    return {
+                        angle: directAngle,
+                        power: calculatePower(distance)
+                    };
+                }
+            } else {
+                // Ya pasó la pared, tiro directo
+                return {
+                    angle: directAngle,
+                    power: calculatePower(distance)
+                };
+            }
+            
+        case 3:
+            // Nivel 3: Dos paredes - (300,250) y (550,100)
+            // Pelota en (100,350), hoyo en (700,200)
+            if(aiBall.x < 280) {
+                // Antes de la primera pared, tirar hacia arriba
+                return {
+                    angle: -0.65,
+                    power: 11
+                };
+            } else if(aiBall.x < 530) {
+                // Entre paredes, continuar hacia arriba-derecha
+                return {
+                    angle: -0.3,
+                    power: 10
+                };
+            } else {
+                // Después de las paredes, directo al hoyo
+                return {
+                    angle: directAngle,
+                    power: calculatePower(distance)
+                };
+            }
+            
+        case 4:
+            // Nivel 4: Tiro directo al hoyo (línea recta)
+            return {
+                angle: directAngle,
+                power: calculatePower(distance)
+            };
+            
+        case 5:
+            // Nivel 5: Laberinto con paredes verticales en x:250, x:450, x:650
+            // Pelota en (100,350), hoyo en (700,350)
+            if(aiBall.x < 240) {
+                // Antes de la primera pared, tirar con arco alto hacia arriba
+                if(aiBall.y > 150) {
+                    return {
+                        angle: -0.4, // aquí para reducir angulos de disparo
+                        power: 12
+                    };
+                } else {
+                    // Ya está arriba, ir a la derecha
+                    return {
+                        angle: 0.1,
+                        power: 12
+                    };
+                }
+            } else if(aiBall.x < 440) {
+                // Entre primera y segunda pared
+                if(aiBall.y < 160) {
+                    // Está arriba, bajar un poco
+                    return {
+                        angle: 0.5,
+                        power: 9
+                    };
+                } else {
+                    // Está abajo, subir
+                    return {
+                        angle: -0.5,
+                        power: 9
+                    };
+                }
+            } else if(aiBall.x < 640) {
+                // Entre segunda y tercera pared - tirar directo al hoyo
+                return {
+                    angle: directAngle,
+                    power: calculatePower(distance)
+                };
+            } else {
+                // Después de todas las paredes, directo al hoyo
+                return {
+                    angle: directAngle,
+                    power: calculatePower(distance)
+                };
+            }
+            
+        default:
+            return null;
+    }
+}
+
+// Buscar ruta alternativa (para niveles aleatorios)
+function findAlternativePath(targetAngle, targetPower) {
+    let foundAlternative = false;
+    let resultAngle = targetAngle;
+    let resultPower = targetPower;
+    
+    // 1. Intentar múltiples potencias con el ángulo directo
+    const powerTests = [];
+    for(let p = 5; p <= 15; p += 2) {
+        powerTests.push(p);
+    }
+    
+    for(let testPower of powerTests) {
+        if(pathIsClear(aiBall.x, aiBall.y, targetAngle, testPower)) {
+            resultPower = testPower;
+            foundAlternative = true;
+            break;
+        }
+    }
+    
+    // 2. Intentar ángulos alternativos
+    if(!foundAlternative) {
+        const angleTests = [
+            -Math.PI/6, Math.PI/6, -Math.PI/4, Math.PI/4, 
+            -Math.PI/3, Math.PI/3, -Math.PI/2, Math.PI/2,
+            -2*Math.PI/3, 2*Math.PI/3, -5*Math.PI/6, 5*Math.PI/6
+        ];
+        
+        for(let angleOffset of angleTests) {
+            const testAngle = targetAngle + angleOffset;
+            
+            for(let testPower of powerTests) {
+                if(pathIsClear(aiBall.x, aiBall.y, testAngle, testPower)) {
+                    resultAngle = testAngle;
+                    resultPower = testPower;
+                    foundAlternative = true;
+                    break;
+                }
+            }
+            if(foundAlternative) break;
+        }
+    }
+    
+    // 3. Búsqueda exhaustiva
+    if(!foundAlternative) {
+        const bounceShot = findBouncePoint();
+        if(bounceShot) {
+            resultAngle = bounceShot.angle;
+            resultPower = bounceShot.power;
+            foundAlternative = true;
+        } else {
+            // Último recurso
+            for(let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) {
+                for(let power = 6; power <= 15; power += 3) {
+                    if(pathIsClear(aiBall.x, aiBall.y, angle, power)) {
+                        resultAngle = angle;
+                        resultPower = power;
+                        foundAlternative = true;
+                        break;
+                    }
+                }
+                if(foundAlternative) break;
+            }
+        }
+    }
+    
+    if(foundAlternative) {
+        return {angle: resultAngle, power: resultPower};
+    }
+    return null;
+}
+
+function checkLevelComplete() {
+    if(gameMode === 'vs2P') {
+        // En modo 2 jugadores, ambos deben terminar
+        if(player1Finished && player2Finished) {
+            totalPlayerStrokes += playerStrokes;
+            totalAIStrokes += aiStrokes;
+            
+            const maxLevels = mapMode === 'normal' ? levels.length : maxRandomLevels;
+            
+            if(currentLevel >= maxLevels) {
+                // Juego terminado
+                gameState = 'game_over';
+                if(totalPlayerStrokes < totalAIStrokes) {
+                    msg.textContent = `🏆 ¡JUGADOR 1 GANA! ${totalPlayerStrokes} golpes vs ${totalAIStrokes} golpes`;
+                } else if(totalPlayerStrokes > totalAIStrokes) {
+                    msg.textContent = `🏆 ¡JUGADOR 2 GANA! ${totalAIStrokes} golpes vs ${totalPlayerStrokes} golpes`;
+                } else {
+                    msg.textContent = `🤝 ¡EMPATE! Ambos con ${totalPlayerStrokes} golpes`;
+                }
+                msg.style.color = "#00ff00";
+                saveRecord(totalPlayerStrokes, currentLevel);
+                restartBtn.textContent = "🎮 Jugar de nuevo";
+                restartBtn.style.display = "inline-block";
+            } else {
+                // Siguiente nivel
+                gameState = 'level_complete';
+                msg.textContent = `✅ Nivel ${currentLevel} completado - J1: ${playerStrokes} golpes | J2: ${aiStrokes} golpes`;
+                msg.style.color = "#00ff00";
+                restartBtn.textContent = "➡️ Siguiente nivel";
+                restartBtn.style.display = "inline-block";
+            }
+        } else {
+            // Un jugador terminó, el otro continúa
+            if(player1Finished) {
+                turn = 'ai';
+                gameState = 'aiming';
+                msg.textContent = `✅ J1 terminó en ${playerStrokes} golpes. Turno Jugador 2`;
+                msg.style.color = "#ff6666";
+            } else {
+                turn = 'player';
+                gameState = 'aiming';
+                msg.textContent = `✅ J2 terminó en ${aiStrokes} golpes. Turno Jugador 1`;
+                msg.style.color = "#4169E1";
+            }
+        }
+    } else {
+        // Modo VS IA - ambos deben terminar
+        if(player1Finished && aiFinished) {
+            totalPlayerStrokes += playerStrokes;
+            totalAIStrokes += aiStrokes;
+            
+            const maxLevels = mapMode === 'normal' ? levels.length : maxRandomLevels;
+            
+            if(currentLevel >= maxLevels) {
+                // Juego terminado
+                gameState = 'game_over';
+                if(totalPlayerStrokes < totalAIStrokes) {
+                    msg.textContent = `🎉 ¡GANASTE! Total: ${totalPlayerStrokes} golpes vs IA: ${totalAIStrokes} golpes`;
+                } else if(totalPlayerStrokes > totalAIStrokes) {
+                    msg.textContent = `💀 ¡LA IA GANA! IA: ${totalAIStrokes} golpes vs Tú: ${totalPlayerStrokes} golpes`;
+                } else {
+                    msg.textContent = `🤝 ¡EMPATE! Ambos con ${totalPlayerStrokes} golpes`;
+                }
+                msg.style.color = "#00ff00";
+                saveRecord(totalPlayerStrokes, currentLevel);
+                restartBtn.textContent = "🎮 Jugar de nuevo";
+                restartBtn.style.display = "inline-block";
+            } else {
+                // Siguiente nivel
+                gameState = 'level_complete';
+                msg.textContent = `✅ Nivel ${currentLevel} completado - Tú: ${playerStrokes} golpes | IA: ${aiStrokes} golpes`;
+                msg.style.color = "#00ff00";
+                restartBtn.textContent = "➡️ Siguiente nivel";
+                restartBtn.style.display = "inline-block";
+            }
+        } else {
+            // Uno terminó, el otro continúa
+            if(player1Finished) {
+                turn = 'ai';
+                gameState = 'ai_turn';
+                msg.textContent = `✅ Terminaste en ${playerStrokes} golpes. Turno de la IA...`;
+                msg.style.color = "#ff6666";
+                setTimeout(aiTurn, 1000);
+            } else {
+                turn = 'player';
+                gameState = 'aiming';
+                msg.textContent = `✅ IA terminó en ${aiStrokes} golpes. Tu turno`;
+                msg.style.color = "#4169E1";
+            }
+        }
+    }
+}
+
+
+
+/* ===== UPDATE ===== */
+function update() {
+    if(gameState === 'aiming') {
+        // No permitir ajustar ángulo si el jugador actual ya terminó
+        if(turn === 'player' && player1Finished) return;
+        if(turn === 'ai' && player2Finished && gameMode === 'vs2P') return;
+        if(turn === 'ai' && aiFinished && gameMode === 'vsAI') return;
+        
+        // Ajustar ángulo (360 grados)
+        if(keys['arrowleft']) angle -= 0.03;
+        if(keys['arrowright']) angle += 0.03;
+        
+        // Sin límite de ángulo (360°)
+    }
+    
+    if(gameState === 'charging') {
+        // Cargar potencia
+        power += powerDirection * 2;
+        if(power >= 100) {
+            power = 100;
+            powerDirection = -1;
+        }
+        if(power <= 5) {
+            power = 5;
+            powerDirection = 1;
+        }
+    }
+    
+    if(gameState === 'ball_moving') {
+        updateBall();
+    }
+}
+
+/* ===== DRAW ===== */
+function draw() {
+    ctx.clearRect(0, 0, 800, 400);
+    
+    // Hoyo
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    ctx.arc(hole.x, hole.y, hole.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Bandera
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(hole.x, hole.y);
+    ctx.lineTo(hole.x, hole.y - 40);
+    ctx.stroke();
+    ctx.fillStyle = "#ff0000";
+    ctx.beginPath();
+    ctx.moveTo(hole.x, hole.y - 40);
+    ctx.lineTo(hole.x + 20, hole.y - 30);
+    ctx.lineTo(hole.x, hole.y - 20);
+    ctx.fill();
+    
+    // Paredes
+    ctx.fillStyle = "#654321";
+    walls.forEach(wall => {
+        ctx.fillRect(wall.x, wall.y, wall.w, wall.h);
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(wall.x, wall.y, wall.w, wall.h);
+    });
+    
+    // Flecha de apuntado
+    if(gameState === 'aiming' || gameState === 'charging') {
+        const arrowLength = gameState === 'charging' ? aimArrow.maxLength * (power / 100) : aimArrow.length;
+        const ball = turn === 'player' ? playerBall : aiBall;
+        
+        ctx.strokeStyle = turn === 'player' ? "#ffff00" : "#ff6666";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(ball.x, ball.y);
+        ctx.lineTo(
+            ball.x + Math.cos(angle) * arrowLength,
+            ball.y + Math.sin(angle) * arrowLength
+        );
+        ctx.stroke();
+        
+        // Punta de flecha
+        const headLen = 10;
+        const headAngle = Math.PI / 6;
+        const endX = ball.x + Math.cos(angle) * arrowLength;
+        const endY = ball.y + Math.sin(angle) * arrowLength;
+        
+        ctx.beginPath();
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(
+            endX - headLen * Math.cos(angle - headAngle),
+            endY - headLen * Math.sin(angle - headAngle)
+        );
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(
+            endX - headLen * Math.cos(angle + headAngle),
+            endY - headLen * Math.sin(angle + headAngle)
+        );
+        ctx.stroke();
+    }
+    
+    // Barra de potencia
+    if(gameState === 'charging') {
+        const barWidth = 200;
+        const barHeight = 30;
+        const barX = 300;
+        const barY = 30;
+        
+        ctx.fillStyle = power > 80 ? "#ff0000" : "#00ff00";
+        ctx.fillRect(barX, barY, (barWidth * power) / 100, barHeight);
+        
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(barX, barY, barWidth, barHeight);
+        
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 14px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(`POTENCIA: ${Math.floor(power)}%`, barX + barWidth / 2, barY - 5);
+    }
+    
+    // Bola del jugador (mostrar si no está en el hoyo)
+    if(!player1InHole) {
+        ctx.fillStyle = playerBall.color;
+        ctx.beginPath();
+        ctx.arc(playerBall.x, playerBall.y, playerBall.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+    
+    // Bola de la IA/Jugador 2 (mostrar si no está en el hoyo)
+    if(gameMode === 'vs2P' && !player2InHole) {
+        ctx.fillStyle = aiBall.color;
+        ctx.beginPath();
+        ctx.arc(aiBall.x, aiBall.y, aiBall.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    } else if(gameMode === 'vsAI' && !aiInHole) {
+        ctx.fillStyle = aiBall.color;
+        ctx.beginPath();
+        ctx.arc(aiBall.x, aiBall.y, aiBall.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+    }
+}
+
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ===== RESTART ===== */
+restartBtn.onclick = () => {
+    if(gameState === 'game_over') {
+        // Reiniciar juego completo
+        currentLevel = 1;
+        totalPlayerStrokes = 0;
+        totalAIStrokes = 0;
+        loadLevel();
+    } else if(gameState === 'level_complete') {
+        // Siguiente nivel
+        const maxLevels = mapMode === 'normal' ? levels.length : maxRandomLevels;
+        
+        if(currentLevel >= maxLevels) {
+            // Era el último nivel - mostrar resultado final
+            gameState = 'game_over';
+            if(totalPlayerStrokes < totalAIStrokes) {
+                if(gameMode === 'vsAI') {
+                    msg.textContent = `🎉 ¡GANASTE! Total: ${totalPlayerStrokes} golpes vs IA: ${totalAIStrokes} golpes`;
+                } else {
+                    msg.textContent = `🏆 ¡JUGADOR 1 GANA! ${totalPlayerStrokes} golpes vs ${totalAIStrokes} golpes`;
+                }
+            } else if(totalPlayerStrokes > totalAIStrokes) {
+                if(gameMode === 'vsAI') {
+                    msg.textContent = `💀 ¡LA IA GANA! IA: ${totalAIStrokes} golpes vs Tú: ${totalPlayerStrokes} golpes`;
+                } else {
+                    msg.textContent = `🏆 ¡JUGADOR 2 GANA! ${totalAIStrokes} golpes vs ${totalPlayerStrokes} golpes`;
+                }
+            } else {
+                msg.textContent = `🤝 ¡EMPATE! Ambos con ${totalPlayerStrokes} golpes`;
+            }
+            msg.style.color = "#00ff00";
+            saveRecord(totalPlayerStrokes, currentLevel);
+            restartBtn.textContent = "🎮 Jugar de nuevo";
+        } else {
+            currentLevel++;
+            loadLevel();
+        }
+    }
+};
+
+/* ===== START ===== */
+loadLevel();
+loop();
+</script>
+
+</body>
+</html>

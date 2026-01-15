@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Race F1 — Carrera VS IA</title>
+  <style>
+    :root{--bg:#071023;--card:#0f2540;--accent:#ffcc00;--danger:#ff6b6b}
+    html,body{height:100%;margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#031224,#071a2a);color:#eaf6ff}
+    .app{max-width:1000px;margin:18px auto;padding:18px}
+    header{display:flex;align-items:center;gap:12px}
+    h1{font-size:20px;margin:0}
+    .board{display:flex;gap:16px;margin-top:12px}
+    .left{flex:1}
+    .card{background:linear-gradient(180deg,var(--card),#072036);border-radius:10px;padding:12px;box-shadow:0 8px 20px rgba(0,0,0,0.5)}
+    canvas{width:100%;height:360px;border-radius:8px;background:#062436;display:block}
+    .controls{display:flex;gap:8px;margin-top:8px}
+    button{padding:8px 12px;border-radius:8px;border:none;background:var(--accent);color:#041223;font-weight:700;cursor:pointer}
+    .hud{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .pill{background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:999px;font-size:13px;color:#bfe6ff}
+    .small{font-size:13px;color:#9fb8cc}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Race F1 — Carrera VS IA</h1>
+      <div style="margin-left:auto" class="small">Controles: W acelerar · S frenar · A izquierda · D derecha</div>
+    </header>
+
+    <div class="board">
+      <div class="left">
+        <div class="card">
+          <canvas id="track" width="900" height="360"></canvas>
+          <div class="controls">
+            <button id="startBtn">▶ Empezar</button>
+            <button id="pauseBtn">⏸ Pausa</button>
+            <select id="levelSelect"></select>
+            <select id="circuitSelect"></select>
+            <button id="nextBtn">Siguiente</button>
+          </div>
+          <div class="hud" id="hud">
+            <div class="pill">Nivel: <span id="hudLevel">1</span></div>
+            <div class="pill">Circuito: <span id="hudCircuit">-</span></div>
+            <div class="pill">Vuelta: <span id="hudLap">0</span>/<span id="hudLaps">3</span></div>
+            <div class="pill">Posición: <span id="hudPos">—</span></div>
+            <div class="pill">Tiempo: <span id="hudTime">0.00</span>s</div>
+            <div class="pill">Velocidad: <span id="hudSpeed">0</span> km/h</div>
+          </div>
+        </div>
+      </div>
+      <div style="width:300px">
+        <div class="card">
+          <strong>Instrucciones</strong>
+          <p class="small">Compite contra la IA. Elige nivel y circuito. Cada circuito tiene longitud y dificultad. Gana quien complete las vueltas primero.</p>
+          <hr />
+          <div id="results"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // --- Game config ---
+  const canvas = document.getElementById('track');
+  const ctx = canvas.getContext('2d');
+  const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const levelSelect = document.getElementById('levelSelect');
+  const circuitSelect = document.getElementById('circuitSelect');
+  const hudLevel = document.getElementById('hudLevel');
+  const hudCircuit = document.getElementById('hudCircuit');
+  const hudLap = document.getElementById('hudLap');
+  const hudLaps = document.getElementById('hudLaps');
+  const hudPos = document.getElementById('hudPos');
+  const hudTime = document.getElementById('hudTime');
+  const hudSpeed = document.getElementById('hudSpeed');
+  const results = document.getElementById('results');
+
+  // levels and circuits
+  const LEVELS = [
+    {id:1,name:'Principiante', aiCoef:0.85},
+    {id:2,name:'Intermedio', aiCoef:1.0},
+    {id:3,name:'Profesional', aiCoef:1.15}
+  ];
+
+  const CIRCUITS = [
+    {id:1,name:'Puerto Azul', length:1200, laps:3, difficulty:0.9, lanes:3},
+    {id:2,name:'Desierto 200', length:1600, laps:3, difficulty:1.0, lanes:4},
+    {id:3,name:'Monte Rápido', length:2000, laps:3, difficulty:1.2, lanes:5},
+    {id:4,name:'Ciudad Nocturna', length:1000, laps:4, difficulty:1.1, lanes:2}
+  ];
+
+  // state
+  let state = {
+    running:false, paused:false, time:0, level:1, circuit:1
+  };
+
+  // mapping: convert progress meters -> vertical pixels (y) - progress increases upwards
+  // map progress (meters) -> position on a parametric oval circuit
+  function metersToPos(m, length){
+    // Normalize meters into [0,length)
+    m = ((m % length) + length) % length;
+    // Use precomputed path samples on currentCircuit
+    if(!currentCircuit || !currentCircuit.pathSamples) return {x:canvas.width/2,y:canvas.height/2,angle:0,dx:0,dy:1};
+    const samples = currentCircuit.pathSamples;
+    const totalPixels = currentCircuit.pixelLength || 1;
+    const frac = (m % length) / length; // 0..1
+    const targetPix = frac * totalPixels;
+    // binary search for index
+    let lo = 0, hi = samples.length-1;
+    while(lo < hi){
+      const mid = Math.floor((lo+hi)/2);
+      if(samples[mid].accum < targetPix) lo = mid+1; else hi = mid;
+    }
+    const i = Math.max(1, lo);
+    const a = samples[i-1], b = samples[i];
+    const span = b.accum - a.accum || 1;
+    const u = (targetPix - a.accum)/span;
+    const x = a.x + (b.x - a.x)*u;
+    const y = a.y + (b.y - a.y)*u;
+    const dx = b.x - a.x; const dy = b.y - a.y;
+    const angle = Math.atan2(dy, dx);
+    return {x,y,angle,t:frac,dx,dy};
+  }
+
+  // Build curved track geometry (Catmull-Rom through control points)
+  function buildTrackGeometry(circuit){
+    // choose control points per circuit id (relative coords)
+    const w = canvas.width, h = canvas.height;
+    const presets = {
+      // sharper, more technical curves
+      1: [ [0.12,0.62],[0.28,0.18],[0.45,0.22],[0.62,0.12],[0.78,0.28],[0.9,0.55],[0.68,0.8],[0.46,0.84],[0.25,0.72] ],
+      2: [ [0.14,0.65],[0.22,0.2],[0.38,0.18],[0.55,0.12],[0.7,0.18],[0.82,0.36],[0.9,0.6],[0.7,0.82],[0.4,0.78] ],
+      3: [ [0.18,0.6],[0.32,0.14],[0.5,0.16],[0.6,0.28],[0.72,0.14],[0.82,0.36],[0.68,0.78],[0.46,0.76],[0.26,0.68] ],
+      4: [ [0.2,0.62],[0.34,0.2],[0.5,0.14],[0.64,0.24],[0.78,0.32],[0.86,0.6],[0.64,0.82],[0.42,0.8],[0.26,0.7] ]
+    };
+    const rel = presets[circuit.id] || presets[1];
+    const pts = rel.map(p=>({x: p[0]* (w-40) + 20, y: p[1]*(h-40)+20}));
+    // close loop by repeating first points
+    const closed = pts.slice();
+    closed.push(pts[0], pts[1], pts[2]);
+    const samples = [];
+    const stepsPerSeg = 80;
+    for(let i=0;i<pts.length;i++){
+      const p0 = closed[(i-1 + closed.length)%closed.length];
+      const p1 = closed[i];
+      const p2 = closed[i+1];
+      const p3 = closed[i+2];
+      for(let s=0;s<stepsPerSeg;s++){
+        const t = s/stepsPerSeg;
+        const pt = catmullRom(p0,p1,p2,p3,t);
+        samples.push({x:pt.x,y:pt.y});
+      }
+    }
+    // compute accum distances
+    let accum = 0; samples[0].accum = 0;
+    for(let i=1;i<samples.length;i++){ const ddx = samples[i].x - samples[i-1].x; const ddy = samples[i].y - samples[i-1].y; accum += Math.hypot(ddx,ddy); samples[i].accum = accum; }
+    // close loop distance to first
+    const cdx = samples[0].x - samples[samples.length-1].x; const cdy = samples[0].y - samples[samples.length-1].y; const closing = Math.hypot(cdx,cdy);
+    const total = accum + closing;
+    // append final sample equal to first with full accum to close mapping
+    samples.push({x: samples[0].x, y: samples[0].y, accum: total});
+    // store
+    circuit.pathSamples = samples;
+    circuit.pixelLength = total;
+  }
+
+  function catmullRom(p0,p1,p2,p3,t){
+    const t2 = t*t; const t3 = t2*t;
+    const x = 0.5*((2*p1.x) + (-p0.x + p2.x)*t + (2*p0.x -5*p1.x +4*p2.x - p3.x)*t2 + (-p0.x +3*p1.x-3*p2.x + p3.x)*t3);
+    const y = 0.5*((2*p1.y) + (-p0.y + p2.y)*t + (2*p0.y -5*p1.y +4*p2.y - p3.y)*t2 + (-p0.y +3*p1.y-3*p2.y + p3.y)*t3);
+    return {x,y};
+  }
+
+  // approximate curvature at progress m (meters)
+  function computeCurvature(m){
+    if(!currentCircuit) return 0;
+    const L = currentCircuit.length;
+    const delta = Math.max(1, L*0.003);
+    const a = metersToPos(m - delta, L);
+    const b = metersToPos(m, L);
+    const c = metersToPos(m + delta, L);
+    const ang1 = Math.atan2(b.y - a.y, b.x - a.x);
+    const ang2 = Math.atan2(c.y - b.y, c.x - b.x);
+    let diff = Math.abs(ang2 - ang1);
+    if(diff > Math.PI) diff = 2*Math.PI - diff;
+    const curvature = diff / (2*delta);
+    return curvature;
+  }
+
+  // car prototype
+  function Car(opts){
+    this.name = opts.name;
+    this.color = opts.color;
+    this.lane = opts.lane || 1; // 0..lanes-1
+    this.progress = 0; // meters within current lap
+    this.lap = 0;
+    this.speed = 0; // m/s
+    this.maxSpeed = opts.maxSpeed || 80; // m/s
+    this.acc = opts.acc || 6; // m/s^2
+    this.grip = opts.grip || 60; // lateral acceleration limit (m/s^2)
+    this.width = 36; this.height=18;
+    this.skidTimer = 0;
+  }
+
+  Car.prototype.update = function(dt, control){
+    // control: throttle (-1..1)
+    // if skidding, reduce control
+    if(this.skidTimer > 0){
+      this.skidTimer = Math.max(0, this.skidTimer - dt);
+      // while skidding, lose speed
+      this.speed *= Math.max(0.9, 1 - dt*1.5);
+    } else {
+      const target = Math.max(0, Math.min(this.maxSpeed, this.speed + (control.throttle || 0) * this.acc * dt));
+      this.speed += (target - this.speed) * Math.min(1, dt*6);
+    }
+    this.progress += this.speed * dt;
+    // check curvature-induced skid
+    if(currentCircuit && this.speed > 1 && this.skidTimer <= 0){
+      const k = computeCurvature(this.progress);
+      if(k > 1e-6){
+        const latAcc = this.speed*this.speed*k; // v^2 * curvature
+        if(latAcc > this.grip){
+          // skid: lose speed and randomly change lane a bit
+          this.speed *= 0.5;
+          this.progress = Math.max(0, this.progress - 4);
+          const delta = (Math.random()<0.5? -1: 1);
+          this.lane = Math.max(0, Math.min((currentCircuit.lanes-1), this.lane + delta));
+          this.skidTimer = 0.8 + Math.random()*0.6;
+        }
+      }
+    }
+  }
+
+  // init UI selects
+  function initUI(){
+    LEVELS.forEach(l=>{ const o = document.createElement('option'); o.value=l.id; o.textContent=l.name; levelSelect.appendChild(o); });
+    CIRCUITS.forEach(c=>{ const o = document.createElement('option'); o.value=c.id; o.textContent=c.name; circuitSelect.appendChild(o); });
+    levelSelect.value = 1; circuitSelect.value = 1;
+  }
+
+  // race objects
+  let racers = [], currentCircuit, currentLevel;
+  let lastTime = 0;
+
+  function setupRace(){
+    currentLevel = LEVELS.find(l=>l.id==state.level);
+    currentCircuit = CIRCUITS.find(c=>c.id==state.circuit);
+    // build curved geometry for selected circuit
+    buildTrackGeometry(currentCircuit);
+    // create 4 racers: first is human-controlled, rest AI
+    racers = [];
+    const p0 = new Car({name:'TÚ', color:'#00d4ff', lane:1, maxSpeed: 220, acc: 30, grip: 80});
+    const p1 = new Car({name:'R2', color:'#ff5c5c', lane:0, maxSpeed: 200 * currentLevel.aiCoef * currentCircuit.difficulty, acc: 20, grip: 75});
+    const p2 = new Car({name:'R3', color:'#ffd24d', lane: Math.min(2,currentCircuit.lanes-1), maxSpeed: 195 * currentLevel.aiCoef * currentCircuit.difficulty, acc: 18, grip: 70});
+    const p3 = new Car({name:'R4', color:'#9bff7f', lane: Math.max(0,currentCircuit.lanes-1), maxSpeed: 190 * currentLevel.aiCoef * currentCircuit.difficulty, acc: 16, grip: 72});
+    racers.push(p0,p1,p2,p3);
+    racers.forEach(r=>{ r.progress = 0; r.lap = 1; r.speed = 0; r.skidTimer = 0; });
+    state.time = 0; state.running = false; state.paused = false;
+    hudLaps.textContent = currentCircuit.laps;
+    hudCircuit.textContent = currentCircuit.name;
+    hudLevel.textContent = currentLevel.name;
+    results.innerHTML = '';
+    updateHUD();
+    draw();
+  }
+
+  // game loop
+  let rafId = null;
+  function gameLoop(ts){
+    if(!lastTime) lastTime = ts; const dt = (ts - lastTime)/1000; lastTime = ts;
+    if(state.running && !state.paused){
+      state.time += dt;
+      updatePlayer(dt);
+      updateAI(dt);
+      updateHUD();
+      checkFinish();
+    }
+    draw();
+    rafId = requestAnimationFrame(gameLoop);
+  }
+
+  function startRace(){
+    if(!state.running){ state.running = true; state.paused = false; lastTime = 0; }
+  }
+
+  function togglePause(){
+    state.paused = !state.paused;
+    pauseBtn.textContent = state.paused ? '▶ Reanudar' : '⏸ Pausa';
+    if(state.paused===false && state.running) lastTime = 0;
+  }
+
+  startBtn.onclick = ()=>{ startRace(); };
+  // start the RAF loop
+  rafId = requestAnimationFrame(gameLoop);
+
+  // simple AI behavior
+  function updateAI(dt){
+    // update all AI racers (skip first which is human)
+    for(let i=1;i<racers.length;i++){
+      const car = racers[i];
+      const variability = (Math.sin((state.time + i)*0.7)+1)/8;
+      const targetSpeed = car.maxSpeed * (0.9 + variability);
+      const throttle = (targetSpeed - car.speed) > 2 ? 1 : -0.6;
+      // occasional lane change, slightly more often when slower
+      if(Math.random() < 0.01) car.lane = Math.max(0, Math.min(currentCircuit.lanes-1, car.lane + (Math.random()<0.5? -1:1)));
+      car.update(dt, {throttle:throttle});
+      if(car.progress >= currentCircuit.length){ car.progress -= currentCircuit.length; car.lap++; }
+    }
+  }
+
+  // player controls
+  const controls = { throttle:0, laneDelta:0 };
+  window.addEventListener('keydown', (e)=>{
+    const k = e.key.toLowerCase();
+    if(k === 'w') controls.throttle = 1;
+    if(k === 's') controls.throttle = -1;
+    if(k === 'a'){ controls.laneDelta = -1; }
+    if(k === 'd'){ controls.laneDelta = 1; }
+    if(k === ' ') togglePause();
+  });
+  window.addEventListener('keyup', (e)=>{
+    const k = e.key.toLowerCase();
+    if(k === 'w' || k === 's') controls.throttle = 0;
+    if(k === 'a' || k === 'd') controls.laneDelta = 0;
+  });
+
+  function updatePlayer(dt){
+    const player = racers[0];
+    // apply a single lane change per keypress
+    if(controls.laneDelta && player.skidTimer<=0){ player.lane = Math.max(0, Math.min(currentCircuit.lanes-1, player.lane + controls.laneDelta)); controls.laneDelta = 0; }
+    player.update(dt, {throttle:controls.throttle});
+    if(player.progress >= currentCircuit.length){ player.progress -= currentCircuit.length; player.lap++; }
+  }
+
+  function updateHUD(){
+    // compute ranking
+    const distances = racers.map(r=>({r,dist: r.lap * currentCircuit.length + r.progress}));
+    distances.sort((a,b)=>b.dist - a.dist);
+    const rank = distances.findIndex(d=>d.r === racers[0]) + 1;
+    hudLap.textContent = racers[0].lap;
+    hudTime.textContent = state.time.toFixed(2);
+    hudSpeed.textContent = Math.round(racers[0].speed*3.6);
+    const pDist = racers[0].lap * currentCircuit.length + racers[0].progress;
+    hudPos.textContent = (rank>0) ? (rank + 'º') : '—';
+  }
+
+  function checkFinish(){
+    for(const r of racers){
+      if(r.lap > currentCircuit.laps){
+        state.running = false;
+        const winner = r.name;
+        results.innerHTML = `<div class="small"><strong>Fin de carrera:</strong> Ganador: ${winner}</div>`;
+        break;
+      }
+    }
+  }
+
+  // draw track and cars (vertical)
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // draw oval circuit center
+    if(!currentCircuit) return;
+    const lanesCount = currentCircuit.lanes;
+    // path sampling (draw center line)
+    ctx.lineWidth = 2; ctx.strokeStyle = '#1f7a9a'; ctx.beginPath();
+    const samples = 180;
+    for(let i=0;i<=samples;i++){
+      const t = (i/samples) * Math.PI*2;
+      const pos = metersToPos((t/(Math.PI*2))*currentCircuit.length, currentCircuit.length);
+      if(i===0) ctx.moveTo(pos.x,pos.y); else ctx.lineTo(pos.x,pos.y);
+    }
+    ctx.closePath(); ctx.stroke();
+
+    // draw lane lines (offsets)
+    const laneSpacing = 26;
+    for(let li=1; li<=Math.floor(lanesCount/2); li++){
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.beginPath();
+      for(let i=0;i<=samples;i++){
+        const m = (i/samples)*currentCircuit.length;
+        const p = metersToPos(m, currentCircuit.length);
+        const dx = p.dx; const dy = p.dy;
+        // perpendicular vector
+        let px = -dy; let py = dx; const norm = Math.hypot(px,py)||1; px/=norm; py/=norm;
+        const off = li*laneSpacing;
+        const x1 = p.x + px*off;
+        const y1 = p.y + py*off;
+        const x2 = p.x - px*off;
+        const y2 = p.y - py*off;
+        if(i===0){ ctx.moveTo(x1,y1); } else { ctx.lineTo(x1,y1); }
+      }
+      ctx.stroke();
+      ctx.beginPath();
+      for(let i=0;i<=samples;i++){
+        const m = (i/samples)*currentCircuit.length;
+        const p = metersToPos(m, currentCircuit.length);
+        const dx = p.dx; const dy = p.dy;
+        let px = -dy; let py = dx; const norm = Math.hypot(px,py)||1; px/=norm; py/=norm;
+        const off = li*laneSpacing;
+        const x2 = p.x - px*off;
+        const y2 = p.y - py*off;
+        if(i===0){ ctx.moveTo(x2,y2); } else { ctx.lineTo(x2,y2); }
+      }
+      ctx.stroke();
+    }
+
+    // finish line at progress = 0
+    const finish = metersToPos(0, currentCircuit.length);
+    // draw small perpendicular marks for finish
+    {
+      const dx = finish.dx; const dy = finish.dy; let px = -dy; let py = dx; const norm = Math.hypot(px,py)||1; px/=norm; py/=norm;
+      ctx.fillStyle = '#fff';
+      for(let s=-3;s<=3;s+=1){ ctx.fillRect(finish.x + px*(s*6) - 3, finish.y + py*(s*6) - 6, 6, 6); }
+    }
+
+    // draw cars on path with lane lateral offset
+    function drawCarV(car){
+      const p = metersToPos(car.progress, currentCircuit.length);
+      // perpendicular unit vector
+      let px = -p.dy; let py = p.dx; const n = Math.hypot(px,py)||1; px/=n; py/=n;
+      const centerIndex = (currentCircuit.lanes-1)/2;
+      const offset = (car.lane - centerIndex) * laneSpacing;
+      const x = p.x + px*offset;
+      const y = p.y + py*offset;
+      // rotated rectangle
+      ctx.save(); ctx.translate(x,y); ctx.rotate(p.angle);
+      ctx.fillStyle = car.color; ctx.fillRect(-car.width/2, -car.height/2, car.width, car.height);
+      ctx.fillStyle = '#000'; ctx.fillRect(-car.width/4, -car.height/4, car.width/2, car.height/2);
+      ctx.fillStyle = '#fff'; ctx.font='10px Arial'; ctx.textAlign='center'; ctx.fillText(car.name,0, -car.height/2 - 6);
+      ctx.restore();
+    }
+
+    // draw all racers
+    for(const r of racers){ drawCarV(r); }
+  }
+  pauseBtn.onclick = ()=> togglePause();
+  nextBtn.onclick = ()=>{
+    const nextCircuit = CIRCUITS[(CIRCUITS.findIndex(c=>c.id==state.circuit)+1) % CIRCUITS.length];
+    state.circuit = nextCircuit.id; circuitSelect.value = state.circuit;
+    setupRace();
+  };
+  levelSelect.onchange = ()=>{ state.level = Number(levelSelect.value); setupRace(); };
+  circuitSelect.onchange = ()=>{ state.circuit = Number(circuitSelect.value); setupRace(); };
+
+  // init
+  initUI(); setupRace();
+  </script>
+</body>
+</html>

@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>🔴 PRESS THE BUTTON</title>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Arial Black', Arial, sans-serif;
+    background: #000;
+    color: #fff;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    text-align: center;
+}
+
+#gameScreen {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    transition: background 0.3s;
+}
+
+#title {
+    font-size: 48px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px #ff0000;
+}
+
+#question {
+    font-size: 36px;
+    margin: 40px;
+    padding: 30px;
+    max-width: 800px;
+    min-height: 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid #fff;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.1);
+}
+
+#timer {
+    font-size: 72px;
+    font-weight: bold;
+    color: #00ff00;
+    margin: 20px;
+    text-shadow: 0 0 30px currentColor;
+}
+
+#timer.warning {
+    color: #ffff00;
+    animation: pulse 0.5s infinite;
+}
+
+#timer.danger {
+    color: #ff0000;
+    animation: pulse 0.25s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+#button {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #ff6666, #ff0000, #cc0000);
+    border: 8px solid #fff;
+    font-size: 32px;
+    font-weight: bold;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 10px 30px rgba(255,0,0,0.5), inset 0 -10px 20px rgba(0,0,0,0.3);
+    transition: all 0.1s;
+    margin: 20px;
+    text-shadow: 2px 2px 4px #000;
+}
+
+#button:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(255,0,0,0.7), inset 0 -10px 20px rgba(0,0,0,0.3);
+}
+
+#button:active {
+    transform: translateY(5px);
+    box-shadow: 0 5px 15px rgba(255,0,0,0.3), inset 0 5px 15px rgba(0,0,0,0.5);
+}
+
+#score {
+    font-size: 28px;
+    margin: 20px;
+}
+
+#startScreen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#startButton {
+    padding: 20px 60px;
+    font-size: 32px;
+    font-weight: bold;
+    background: #ff0000;
+    color: #fff;
+    border: 4px solid #fff;
+    border-radius: 10px;
+    cursor: pointer;
+    margin-top: 30px;
+    transition: all 0.2s;
+}
+
+#startButton:hover {
+    background: #ff3333;
+    transform: scale(1.1);
+}
+
+#instructions {
+    max-width: 600px;
+    font-size: 18px;
+    line-height: 1.6;
+    margin: 20px;
+    padding: 20px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 10px;
+}
+
+#gameOverScreen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#finalScore {
+    font-size: 48px;
+    margin: 30px;
+    color: #ffff00;
+}
+
+#restartButton {
+    padding: 20px 60px;
+    font-size: 32px;
+    font-weight: bold;
+    background: #ff0000;
+    color: #fff;
+    border: 4px solid #fff;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#restartButton:hover {
+    background: #ff3333;
+    transform: scale(1.1);
+}
+
+.symbol {
+    font-size: 120px;
+    animation: appear 0.3s;
+}
+
+@keyframes appear {
+    from { transform: scale(0); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.rule-display {
+    font-size: 28px;
+    padding: 20px;
+    background: rgba(255,255,0,0.2);
+    border: 3px solid #ffff00;
+    border-radius: 10px;
+    margin: 20px;
+    animation: fadeIn 0.5s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+#memoryDisplay {
+    font-size: 80px;
+    font-weight: bold;
+    padding: 40px;
+    background: rgba(255,255,255,0.2);
+    border: 5px solid #fff;
+    border-radius: 15px;
+    animation: memorize 2s;
+}
+
+@keyframes memorize {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); background: rgba(255,255,0,0.3); }
+}
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+    <h1 id="title">🔴 PRESS THE BUTTON</h1>
+    <div id="instructions">
+        <p><strong>REGLAS:</strong></p>
+        <p>⏱️ Tienes 8 segundos por pregunta</p>
+        <p>🔴 PULSAR el botón = SÍ</p>
+        <p>⚫ NO PULSAR = NO</p>
+        <p>❌ Un solo error = MUERTE</p>
+        <p>🎯 Sobrevive a 15 preguntas</p>
+        <br>
+        <p><strong>¡Las reglas pueden cambiar!</strong></p>
+        <p>Presta atención a TODO.</p>
+    </div>
+    <button id="startButton" onclick="startGame()">EMPEZAR</button>
+</div>
+
+<div id="gameScreen" style="display:none;">
+    <div id="score">Pregunta: <span id="currentQuestion">0</span> / 15</div>
+    <div id="timer">8</div>
+    <div id="question"></div>
+    <button id="button" onclick="pressButton()">PRESS</button>
+</div>
+
+<div id="gameOverScreen">
+    <h1 style="font-size: 64px; color: #ff0000;">💀 GAME OVER</h1>
+    <div id="failMessage" style="font-size: 24px; margin: 20px;"></div>
+    <div id="finalScore"></div>
+    <button id="restartButton" onclick="location.reload()">REINTENTAR</button>
+</div>
+
+<script>
+// ========== POOL DE PREGUNTAS POR CATEGORÍAS ==========
+const culturaGeneral = [
+    { text: "¿Los tomates son frutas?", answer: true },
+    { text: "¿Los murciélagos son ciegos?", answer: false },
+    { text: "¿El Gran Muralla China es visible desde el espacio?", answer: false },
+    { text: "¿Los humanos tenemos más de 5 sentidos?", answer: true },
+    { text: "¿El agua hierve a 100 °C al nivel del mar?", answer: true },
+    { text: "¿Los vikingos usaban cascos con cuernos?", answer: false },
+    { text: "¿Las arañas son insectos?", answer: false },
+    { text: "¿El champán solo puede venir de Francia?", answer: true },
+    { text: "¿Los peces dorados tienen memoria de 3 segundos?", answer: false },
+    { text: "¿El Monte Everest es la montaña más alta desde el centro de la Tierra?", answer: false }
+];
+
+const geografia = [
+    { text: "¿Rusia está en dos continentes?", answer: true },
+    { text: "¿Groenlandia pertenece a Dinamarca?", answer: true },
+    { text: "¿El río Nilo es más largo que el Amazonas?", answer: false },
+    { text: "¿Turquía está completamente en Asia?", answer: false },
+    { text: "¿El desierto más grande del mundo es el Sahara?", answer: false },
+    { text: "¿El punto más bajo de la Tierra está en el Mar Muerto?", answer: false },
+    { text: "¿Australia es más grande que Europa?", answer: false },
+    { text: "¿Hay más de 190 países en el mundo?", answer: true },
+    { text: "¿Alaska fue comprada a Rusia?", answer: true },
+    { text: "¿La capital de Canadá es Toronto?", answer: false }
+];
+
+const matematicas = [
+    { text: "¿13 × 7 = 91?", answer: true },
+    { text: "¿144 ÷ 12 = 13?", answer: false },
+    { text: "¿√64 es 8?", answer: true },
+    { text: "¿25% de 80 es 20?", answer: true },
+    { text: "¿17 es un número primo?", answer: true },
+    { text: "¿1 es un número primo?", answer: false },
+    { text: "¿0.5 × 100 = 50?", answer: true },
+    { text: "¿Un círculo tiene infinitos lados?", answer: false },
+    { text: "¿2⁴ es 16?", answer: true },
+    { text: "¿15 × 6 = 80?", answer: false }
+];
+
+const logica = [
+    { text: "¿Febrero puede tener 29 días?", answer: true },
+    { text: "¿Un avión vuela más rápido que el sonido siempre?", answer: false },
+    { text: "¿El vidrio es un líquido?", answer: false },
+    { text: "¿Los camaleones cambian de color para camuflarse?", answer: false },
+    { text: "¿Usar sombreros causa calvicie?", answer: false },
+    { text: "¿El café está hecho de semillas?", answer: true },
+    { text: "¿Las uñas siguen creciendo después de morir?", answer: false },
+    { text: "¿El oxígeno es inflamable?", answer: false },
+    { text: "¿Los rayos nunca caen dos veces en el mismo lugar?", answer: false },
+    { text: "¿La lengua tiene zonas específicas para cada sabor?", answer: false }
+];
+
+const ciencia = [
+    { text: "¿Los diamantes están hechos de carbono?", answer: true },
+    { text: "¿Los antibióticos funcionan contra virus?", answer: false },
+    { text: "¿El ADN está en todas las células del cuerpo?", answer: false },
+    { text: "¿La velocidad de la luz cambia según el medio?", answer: true },
+    { text: "¿Los humanos compartimos más del 50% del ADN con plátanos?", answer: true },
+    { text: "¿El cerebro humano es el órgano que más energía consume?", answer: false },
+    { text: "¿El agua caliente se congela más rápido que la fría?", answer: true },
+    { text: "¿Venus es el planeta más caliente del sistema solar?", answer: true },
+    { text: "¿Las estrellas fugaces son estrellas?", answer: false },
+    { text: "¿La mayoría del oxígeno viene de los árboles?", answer: false }
+];
+
+// ========== REGLAS VISUALES ==========
+const visualRules = [
+    {
+        rule: "Si ves un +, PULSA el botón",
+        symbols: ['+', '-', '×', '÷'],
+        correctSymbol: '+',
+        shouldPress: true
+    },
+    {
+        rule: "Si ves un -, NO PULSES",
+        symbols: ['+', '-', '×', '÷'],
+        correctSymbol: '-',
+        shouldPress: false
+    },
+    {
+        rule: "Si el fondo es ROJO, PULSA",
+        type: 'background',
+        colors: ['#ff0000', '#0000ff', '#00ff00', '#ffff00'],
+        correctColor: '#ff0000',
+        shouldPress: true
+    },
+    {
+        rule: "Si el fondo es AZUL, NO PULSES",
+        type: 'background',
+        colors: ['#ff0000', '#0000ff', '#00ff00', '#ffff00'],
+        correctColor: '#0000ff',
+        shouldPress: false
+    },
+    {
+        rule: "Si ves un ★, PULSA",
+        symbols: ['★', '●', '■', '▲'],
+        correctSymbol: '★',
+        shouldPress: true
+    },
+    {
+        rule: "Si ves un ●, NO PULSES",
+        symbols: ['★', '●', '■', '▲'],
+        correctSymbol: '●',
+        shouldPress: false
+    }
+];
+
+// ========== PREGUNTAS DE MEMORIA ==========
+function generateMemoryQuestion() {
+    const num = Math.floor(Math.random() * 900) + 100; // 100-999
+    const options = [num];
+    
+    // Generar 3 números cercanos como distractores
+    while(options.length < 4) {
+        const distractor = num + (Math.floor(Math.random() * 20) - 10);
+        if(distractor >= 100 && distractor <= 999 && !options.includes(distractor)) {
+            options.push(distractor);
+        }
+    }
+    
+    // Mezclar opciones
+    options.sort(() => Math.random() - 0.5);
+    
+    return {
+        type: 'memory',
+        memorize: num,
+        question: "¿Cuál era el número mostrado?",
+        options: options,
+        answer: num
+    };
+}
+
+// ========== VARIABLES DE JUEGO ==========
+let currentQuestionIndex = 0;
+let selectedQuestions = [];
+let timerValue = 8;
+let timerInterval = null;
+let buttonPressed = false;
+let waitingForAnswer = false;
+let currentAnswer = false;
+
+// ========== INICIAR JUEGO ==========
+function startGame() {
+    document.getElementById('startScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'flex';
+    
+    // Seleccionar 15 preguntas aleatorias mezcladas
+    selectedQuestions = generateRandomQuestions(15);
+    currentQuestionIndex = 0;
+    
+    nextQuestion();
+}
+
+function generateRandomQuestions(count) {
+    const questions = [];
+    
+    // Función auxiliar para seleccionar preguntas aleatorias de una categoría
+    function selectRandom(array, n) {
+        const shuffled = [...array].sort(() => Math.random() - 0.5);
+        return shuffled.slice(0, n);
+    }
+    
+    // Seleccionar 3 preguntas de cada categoría (5 categorías × 3 = 15 preguntas)
+    const selectedCultura = selectRandom(culturaGeneral, 3);
+    const selectedGeo = selectRandom(geografia, 3);
+    const selectedMat = selectRandom(matematicas, 3);
+    const selectedLog = selectRandom(logica, 3);
+    const selectedCien = selectRandom(ciencia, 3);
+    
+    // Agregar todas las preguntas con su tipo
+    selectedCultura.forEach(q => questions.push({ type: 'general', ...q }));
+    selectedGeo.forEach(q => questions.push({ type: 'general', ...q }));
+    selectedMat.forEach(q => questions.push({ type: 'general', ...q }));
+    selectedLog.forEach(q => questions.push({ type: 'general', ...q }));
+    selectedCien.forEach(q => questions.push({ type: 'general', ...q }));
+    
+    // Mezclar todas las preguntas aleatoriamente
+    questions.sort(() => Math.random() - 0.5);
+    
+    return questions;
+}
+
+// ========== SIGUIENTE PREGUNTA ==========
+function nextQuestion() {
+    if(currentQuestionIndex >= 15) {
+        winGame();
+        return;
+    }
+    
+    currentQuestionIndex++;
+    document.getElementById('currentQuestion').textContent = currentQuestionIndex;
+    
+    buttonPressed = false;
+    waitingForAnswer = false;
+    timerValue = 8;
+    
+    const question = selectedQuestions[currentQuestionIndex - 1];
+    
+    // Resetear colores
+    document.getElementById('gameScreen').style.background = '#000';
+    document.getElementById('question').style.color = '#fff';
+    
+    if(question.type === 'visual') {
+        showVisualRule(question.rule);
+    } else if(question.type === 'memory') {
+        showMemoryQuestion(question);
+    } else {
+        showGeneralQuestion(question);
+    }
+}
+
+// ========== PREGUNTA VISUAL ==========
+function showVisualRule(rule) {
+    const questionDiv = document.getElementById('question');
+    questionDiv.innerHTML = `<div class="rule-display">${rule.rule}</div>`;
+    
+    setTimeout(() => {
+        // Mostrar símbolo o color
+        if(rule.type === 'background') {
+            const chosenColor = rule.colors[Math.floor(Math.random() * rule.colors.length)];
+            document.getElementById('gameScreen').style.background = chosenColor;
+            questionDiv.innerHTML = '<div class="symbol">¿?</div>';
+            currentAnswer = (chosenColor === rule.correctColor) ? rule.shouldPress : !rule.shouldPress;
+        } else {
+            const chosenSymbol = rule.symbols[Math.floor(Math.random() * rule.symbols.length)];
+            questionDiv.innerHTML = `<div class="symbol">${chosenSymbol}</div>`;
+            currentAnswer = (chosenSymbol === rule.correctSymbol) ? rule.shouldPress : !rule.shouldPress;
+        }
+        
+        startTimer();
+    }, 2000);
+}
+
+// ========== PREGUNTA DE MEMORIA ==========
+function showMemoryQuestion(question) {
+    const questionDiv = document.getElementById('question');
+    questionDiv.innerHTML = `<div id="memoryDisplay">${question.memorize}</div>`;
+    
+    setTimeout(() => {
+        // Mostrar pregunta y opciones
+        let optionsHTML = '<div style="font-size: 24px; margin-bottom: 20px;">' + question.question + '</div>';
+        optionsHTML += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; max-width: 400px;">';
+        
+        question.options.forEach((opt, index) => {
+            optionsHTML += `
+                <button onclick="selectMemoryOption(${opt})" 
+                    style="padding: 15px; font-size: 28px; font-weight: bold; 
+                           background: rgba(255,255,255,0.2); border: 3px solid #fff; 
+                           border-radius: 10px; cursor: pointer; color: #fff;
+                           transition: all 0.2s;"
+                    onmouseover="this.style.background='rgba(255,255,255,0.4)'"
+                    onmouseout="this.style.background='rgba(255,255,255,0.2)'">
+                    ${opt}
+                </button>`;
+        });
+        
+        optionsHTML += '</div>';
+        questionDiv.innerHTML = optionsHTML;
+        
+        currentAnswer = question.answer;
+        startTimer();
+    }, 2500);
+}
+
+// ========== PREGUNTA GENERAL ==========
+function showGeneralQuestion(question) {
+    const questionDiv = document.getElementById('question');
+    questionDiv.innerHTML = question.text;
+    currentAnswer = question.answer;
+    startTimer();
+}
+
+// ========== TEMPORIZADOR ==========
+function startTimer() {
+    waitingForAnswer = true;
+    timerValue = 8;
+    updateTimerDisplay();
+    
+    timerInterval = setInterval(() => {
+        timerValue--;
+        updateTimerDisplay();
+        
+        if(timerValue <= 0) {
+            clearInterval(timerInterval);
+            checkAnswer(false); // No pulsó
+        }
+    }, 1000);
+}
+
+function updateTimerDisplay() {
+    const timerDiv = document.getElementById('timer');
+    timerDiv.textContent = timerValue;
+    
+    timerDiv.className = '';
+    if(timerValue <= 3) {
+        timerDiv.className = 'danger';
+    } else if(timerValue <= 5) {
+        timerDiv.className = 'warning';
+    }
+}
+
+// ========== PULSAR BOTÓN ==========
+function pressButton() {
+    if(!waitingForAnswer || buttonPressed) return;
+    
+    buttonPressed = true;
+    clearInterval(timerInterval);
+    checkAnswer(true); // Pulsó
+}
+
+function selectMemoryOption(selected) {
+    if(!waitingForAnswer || buttonPressed) return;
+    
+    buttonPressed = true;
+    clearInterval(timerInterval);
+    
+    // Para preguntas de memoria con opciones
+    const correct = (selected === currentAnswer);
+    waitingForAnswer = false;
+    
+    if(correct) {
+        setTimeout(nextQuestion, 500);
+    } else {
+        gameOverMemory(selected);
+    }
+}
+
+function gameOverMemory(selected) {
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'flex';
+    
+    document.getElementById('failMessage').innerHTML = 
+        `Elegiste: <strong>${selected}</strong><br>El número correcto era: <strong>${currentAnswer}</strong>`;
+    document.getElementById('finalScore').textContent = 
+        `Sobreviviste a ${currentQuestionIndex - 1} de 15 preguntas`;
+}
+
+// ========== VERIFICAR RESPUESTA ==========
+function checkAnswer(pressed) {
+    waitingForAnswer = false;
+    
+    const correct = (pressed === currentAnswer);
+    
+    if(correct) {
+        // Correcto - siguiente pregunta
+        setTimeout(nextQuestion, 500);
+    } else {
+        // Incorrecto - game over
+        gameOver(pressed);
+    }
+}
+
+// ========== GAME OVER ==========
+function gameOver(pressed) {
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'flex';
+    
+    const action = pressed ? "Pulsaste" : "NO pulsaste";
+    const shouldHave = currentAnswer ? "DEBÍAS pulsar" : "NO debías pulsar";
+    
+    document.getElementById('failMessage').innerHTML = 
+        `${action} el botón<br><strong>${shouldHave}</strong>`;
+    document.getElementById('finalScore').textContent = 
+        `Sobreviviste a ${currentQuestionIndex - 1} de 15 preguntas`;
+}
+
+// ========== VICTORIA ==========
+function winGame() {
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'flex';
+    
+    document.getElementById('gameOverScreen').innerHTML = `
+        <h1 style="font-size: 64px; color: #00ff00;">🏆 ¡VICTORIA!</h1>
+        <div style="font-size: 32px; margin: 30px;">
+            ¡Sobreviviste a las 15 preguntas!
+        </div>
+        <button id="restartButton" onclick="location.reload()">JUGAR DE NUEVO</button>
+    `;
+}
+</script>
+
+</body>
+</html>

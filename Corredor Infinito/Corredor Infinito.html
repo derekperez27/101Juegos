@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Dino Runner</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+#records {
+    margin: 20px auto;
+    max-width: 400px;
+}
+#records h2 {
+    color: #00ff00;
+}
+#recordsList {
+    background: #222;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.record-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    margin: 5px 0;
+    background: #333;
+    border-radius: 5px;
+    border-left: 3px solid #00ff00;
+}
+.record-rank {
+    font-weight: bold;
+    color: #00ff00;
+    margin-right: 10px;
+}
+.record-score {
+    color: #4CAF50;
+    font-weight: bold;
+}
+.no-records {
+    color: #888;
+    font-style: italic;
+    padding: 20px;
+}
+button {
+    padding: 10px 20px;
+    font-size: 16px;
+    margin: 5px;
+    cursor: pointer;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+}
+button:hover {
+    background: #45a049;
+}
+.danger-btn {
+    background: #d32f2f !important;
+}
+.danger-btn:hover {
+    background: #c62828 !important;
+}
+</style>
+</head>
+<body>
+
+<h1>🦖 Dino Runner</h1>
+<p>Puntuación: <span id="score">0</span></p>
+<p>Velocidad: <span id="speedDisplay">6.0</span></p>
+<p id="msg" style="color:#00ff00; font-size:18px;"></p>
+<p style="color:#888; font-size:12px;">ESPACIO o W: Saltar | S o ↓: Agacharse | R: Reiniciar</p>
+
+<canvas id="c" width="800" height="300"></canvas>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button onclick="clearRecords()" class="danger-btn">Borrar Récords</button>
+</div>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const scoreSpan = document.getElementById("score");
+const speedDisplay = document.getElementById("speedDisplay");
+const msg = document.getElementById("msg");
+
+let speed = 6;
+let score = 0;
+let running = false;
+let spawnInterval = 1200;
+let frameCount = 0;
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('dinoRunnerRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(score) {
+    const records = loadRecords();
+    records.push({
+        score: score,
+        date: new Date().toLocaleDateString()
+    });
+    // Ordenar por puntuación (mayor a menor)
+    records.sort((a, b) => b.score - a.score);
+    // Guardar solo los mejores 10
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('dinoRunnerRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-score">${record.score} pts</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('dinoRunnerRecords');
+        displayRecords();
+    }
+}
+
+// Mostrar récords al cargar la página
+displayRecords();
+
+/* ===== PLAYER ===== */
+const player = {
+    x: 100,
+    y: 200,
+    w: 30,
+    h: 40,
+    vy: 0,
+    jumping: false,
+    crouching: false,
+    groundY: 200
+};
+
+/* ===== OBSTACLES ===== */
+let obstacles = [];
+
+function spawnObstacle(){
+    const type = Math.random() < 0.6 ? 'low' : 'high'; // 60% bajo, 40% alto
+    
+    obstacles.push({
+        x: 800,
+        y: type === 'low' ? 210 : 185,
+        w: 25,
+        h: type === 'low' ? 30 : 25,
+        type: type
+    });
+    
+    // Obstáculos dobles (después de 20 puntos)
+    if(score > 20 && Math.random() < 0.25){
+        const type2 = Math.random() < 0.5 ? 'low' : 'high';
+        obstacles.push({
+            x: 950,
+            y: type2 === 'low' ? 210 : 185,
+            w: 25,
+            h: type2 === 'low' ? 30 : 25,
+            type: type2
+        });
+    }
+    
+    // Obstáculos triples (después de 50 puntos)
+    if(score > 50 && Math.random() < 0.15){
+        const type3 = Math.random() < 0.5 ? 'low' : 'high';
+        obstacles.push({
+            x: 1100,
+            y: type3 === 'low' ? 210 : 185,
+            w: 25,
+            h: type3 === 'low' ? 30 : 25,
+            type: type3
+        });
+    }
+}
+
+/* ===== INPUT ===== */
+document.addEventListener("keydown", e => {
+    if(!running) {
+        if(e.key === "r" || e.key === "R" || e.key === " ") {
+            restart();
+        }
+        return;
+    }
+
+    // Saltar
+    if((e.key === "w" || e.key === "W" || e.key === " " || e.key === "ArrowUp") && !player.jumping && !player.crouching){
+        player.jumping = true;
+        player.vy = -14;
+    }
+    
+    // Agacharse
+    if((e.key === "s" || e.key === "S" || e.key === "ArrowDown")){
+        player.crouching = true;
+        // Caída rápida si está saltando
+        if(player.jumping && player.vy > 0){
+            player.vy = 8; // Acelerar la caída
+        }
+    }
+});
+
+document.addEventListener("keyup", e => {
+    if((e.key === "s" || e.key === "S" || e.key === "ArrowDown")){
+        player.crouching = false;
+    }
+});
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    frameCount++;
+
+    // Gravedad y salto
+    if(player.jumping){
+        player.y += player.vy;
+        player.vy += 0.8;
+        
+        if(player.y >= player.groundY){
+            player.y = player.groundY;
+            player.jumping = false;
+            player.vy = 0;
+        }
+    }
+
+    // Mover obstáculos
+    obstacles.forEach(o => o.x -= speed);
+
+    // Colisiones
+    obstacles.forEach(o => {
+        const playerW = player.crouching ? player.w : player.w;
+        const playerH = player.crouching ? 20 : player.h;
+        const playerY = player.crouching ? player.y + 20 : player.y;
+
+        if(o.x < player.x + playerW &&
+           o.x + o.w > player.x &&
+           o.y < playerY + playerH &&
+           o.y + o.h > playerY){
+            die();
+        }
+    });
+
+    // Eliminar obstáculos fuera de pantalla y sumar puntos
+    obstacles = obstacles.filter(o => {
+        if(o.x + o.w < 0) {
+            score++;
+            scoreSpan.textContent = score;
+            return false;
+        }
+        return true;
+    });
+
+    // Aumentar dificultad cada 5 puntos (más agresivo)
+    if(score > 0 && score % 5 === 0 && frameCount % 60 === 0){
+        if(speed < 15) {
+            speed += 0.25; // Aumenta más rápido
+            speedDisplay.textContent = speed.toFixed(1);
+        }
+        if(spawnInterval > 500){
+            spawnInterval -= 30;
+        }
+    }
+    
+    // Super velocidad después de 100 puntos
+    if(score > 100 && score % 10 === 0 && frameCount % 60 === 0){
+        if(speed < 20) {
+            speed += 0.3;
+            speedDisplay.textContent = speed.toFixed(1);
+        }
+    }
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0, 0, 800, 300);
+
+    // Suelo
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 240);
+    ctx.lineTo(800, 240);
+    ctx.stroke();
+
+    // Líneas decorativas del suelo (efecto movimiento)
+    ctx.strokeStyle = "#333";
+    for(let i = 0; i < 20; i++){
+        const x = (frameCount * speed * 0.5 + i * 50) % 800;
+        ctx.beginPath();
+        ctx.moveTo(x, 245);
+        ctx.lineTo(x + 20, 245);
+        ctx.stroke();
+    }
+
+    // Jugador
+    ctx.fillStyle = "cyan";
+    if(player.crouching){
+        ctx.fillRect(player.x, player.y + 20, player.w, 20);
+    } else {
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+    }
+
+    // Obstáculos
+    obstacles.forEach(o => {
+        ctx.fillStyle = o.type === 'low' ? "red" : "orange";
+        ctx.fillRect(o.x, o.y, o.w, o.h);
+    });
+
+    // Nubes decorativas
+    ctx.fillStyle = "#222";
+    for(let i = 0; i < 3; i++){
+        const x = (frameCount * 0.3 + i * 300) % 900 - 100;
+        ctx.fillRect(x, 30 + i * 30, 60, 20);
+        ctx.fillRect(x + 15, 20 + i * 30, 30, 20);
+    }
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ===== SPAWN TIMER ===== */
+let spawnTimer;
+
+function startSpawning(){
+    clearInterval(spawnTimer);
+    spawnTimer = setInterval(() => {
+        if(running) spawnObstacle();
+    }, spawnInterval);
+}
+
+/* ===== GAME OVER ===== */
+function die(){
+    running = false;
+    
+    // Guardar récord
+    saveRecord(score);
+    
+    const records = loadRecords();
+    const isTopRecord = records.length > 0 && records[0].score === score;
+    
+    if(isTopRecord){
+        msg.innerHTML = "🏆 ¡NUEVO RÉCORD! 💀 GAME OVER";
+    } else {
+        msg.innerHTML = "💀 GAME OVER";
+    }
+    
+    clearInterval(spawnTimer);
+}
+
+/* ===== REINICIO ===== */
+function restart(){
+    // Resetear variables
+    speed = 6;
+    score = 0;
+    spawnInterval = 1200;
+    frameCount = 0;
+    obstacles = [];
+    running = true;
+    
+    player.x = 100;
+    player.y = 200;
+    player.vy = 0;
+    player.jumping = false;
+    player.crouching = false;
+    
+    scoreSpan.textContent = 0;
+    speedDisplay.textContent = "6.0";
+    msg.innerHTML = "¡Buena suerte! 🦖";
+    
+    startSpawning();
+}
+
+loop();
+
+// Auto-start al presionar espacio
+document.addEventListener("keydown", e => {
+    if(!running && obstacles.length === 0 && (e.key === " " || e.key === "r" || e.key === "R")){
+        restart();
+    }
+}, {once: false});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Time Freeze</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        canvas {
+            background: #000;
+            display: block;
+            margin: 20px auto;
+            border: 2px solid white;
+        }
+
+        #records {
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        #records h2 {
+            color: #00ff00;
+        }
+
+        #recordsList {
+            background: #222;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .record-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: #333;
+            border-radius: 5px;
+            border-left: 3px solid #00ff00;
+        }
+
+        .record-rank {
+            font-weight: bold;
+            color: #00ff00;
+            margin-right: 10px;
+        }
+
+        .record-score {
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        .no-records {
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>⏸️ Time Freeze</h1>
+    <p>Movimientos: <span id="moves">0</span></p>
+    <p>Proyectiles máximos: <span id="max">1</span></p>
+    <canvas id="game" width="400" height="400"></canvas>
+    <button onclick="startGame()">Empezar</button>
+
+    <div id="records">
+        <h2>🏆 Récords</h2>
+        <div id="recordsList"></div>
+        <button onclick="clearRecords()" style="background: #d32f2f; color: white; padding: 8px 15px; cursor: pointer; border: none; border-radius: 5px; margin-top: 10px;">Borrar Récords</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("game");
+        const ctx = canvas.getContext("2d");
+
+        const GRID = 40;
+        const COLS = 10;
+        const ROWS = 10;
+
+        let running = false;
+        let moves = 0;
+        let maxProjectiles = 1;
+
+        const player = {
+            x: 5,
+            y: 5
+        };
+
+        let bullets = [];
+
+        /* ===== RÉCORDS ===== */
+        function loadRecords() {
+            const records = localStorage.getItem('timeFreezeRecords');
+            return records ? JSON.parse(records) : [];
+        }
+
+        function saveRecord(moves) {
+            const records = loadRecords();
+            records.push({
+                moves: moves,
+                date: new Date().toLocaleDateString()
+            });
+            // Ordenar por movimientos (mayor a menor)
+            records.sort((a, b) => b.moves - a.moves);
+            // Guardar solo los mejores 10
+            const top10 = records.slice(0, 10);
+            localStorage.setItem('timeFreezeRecords', JSON.stringify(top10));
+            displayRecords();
+        }
+
+        function displayRecords() {
+            const records = loadRecords();
+            const recordsList = document.getElementById('recordsList');
+            
+            if (records.length === 0) {
+                recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+                return;
+            }
+
+            recordsList.innerHTML = records.map((record, index) => {
+                let medal = '';
+                if (index === 0) medal = '🥇';
+                else if (index === 1) medal = '🥈';
+                else if (index === 2) medal = '🥉';
+                
+                return `
+                    <div class="record-item">
+                        <span class="record-rank">${medal} #${index + 1}</span>
+                        <span class="record-score">${record.moves} movimientos</span>
+                        <span style="color: #666; font-size: 12px;">${record.date}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function clearRecords() {
+            if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+                localStorage.removeItem('timeFreezeRecords');
+                displayRecords();
+            }
+        }
+
+        // Mostrar récords al cargar la página
+        displayRecords();
+
+        /* =========================
+           UTILIDADES
+        ========================= */
+        function randCell(max) {
+            return Math.floor(Math.random() * max);
+        }
+
+        /* =========================
+           SPAWN DE PROYECTILES
+        ========================= */
+        function spawnBullet() {
+            const side = Math.floor(Math.random() * 4);
+            let x, y, dx, dy;
+
+            if (side === 0) { x = 0; y = randCell(ROWS); dx = 1; dy = 0; }
+            if (side === 1) { x = COLS - 1; y = randCell(ROWS); dx = -1; dy = 0; }
+            if (side === 2) { x = randCell(COLS); y = 0; dx = 0; dy = 1; }
+            if (side === 3) { x = randCell(COLS); y = ROWS - 1; dx = 0; dy = -1; }
+
+            bullets.push({ x, y, dx, dy });
+        }
+
+        /* =========================
+           DIFICULTAD PROGRESIVA
+        ========================= */
+        function updateDifficulty() {
+            if (moves % 5 === 0) {
+                maxProjectiles++;
+                document.getElementById("max").textContent = maxProjectiles;
+            }
+        }
+
+        /* =========================
+           DIBUJO
+        ========================= */
+        function drawGrid() {
+            ctx.strokeStyle = "#222";
+            for (let i = 0; i <= COLS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * GRID, 0);
+                ctx.lineTo(i * GRID, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i <= ROWS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, i * GRID);
+                ctx.lineTo(canvas.width, i * GRID);
+                ctx.stroke();
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGrid();
+
+            // Jugador
+            ctx.fillStyle = "cyan";
+            ctx.fillRect(player.x * GRID + 10, player.y * GRID + 10, 20, 20);
+
+            // Proyectiles
+            ctx.fillStyle = "red";
+            bullets.forEach(b => {
+                ctx.fillRect(b.x * GRID + 14, b.y * GRID + 14, 12, 12);
+            });
+        }
+
+        /* =========================
+           LÓGICA DEL MUNDO
+        ========================= */
+        function stepWorld() {
+            // Mover proyectiles
+            bullets.forEach(b => {
+                b.x += b.dx;
+                b.y += b.dy;
+            });
+
+            // Colisiones
+            for (let b of bullets) {
+                if (b.x === player.x && b.y === player.y) {
+                    gameOver();
+                    return;
+                }
+            }
+
+            // Limpiar fuera del mapa
+            bullets = bullets.filter(b =>
+                b.x >= 0 && b.x < COLS && b.y >= 0 && b.y < ROWS
+            );
+
+            // Spawn progresivo
+            if (bullets.length < maxProjectiles) {
+                spawnBullet();
+            }
+        }
+
+        /* =========================
+           MOVIMIENTO DEL JUGADOR
+        ========================= */
+        function movePlayer(dx, dy) {
+            if (!running) return;
+
+            const nx = player.x + dx;
+            const ny = player.y + dy;
+
+            if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return;
+
+            player.x = nx;
+            player.y = ny;
+
+            moves++;
+            document.getElementById("moves").textContent = moves;
+
+            updateDifficulty();
+            stepWorld();
+            draw();
+        }
+
+        /* =========================
+           CONTROL DE JUEGO
+        ========================= */
+        function startGame() {
+            running = true;
+            moves = 0;
+            maxProjectiles = 1;
+            bullets = [];
+
+            player.x = 5;
+            player.y = 5;
+
+            document.getElementById("moves").textContent = 0;
+            document.getElementById("max").textContent = 1;
+
+            draw();
+        }
+
+        function gameOver() {
+            running = false;
+            saveRecord(moves);
+            alert("GAME OVER\nMovimientos: " + moves);
+        }
+
+        /* =========================
+           INPUT
+        ========================= */
+        document.addEventListener("keydown", e => {
+            if (e.key === "w" || e.key === "ArrowUp") movePlayer(0, -1);
+            if (e.key === "s" || e.key === "ArrowDown") movePlayer(0, 1);
+            if (e.key === "a" || e.key === "ArrowLeft") movePlayer(-1, 0);
+            if (e.key === "d" || e.key === "ArrowRight") movePlayer(1, 0);
+        });
+    </script>
+
+</body>
+</html>

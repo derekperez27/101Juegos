@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Conditional Memory</title>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Courier New', monospace;
+    background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2e 100%);
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+#game-container {
+    width: 100%;
+    max-width: 900px;
+    text-align: center;
+    padding: 20px;
+}
+
+h1 {
+    font-size: 42px;
+    margin-bottom: 5px;
+    text-shadow: 0 0 30px rgba(138,43,226,0.8);
+    letter-spacing: 3px;
+}
+
+.subtitle {
+    font-size: 18px;
+    color: #ff6ec7;
+    margin-bottom: 20px;
+    font-style: italic;
+}
+
+#menu {
+    background: rgba(255,255,255,0.05);
+    padding: 40px;
+    border-radius: 20px;
+    border: 2px solid rgba(138,43,226,0.3);
+}
+
+#instructions {
+    text-align: left;
+    margin: 30px 0;
+    font-size: 18px;
+    line-height: 1.8;
+}
+
+#instructions h3 {
+    color: #8a2be2;
+    margin: 20px 0 10px 0;
+}
+
+#instructions ul {
+    list-style: none;
+    padding-left: 20px;
+}
+
+#instructions li {
+    margin: 10px 0;
+}
+
+.example {
+    background: rgba(138,43,226,0.1);
+    border-left: 4px solid #8a2be2;
+    padding: 20px;
+    margin: 20px 0;
+    font-size: 16px;
+    text-align: left;
+}
+
+.warning {
+    background: rgba(255,110,199,0.2);
+    border-left: 4px solid #ff6ec7;
+    padding: 15px;
+    margin: 20px 0;
+    font-size: 17px;
+}
+
+#start-btn, #restart-btn {
+    background: linear-gradient(135deg, #8a2be2, #ff6ec7);
+    border: none;
+    padding: 25px 70px;
+    font-size: 32px;
+    color: white;
+    border-radius: 15px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 30px;
+    transition: all 0.3s;
+    box-shadow: 0 8px 30px rgba(138,43,226,0.6);
+    font-family: 'Courier New', monospace;
+    display: inline-block;
+}
+
+#start-btn:hover, #restart-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 35px rgba(138,43,226,0.7);
+}
+
+#game {
+    display: none;
+}
+
+#stats {
+    display: flex;
+    justify-content: space-around;
+    margin: 15px 0;
+    font-size: 18px;
+}
+
+.stat {
+    background: rgba(255,255,255,0.05);
+    padding: 10px 20px;
+    border-radius: 10px;
+    border: 2px solid rgba(138,43,226,0.4);
+}
+
+#phase-container {
+    margin: 20px 0;
+}
+
+.phase-title {
+    font-size: 24px;
+    color: #8a2be2;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+#data-display {
+    background: rgba(0,0,0,0.4);
+    padding: 40px;
+    margin: 15px auto;
+    border-radius: 20px;
+    min-height: 180px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 70px;
+    font-weight: bold;
+    border: 3px solid #8a2be2;
+    max-width: 600px;
+    transition: all 0.3s;
+}
+
+#condition-display {
+    background: rgba(138,43,226,0.2);
+    padding: 20px;
+    margin: 15px auto;
+    border-radius: 15px;
+    font-size: 22px;
+    border: 2px solid #8a2be2;
+    max-width: 600px;
+    line-height: 1.4;
+}
+
+#trigger-display {
+    margin: 20px auto;
+    padding: 20px;
+    font-size: 100px;
+    font-weight: bold;
+}
+
+#trigger-display.positive {
+    color: #00ff88;
+    text-shadow: 0 0 40px rgba(0,255,136,0.8);
+    animation: glow-green 1s ease-in-out;
+}
+
+#trigger-display.negative {
+    color: #ff4444;
+    text-shadow: 0 0 40px rgba(255,68,68,0.8);
+    animation: glow-red 1s ease-in-out;
+}
+
+@keyframes glow-green {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+@keyframes glow-red {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+#question-display {
+    font-size: 24px;
+    margin: 15px 0;
+    color: #ff6ec7;
+    min-height: 50px;
+}
+
+#answers {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 15px 0;
+}
+
+.answer-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    padding: 15px 30px;
+    font-size: 20px;
+    color: white;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+    min-width: 130px;
+}
+
+.answer-btn:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+
+.answer-btn.correct {
+    background: linear-gradient(135deg, #00ff88 0%, #00cc66 100%);
+}
+
+.answer-btn.wrong {
+    background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
+}
+
+.color-box {
+    width: 120px;
+    height: 120px;
+    border-radius: 15px;
+    border: 3px solid white;
+    display: inline-block;
+}
+
+#game-over {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.95);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+#game-over-content {
+    background: linear-gradient(135deg, #1a0a2e, #0a0a1a);
+    padding: 60px;
+    border-radius: 25px;
+    border: 3px solid #ff6ec7;
+    text-align: center;
+    max-width: 600px;
+}
+
+#game-over h2 {
+    font-size: 56px;
+    color: #ff6ec7;
+    margin-bottom: 30px;
+}
+
+#death-reason {
+    font-size: 22px;
+    margin: 25px 0;
+    color: #ffaa00;
+    line-height: 1.6;
+}
+
+#final-stats {
+    font-size: 20px;
+    margin: 30px 0;
+    line-height: 1.8;
+}
+
+.fade-in {
+    animation: fadeIn 0.5s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+</style>
+</head>
+<body>
+
+<div id="game-container">
+    <h1>🧠 CONDITIONAL MEMORY</h1>
+    <p class="subtitle">"Recuerda solo si se cumple la condición"</p>
+    
+    <div id="menu">
+        <div id="instructions">
+            <h3>📋 REGLAS</h3>
+            <ul>
+                <li>1️⃣ Verás información</li>
+                <li>2️⃣ Se te dará una CONDICIÓN</li>
+                <li>3️⃣ Aparecerá un símbolo</li>
+                <li>4️⃣ Debes responder una pregunta</li>
+            </ul>
+            
+            <div class="warning">
+                <strong>⚠️ ADVERTENCIA:</strong> Solo debes recordar si la condición se cumple.<br>Recordar cuando no debías = MUERTE.
+            </div>
+        </div>
+        
+        <button id="start-btn">🎮 COMENZAR</button>
+    </div>
+    
+    <div id="game">
+        <div id="stats">
+            <div class="stat">
+                Puntuación: <span id="score">0</span>
+            </div>
+            <div class="stat">
+                Ronda: <span id="round">0</span>
+            </div>
+            <div class="stat">
+                Racha: <span id="streak">0</span>
+            </div>
+        </div>
+        
+        <div id="phase-container">
+            <div class="phase-title" id="phase-title"></div>
+            <div id="data-display"></div>
+            <div id="condition-display"></div>
+            <div id="trigger-display"></div>
+            <div id="question-display"></div>
+            <div id="answers"></div>
+        </div>
+    </div>
+    
+    <div id="game-over">
+        <div id="game-over-content">
+            <h2>💀 GAME OVER</h2>
+            <p id="death-reason"></p>
+            <div id="final-stats">
+                <p>Puntuación Final: <span id="final-score" style="color: #8a2be2; font-size: 36px;">0</span></p>
+                <p>Rondas Completadas: <span id="final-round">0</span></p>
+                <p>Mejor Racha: <span id="final-streak">0</span></p>
+            </div>
+            <button id="restart-btn">🔄 INTENTAR DE NUEVO</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let score = 0;
+let round = 0;
+let streak = 0;
+let maxStreak = 0;
+
+let currentData = null;
+let shouldRemember = false;
+let conditionMet = false;
+
+const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#fd79a8'];
+const symbols = ['★', '◆', '●', '■', '▲', '♠'];
+
+const triggers = [
+    { positive: '✓', negative: '✗' },
+    { positive: '+', negative: '-' },
+    { positive: '⬆', negative: '⬇' },
+    { positive: '▶', negative: '◀' }
+];
+
+function startGame() {
+    score = 0;
+    round = 0;
+    streak = 0;
+    maxStreak = 0;
+    
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('game').style.display = 'block';
+    document.getElementById('game-over').style.display = 'none';
+    
+    updateStats();
+    nextRound();
+}
+
+function updateStats() {
+    document.getElementById('score').textContent = score;
+    document.getElementById('round').textContent = round;
+    document.getElementById('streak').textContent = streak;
+}
+
+function nextRound() {
+    round++;
+    updateStats();
+    
+    // Limpiar displays
+    document.getElementById('data-display').innerHTML = '';
+    document.getElementById('condition-display').innerHTML = '';
+    document.getElementById('trigger-display').innerHTML = '';
+    document.getElementById('question-display').innerHTML = '';
+    document.getElementById('answers').innerHTML = '';
+    
+    // Fase 1: Mostrar información
+    showDataPhase();
+}
+
+function showDataPhase() {
+    document.getElementById('phase-title').textContent = '📊 INFORMACIÓN';
+    
+    const dataType = Math.floor(Math.random() * 3);
+    
+    if(dataType === 0) {
+        // Número
+        const number = Math.floor(Math.random() * 100);
+        currentData = { type: 'number', value: number };
+        document.getElementById('data-display').innerHTML = `<div class="fade-in">${number}</div>`;
+    } else if(dataType === 1) {
+        // Color
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        currentData = { type: 'color', value: color };
+        document.getElementById('data-display').innerHTML = 
+            `<div class="color-box fade-in" style="background: ${color};"></div>`;
+    } else {
+        // Símbolo
+        const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+        currentData = { type: 'symbol', value: symbol };
+        document.getElementById('data-display').innerHTML = 
+            `<div class="fade-in" style="font-size: 120px;">${symbol}</div>`;
+    }
+    
+    setTimeout(() => showConditionPhase(), 2500);
+}
+
+function showConditionPhase() {
+    document.getElementById('phase-title').textContent = '🎯 CONDICIÓN';
+    
+    // Seleccionar trigger aleatorio
+    const triggerSet = triggers[Math.floor(Math.random() * triggers.length)];
+    
+    const conditionText = `Recuerda esta información<br><strong>SOLO SI APARECE</strong> ${triggerSet.positive}`;
+    
+    document.getElementById('condition-display').innerHTML = 
+        `<div class="fade-in">${conditionText}</div>`;
+    
+    // Determinar si la condición se cumplirá
+    conditionMet = Math.random() > 0.5;
+    shouldRemember = conditionMet;
+    
+    setTimeout(() => showTriggerPhase(triggerSet), 3000);
+}
+
+function showTriggerPhase(triggerSet) {
+    document.getElementById('phase-title').textContent = '⚡ RESULTADO';
+    document.getElementById('condition-display').innerHTML = '';
+    
+    const triggerDisplay = document.getElementById('trigger-display');
+    
+    if(conditionMet) {
+        triggerDisplay.textContent = triggerSet.positive;
+        triggerDisplay.className = 'positive';
+    } else {
+        triggerDisplay.textContent = triggerSet.negative;
+        triggerDisplay.className = 'negative';
+    }
+    
+    setTimeout(() => showQuestionPhase(), 2000);
+}
+
+function showQuestionPhase() {
+    document.getElementById('phase-title').textContent = '❓ PREGUNTA';
+    document.getElementById('data-display').innerHTML = '';
+    document.getElementById('trigger-display').innerHTML = '';
+    
+    const questionDisplay = document.getElementById('question-display');
+    const answersDiv = document.getElementById('answers');
+    
+    let question = '';
+    let answers = [];
+    let correctAnswer = null;
+    
+    if(currentData.type === 'number') {
+        const questionType = Math.floor(Math.random() * 3);
+        
+        if(questionType === 0) {
+            question = '¿El número era mayor que 50?';
+            correctAnswer = shouldRemember ? (currentData.value > 50) : 'no-recuerdo';
+            answers = [
+                { text: 'SÍ', value: true }, 
+                { text: 'NO', value: false }, 
+                { text: 'NO RECUERDO', value: 'no-recuerdo' }
+            ];
+        } else if(questionType === 1) {
+            question = '¿El número era par?';
+            correctAnswer = shouldRemember ? (currentData.value % 2 === 0) : 'no-recuerdo';
+            answers = [
+                { text: 'SÍ', value: true }, 
+                { text: 'NO', value: false }, 
+                { text: 'NO RECUERDO', value: 'no-recuerdo' }
+            ];
+        } else {
+            question = '¿Cuál era el número exacto?';
+            correctAnswer = shouldRemember ? currentData.value : 'no-recuerdo';
+            
+            const options = [currentData.value];
+            while(options.length < 2) {
+                const fake = Math.floor(Math.random() * 100);
+                if(!options.includes(fake)) options.push(fake);
+            }
+            options.sort(() => Math.random() - 0.5);
+            answers = options.map(n => ({ text: n.toString(), value: n }));
+            answers.push({ text: 'NO RECUERDO', value: 'no-recuerdo' });
+        }
+    } else if(currentData.type === 'color') {
+        const isWarm = ['#ff6b6b', '#f9ca24', '#fd79a8'].includes(currentData.value);
+        
+        question = '¿El color era cálido (rojo/amarillo)?';
+        correctAnswer = shouldRemember ? isWarm : 'no-recuerdo';
+        answers = [
+            { text: 'SÍ', value: true }, 
+            { text: 'NO', value: false }, 
+            { text: 'NO RECUERDO', value: 'no-recuerdo' }
+        ];
+    } else {
+        // Símbolo
+        question = '¿Cuál era el símbolo?';
+        correctAnswer = shouldRemember ? currentData.value : 'no-recuerdo';
+        
+        const options = [currentData.value];
+        while(options.length < 2) {
+            const fake = symbols[Math.floor(Math.random() * symbols.length)];
+            if(!options.includes(fake)) options.push(fake);
+        }
+        options.sort(() => Math.random() - 0.5);
+        answers = options.map(s => ({ text: s, value: s }));
+        answers.push({ text: 'NO RECUERDO', value: 'no-recuerdo' });
+    }
+    
+    questionDisplay.innerHTML = `<div class="fade-in pulse">${question}</div>`;
+    
+    answers.forEach(answer => {
+        const btn = document.createElement('button');
+        btn.className = 'answer-btn fade-in';
+        btn.textContent = answer.text;
+        btn.onclick = () => checkAnswer(answer.value, correctAnswer);
+        answersDiv.appendChild(btn);
+    });
+}
+
+function checkAnswer(answer, correctAnswer) {
+    let isCorrect = false;
+    let reason = '';
+    
+    // Si NO debías recordar
+    if(!shouldRemember) {
+        if(answer === 'no-recuerdo') {
+            isCorrect = true;
+        } else {
+            reason = `💥 <strong>Recordaste cuando NO debías.</strong><br><br>La condición NO se cumplió (apareció ✗ o símbolo negativo).<br>Debiste responder "NO RECUERDO".<br><br>Tu cerebro automáticamente procesó la información, pero no debías usarla.`;
+        }
+    } 
+    // Si SÍ debías recordar
+    else {
+        if(answer === 'no-recuerdo') {
+            reason = `💥 <strong>Dijiste que no recordabas, pero SÍ debías recordar.</strong><br><br>La condición se cumplió (apareció ✓ o símbolo positivo).<br>Debiste recordar y responder correctamente.<br><br>Información correcta: ${formatDataInfo()}`;
+        } else if(answer === correctAnswer) {
+            isCorrect = true;
+        } else {
+            reason = `💥 <strong>Recordaste mal.</strong><br><br>Debías recordar (la condición se cumplió), pero tu respuesta fue incorrecta.<br><br>Información correcta: ${formatDataInfo()}`;
+        }
+    }
+    
+    if(isCorrect) {
+        score += 10;
+        streak++;
+        maxStreak = Math.max(maxStreak, streak);
+        updateStats();
+        
+        setTimeout(() => nextRound(), 1000);
+    } else {
+        gameOver(reason);
+    }
+}
+
+function formatDataInfo() {
+    if(currentData.type === 'number') {
+        return `Número: ${currentData.value}`;
+    } else if(currentData.type === 'color') {
+        return `Color mostrado`;
+    } else {
+        return `Símbolo: ${currentData.value}`;
+    }
+}
+
+function gameOver(reason) {
+    document.getElementById('death-reason').innerHTML = reason;
+    document.getElementById('final-score').textContent = score;
+    document.getElementById('final-round').textContent = round - 1;
+    document.getElementById('final-streak').textContent = maxStreak;
+    
+    document.getElementById('game-over').style.display = 'flex';
+}
+
+document.getElementById('start-btn').onclick = startGame;
+document.getElementById('restart-btn').onclick = startGame;
+</script>
+
+</body>
+</html>

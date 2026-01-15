@@ -1,0 +1,1164 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Battle Arena - Sistema de Combate por Turnos</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); overflow: hidden; }
+  
+  #game { display: block; width: 100%; height: 100vh; background: linear-gradient(180deg, #87ceeb 0%, #e0f6ff 50%, #90c890 100%); }
+  
+  /* Battle UI Container */
+  #battleUI { position: absolute; bottom: 0; left: 0; right: 0; height: 200px; background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.95) 100%); border-top: 3px solid #f4d03f; display: none; }
+  
+  /* Action Panel */
+  #actionPanel { position: absolute; right: 20px; bottom: 20px; width: 480px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .actionBtn { background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); color: #fff; border: 2px solid #7f8c8d; padding: 16px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: all 0.2s; text-align: left; }
+  .actionBtn:hover { background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%); border-color: #f39c12; transform: translateY(-2px); }
+  .actionBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .actionBtn .moveType { font-size: 11px; color: #bdc3c7; text-transform: uppercase; }
+  .actionBtn .movePower { float: right; color: #e74c3c; }
+  
+  /* Status Bars */
+  .statusBar { position: absolute; width: 320px; }
+  #playerStatus { left: 20px; bottom: 120px; }
+  #enemyStatus { right: 20px; top: 40px; }
+  .statusBar .name { font-size: 18px; font-weight: bold; color: #fff; margin-bottom: 4px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+  .statusBar .level { display: inline-block; background: #f39c12; color: #000; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px; }
+  .statusBar .hpBar { width: 100%; height: 24px; background: #34495e; border: 2px solid #2c3e50; border-radius: 12px; overflow: hidden; margin-top: 6px; position: relative; }
+  .statusBar .hpFill { height: 100%; background: linear-gradient(90deg, #27ae60 0%, #2ecc71 100%); transition: width 0.4s; }
+  .statusBar .hpFill.low { background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%); }
+  .statusBar .hpFill.med { background: linear-gradient(90deg, #f39c12 0%, #e67e22 100%); }
+  .statusBar .hpText { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 13px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); }
+  .statusBar .effects { margin-top: 6px; display: flex; gap: 4px; flex-wrap: wrap; }
+  .statusBadge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; color: #fff; }
+  .statusBadge.poison { background: #9b59b6; }
+  .statusBadge.burn { background: #e74c3c; }
+  .statusBadge.paralyze { background: #f39c12; }
+  .statusBadge.buff { background: #3498db; }
+  .statusBadge.debuff { background: #95a5a6; }
+  
+  /* Battle Log */
+  #battleLog { position: absolute; left: 20px; bottom: 20px; width: 500px; height: 80px; background: rgba(0,0,0,0.7); border: 2px solid #34495e; border-radius: 8px; padding: 12px; overflow-y: auto; font-size: 14px; color: #ecf0f1; }
+  #battleLog div { margin-bottom: 4px; animation: fadeIn 0.3s; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  
+  /* Message Overlay */
+  #message { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.95); color: #fff; padding: 24px 32px; border-radius: 12px; border: 3px solid #f39c12; display: none; z-index: 100; font-size: 20px; text-align: center; }
+  #message button { margin-top: 16px; padding: 12px 24px; background: #27ae60; border: none; color: #fff; font-size: 16px; border-radius: 6px; cursor: pointer; }
+  #message button:hover { background: #2ecc71; }
+  
+  /* Start Screen */
+  #startScreen { position: absolute; inset: 0; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 50; }
+  #startScreen h1 { font-size: 48px; color: #f39c12; margin-bottom: 40px; text-shadow: 3px 3px 6px rgba(0,0,0,0.5); }
+  #startScreen .creatureSelect { display: flex; gap: 24px; margin-bottom: 32px; }
+  .creatureCard { background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); padding: 20px; border-radius: 12px; border: 3px solid transparent; cursor: pointer; transition: all 0.3s; width: 180px; }
+  .creatureCard:hover { border-color: #f39c12; transform: scale(1.05); }
+  .creatureCard.selected { border-color: #27ae60; background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); }
+  .creatureCard.selected-p2 { border-color: #e74c3c; background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%); }
+  .creatureCard h3 { color: #fff; margin-bottom: 8px; font-size: 18px; }
+  .creatureCard .type { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; color: #fff; margin-bottom: 8px; }
+  .creatureCard .stats { font-size: 12px; color: #bdc3c7; line-height: 1.6; }
+  #modeSelector { margin-bottom: 32px; display: flex; gap: 16px; }
+  .modeBtn { padding: 12px 32px; background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%); border: 3px solid transparent; color: #fff; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: all 0.3s; }
+  .modeBtn:hover { border-color: #f39c12; }
+  .modeBtn.active { border-color: #27ae60; background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); }
+  .playerSection { margin-bottom: 24px; }
+  .playerSection h2 { color: #f39c12; font-size: 24px; margin-bottom: 12px; }
+  #startBtn { padding: 16px 48px; background: #e74c3c; border: none; color: #fff; font-size: 20px; font-weight: bold; border-radius: 8px; cursor: pointer; }
+  #startBtn:hover { background: #c0392b; }
+  #startBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<!-- Start Screen -->
+<div id="startScreen">
+  <h1>⚔️ BATTLE ARENA ⚔️</h1>
+  <p style="color: #bdc3c7; font-size: 18px; margin-bottom: 24px;">Selecciona el modo de juego</p>
+  
+  <div id="modeSelector">
+    <button class="modeBtn active" data-mode="ai">🤖 Vs IA</button>
+    <button class="modeBtn" data-mode="friend">👥 Vs Amigo</button>
+    <button class="modeBtn" data-mode="story">📖 Modo Historia</button>
+  </div>
+  
+  <div class="playerSection" id="player1Section">
+    <h2 id="player1Label">Jugador 1 - Elige tu criatura</h2>
+    <div class="creatureSelect" id="creatureSelect1"></div>
+  </div>
+  
+  <div class="playerSection" id="player2Section" style="display: none;">
+    <h2>Jugador 2 - Elige tu criatura</h2>
+    <div class="creatureSelect" id="creatureSelect2"></div>
+  </div>
+  
+  <button id="startBtn" disabled>INICIAR COMBATE</button>
+</div>
+
+<!-- Game Canvas -->
+<canvas id="game"></canvas>
+
+<!-- Battle UI -->
+<div id="battleUI">
+  <!-- Player Status -->
+  <div id="playerStatus" class="statusBar">
+    <div class="name">
+      <span id="playerName">-</span>
+      <span class="level" id="playerLevel">Nv.1</span>
+    </div>
+    <div class="hpBar">
+      <div class="hpFill" id="playerHP" style="width: 100%"></div>
+      <div class="hpText" id="playerHPText">100/100</div>
+    </div>
+    <div class="effects" id="playerEffects"></div>
+  </div>
+  
+  <!-- Enemy Status -->
+  <div id="enemyStatus" class="statusBar">
+    <div class="name">
+      <span id="enemyName">-</span>
+      <span class="level" id="enemyLevel">Nv.1</span>
+    </div>
+    <div class="hpBar">
+      <div class="hpFill" id="enemyHP" style="width: 100%"></div>
+      <div class="hpText" id="enemyHPText">100/100</div>
+    </div>
+    <div class="effects" id="enemyEffects"></div>
+  </div>
+  
+  <!-- Battle Log -->
+  <div id="battleLog"></div>
+  
+  <!-- Action Panel -->
+  <div id="actionPanel"></div>
+</div>
+
+<!-- Message Overlay -->
+<div id="message">
+  <div id="messageText"></div>
+  <button id="messageBtn">Continuar</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN DE CANVAS Y CONTEXTO
+// ═══════════════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0;
+
+function resizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SISTEMA DE TIPOS Y EFECTIVIDAD
+// ═══════════════════════════════════════════════════════════════════════════
+const TYPES = {
+  FUEGO: { name: 'Fuego', color: '#e74c3c' },
+  AGUA: { name: 'Agua', color: '#3498db' },
+  PLANTA: { name: 'Planta', color: '#27ae60' },
+  ELECTRICO: { name: 'Eléctrico', color: '#f39c12' },
+  NORMAL: { name: 'Normal', color: '#95a5a6' }
+};
+
+// Tabla de efectividad: [atacante][defensor] = multiplicador
+const TYPE_CHART = {
+  FUEGO: { FUEGO: 0.5, AGUA: 0.5, PLANTA: 2, ELECTRICO: 1, NORMAL: 1 },
+  AGUA: { FUEGO: 2, AGUA: 0.5, PLANTA: 0.5, ELECTRICO: 1, NORMAL: 1 },
+  PLANTA: { FUEGO: 0.5, AGUA: 2, PLANTA: 0.5, ELECTRICO: 1, NORMAL: 1 },
+  ELECTRICO: { FUEGO: 1, AGUA: 2, PLANTA: 0.5, ELECTRICO: 0.5, NORMAL: 1 },
+  NORMAL: { FUEGO: 1, AGUA: 1, PLANTA: 1, ELECTRICO: 1, NORMAL: 1 }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFINICIÓN DE MOVIMIENTOS
+// ═══════════════════════════════════════════════════════════════════════════
+const MOVES = {
+  // Movimientos de Fuego
+  LLAMARADA: { name: 'Llamarada', type: 'FUEGO', power: 50, accuracy: 100, effect: null },
+  PIROCAÑON: { name: 'Pirocañón', type: 'FUEGO', power: 80, accuracy: 85, effect: { type: 'burn', chance: 30 } },
+  
+  // Movimientos de Agua
+  PISTOLA_AGUA: { name: 'Pistola Agua', type: 'AGUA', power: 45, accuracy: 100, effect: null },
+  HIDROBOMBA: { name: 'Hidrobomba', type: 'AGUA', power: 85, accuracy: 80, effect: null },
+  
+  // Movimientos de Planta
+  LATIGO_CEPA: { name: 'Látigo Cepa', type: 'PLANTA', power: 45, accuracy: 100, effect: null },
+  RAYO_SOLAR: { name: 'Rayo Solar', type: 'PLANTA', power: 90, accuracy: 100, effect: null },
+  
+  // Movimientos Eléctricos
+  IMPACTRUENO: { name: 'Impactrueno', type: 'ELECTRICO', power: 40, accuracy: 100, effect: { type: 'paralyze', chance: 30 } },
+  RAYO: { name: 'Rayo', type: 'ELECTRICO', power: 75, accuracy: 90, effect: null },
+  
+  // Movimientos de Estado
+  FORTALEZA: { name: 'Fortaleza', type: 'NORMAL', power: 0, accuracy: 100, effect: { type: 'buff_def', chance: 100 } },
+  AGILIDAD: { name: 'Agilidad', type: 'NORMAL', power: 0, accuracy: 100, effect: { type: 'buff_spd', chance: 100 } },
+  COLMILLO_VENENO: { name: 'Col. Veneno', type: 'NORMAL', power: 30, accuracy: 100, effect: { type: 'poison', chance: 50 } },
+  
+  // Movimientos Avanzados (Modo Historia)
+  INFERNO: { name: 'Inferno', type: 'FUEGO', power: 110, accuracy: 85, effect: { type: 'burn', chance: 50 } },
+  TSUNAMI: { name: 'Tsunami', type: 'AGUA', power: 110, accuracy: 85, effect: null },
+  TERREMOTO: { name: 'Terremoto', type: 'PLANTA', power: 110, accuracy: 90, effect: null },
+  TRUENO: { name: 'Trueno', type: 'ELECTRICO', power: 110, accuracy: 70, effect: { type: 'paralyze', chance: 50 } }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEFINICIÓN DE CRIATURAS
+// ═══════════════════════════════════════════════════════════════════════════
+const CREATURES = {
+  IGNIS: {
+    name: 'Ignis',
+    type: 'FUEGO',
+    baseStats: { hp: 100, atk: 70, def: 50, spd: 65 },
+    moves: ['LLAMARADA', 'PIROCAÑON', 'FORTALEZA', 'COLMILLO_VENENO'],
+    advancedMoves: ['INFERNO'], // Desbloqueables en modo historia
+    sprite: { body: '#e74c3c', accent: '#c0392b' }
+  },
+  AQUOS: {
+    name: 'Aquos',
+    type: 'AGUA',
+    baseStats: { hp: 110, atk: 60, def: 60, spd: 55 },
+    moves: ['PISTOLA_AGUA', 'HIDROBOMBA', 'FORTALEZA', 'AGILIDAD'],
+    advancedMoves: ['TSUNAMI'],
+    sprite: { body: '#3498db', accent: '#2980b9' }
+  },
+  VERDIS: {
+    name: 'Verdis',
+    type: 'PLANTA',
+    baseStats: { hp: 105, atk: 65, def: 65, spd: 50 },
+    moves: ['LATIGO_CEPA', 'RAYO_SOLAR', 'COLMILLO_VENENO', 'FORTALEZA'],
+    advancedMoves: ['TERREMOTO'],
+    sprite: { body: '#27ae60', accent: '#229954' }
+  },
+  VOLTIS: {
+    name: 'Voltis',
+    type: 'ELECTRICO',
+    baseStats: { hp: 90, atk: 75, def: 45, spd: 80 },
+    moves: ['IMPACTRUENO', 'RAYO', 'AGILIDAD', 'COLMILLO_VENENO'],
+    advancedMoves: ['TRUENO'],
+    sprite: { body: '#f39c12', accent: '#e67e22' }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ESTADO DEL JUEGO
+// ═══════════════════════════════════════════════════════════════════════════
+let gameState = {
+  phase: 'select', // 'select', 'battle', 'end'
+  mode: 'ai', // 'ai', 'friend' o 'story'
+  selectedCreature1: null,
+  selectedCreature2: null,
+  player: null,
+  enemy: null,
+  turn: 'player',
+  waiting: false,
+  battleCount: 0,
+  storyProgress: 0, // Enemigos derrotados en modo historia
+  animations: []
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLASE DE COMBATIENTE
+// ═══════════════════════════════════════════════════════════════════════════
+class Battler {
+  constructor(creatureId, level = 1, isStoryMode = false) {
+    const template = CREATURES[creatureId];
+    this.id = creatureId;
+    this.name = template.name;
+    this.type = template.type;
+    this.level = level;
+    this.isStoryMode = isStoryMode;
+    
+    // Calcular estadísticas según nivel (10% por nivel en modo historia)
+    if (isStoryMode) {
+      const hpMultiplier = Math.pow(1.10, level - 1);
+      const atkMultiplier = Math.pow(1.10, level - 1);
+      this.maxHp = Math.floor(template.baseStats.hp * hpMultiplier);
+      this.hp = this.maxHp;
+      this.atk = Math.floor(template.baseStats.atk * atkMultiplier);
+      this.def = Math.floor(template.baseStats.def * Math.pow(1.05, level - 1));
+      this.spd = Math.floor(template.baseStats.spd * Math.pow(1.03, level - 1));
+    } else {
+      this.maxHp = Math.floor(template.baseStats.hp + (level - 1) * 8);
+      this.hp = this.maxHp;
+      this.atk = Math.floor(template.baseStats.atk + (level - 1) * 3);
+      this.def = Math.floor(template.baseStats.def + (level - 1) * 2);
+      this.spd = Math.floor(template.baseStats.spd + (level - 1) * 2);
+    }
+    
+    // Movimientos base
+    this.baseMoves = template.moves.map(m => MOVES[m]);
+    this.advancedMoves = template.advancedMoves || [];
+    this.unlockedAdvanced = [];
+    
+    // Inicializar movimientos disponibles
+    this.updateMoveList();
+    
+    this.sprite = template.sprite;
+    
+    // Efectos de estado
+    this.statusEffects = [];
+    
+    // Modificadores temporales
+    this.modifiers = { atk: 0, def: 0, spd: 0 };
+    
+    // Experiencia (solo jugador)
+    this.exp = 0;
+    this.expToNext = level * 100;
+  }
+  
+  updateMoveList() {
+    this.moves = [...this.baseMoves];
+    this.unlockedAdvanced.forEach(moveId => {
+      if (MOVES[moveId]) {
+        this.moves.push(MOVES[moveId]);
+      }
+    });
+    // Limitar a 4 movimientos (los últimos 4)
+    if (this.moves.length > 4) {
+      this.moves = this.moves.slice(-4);
+    }
+  }
+  
+  getStat(stat) {
+    const base = this[stat];
+    const mod = this.modifiers[stat] || 0;
+    const multiplier = 1 + (mod * 0.25);
+    return Math.floor(base * multiplier);
+  }
+  
+  addEffect(effect, duration = 3) {
+    // Evitar duplicados de mismo tipo
+    const existing = this.statusEffects.find(e => e.type === effect);
+    if (existing) {
+      existing.duration = Math.max(existing.duration, duration);
+      return;
+    }
+    this.statusEffects.push({ type: effect, duration: duration });
+    updateStatusDisplay();
+  }
+  
+  removeEffect(type) {
+    this.statusEffects = this.statusEffects.filter(e => e.type !== type);
+    updateStatusDisplay();
+  }
+  
+  hasEffect(type) {
+    return this.statusEffects.some(e => e.type === type);
+  }
+  
+  applyEndTurnEffects() {
+    const messages = [];
+    
+    for (let i = this.statusEffects.length - 1; i >= 0; i--) {
+      const effect = this.statusEffects[i];
+      
+      // Aplicar daño de veneno/quemadura
+      if (effect.type === 'poison') {
+        const dmg = Math.floor(this.maxHp * 0.08);
+        this.hp -= dmg;
+        messages.push(`${this.name} sufre ${dmg} de daño por envenenamiento`);
+      } else if (effect.type === 'burn') {
+        const dmg = Math.floor(this.maxHp * 0.06);
+        this.hp -= dmg;
+        messages.push(`${this.name} sufre ${dmg} de daño por quemadura`);
+      }
+      
+      // Reducir duración
+      effect.duration--;
+      if (effect.duration <= 0) {
+        this.statusEffects.splice(i, 1);
+        messages.push(`${this.name} se recuperó de ${effect.type}`);
+      }
+    }
+    
+    this.hp = Math.max(0, this.hp);
+    return messages;
+  }
+  
+  gainExp(amount) {
+    this.exp += amount;
+    const messages = [];
+    
+    while (this.exp >= this.expToNext) {
+      this.exp -= this.expToNext;
+      this.level++;
+      this.expToNext = this.level * 100;
+      
+      // Subir estadísticas
+      if (this.isStoryMode) {
+        // Modo historia: 10% de incremento
+        const oldMaxHp = this.maxHp;
+        const oldAtk = this.atk;
+        this.maxHp = Math.floor(this.maxHp * 1.10);
+        this.atk = Math.floor(this.atk * 1.10);
+        this.def = Math.floor(this.def * 1.05);
+        this.spd = Math.floor(this.spd * 1.03);
+        this.hp = this.maxHp;
+        
+        messages.push(`¡${this.name} subió al nivel ${this.level}!`);
+        messages.push(`HP: ${oldMaxHp} → ${this.maxHp} (+${this.maxHp - oldMaxHp})`);
+        messages.push(`ATK: ${oldAtk} → ${this.atk} (+${this.atk - oldAtk})`);
+        
+        // Desbloquear movimiento avanzado cada 5 niveles
+        if (this.level % 5 === 0 && this.advancedMoves.length > this.unlockedAdvanced.length) {
+          const nextMove = this.advancedMoves[this.unlockedAdvanced.length];
+          this.unlockedAdvanced.push(nextMove);
+          this.updateMoveList();
+          messages.push(`¡${this.name} aprendió ${MOVES[nextMove].name}!`);
+        }
+      } else {
+        // Modo clásico
+        this.maxHp += 8;
+        this.hp = this.maxHp;
+        this.atk += 3;
+        this.def += 2;
+        this.spd += 2;
+        messages.push(`¡${this.name} subió al nivel ${this.level}!`);
+      }
+    }
+    
+    return messages;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SELECCIÓN DE CRIATURAS Y MODO DE JUEGO
+// ═══════════════════════════════════════════════════════════════════════════
+const startBtn = document.getElementById('startBtn');
+
+function initCreatureSelect() {
+  populateCreatureSelector('creatureSelect1', 1);
+  populateCreatureSelector('creatureSelect2', 2);
+  initModeSelector();
+}
+
+function populateCreatureSelector(containerId, playerNum) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  
+  Object.keys(CREATURES).forEach(id => {
+    const creature = CREATURES[id];
+    const card = document.createElement('div');
+    card.className = 'creatureCard';
+    card.innerHTML = `
+      <h3>${creature.name}</h3>
+      <div class="type" style="background: ${TYPES[creature.type].color}">${TYPES[creature.type].name}</div>
+      <div class="stats">
+        HP: ${creature.baseStats.hp}<br>
+        ATK: ${creature.baseStats.atk}<br>
+        DEF: ${creature.baseStats.def}<br>
+        SPD: ${creature.baseStats.spd}
+      </div>
+    `;
+    
+    card.addEventListener('click', () => {
+      const selector = playerNum === 1 ? 'creatureSelect1' : 'creatureSelect2';
+      document.querySelectorAll(`#${selector} .creatureCard`).forEach(c => {
+        c.classList.remove('selected', 'selected-p2');
+      });
+      card.classList.add(playerNum === 1 ? 'selected' : 'selected-p2');
+      
+      if (playerNum === 1) {
+        gameState.selectedCreature1 = id;
+      } else {
+        gameState.selectedCreature2 = id;
+      }
+      
+      updateStartButton();
+    });
+    
+    container.appendChild(card);
+  });
+}
+
+function initModeSelector() {
+  const modeButtons = document.querySelectorAll('.modeBtn');
+  modeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      modeButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      gameState.mode = btn.dataset.mode;
+      
+      const player2Section = document.getElementById('player2Section');
+      const player1Label = document.getElementById('player1Label');
+      
+      if (gameState.mode === 'friend') {
+        player2Section.style.display = 'block';
+        player1Label.textContent = 'Jugador 1 - Elige tu criatura';
+      } else if (gameState.mode === 'story') {
+        player2Section.style.display = 'none';
+        player1Label.textContent = 'Elige tu héroe para la aventura';
+        gameState.selectedCreature2 = null;
+      } else {
+        player2Section.style.display = 'none';
+        player1Label.textContent = 'Elige tu criatura';
+        gameState.selectedCreature2 = null;
+      }
+      
+      updateStartButton();
+    });
+  });
+}
+
+function updateStartButton() {
+  if (gameState.mode === 'ai' || gameState.mode === 'story') {
+    // IA and Story modes require only the player 1 selection
+    startBtn.disabled = !gameState.selectedCreature1;
+  } else if (gameState.mode === 'friend') {
+    // Friend mode requires both selections
+    startBtn.disabled = !gameState.selectedCreature1 || !gameState.selectedCreature2;
+  } else {
+    startBtn.disabled = true;
+  }
+}
+
+startBtn.addEventListener('click', () => {
+  if (!gameState.selectedCreature1) return;
+  if (gameState.mode === 'friend' && !gameState.selectedCreature2) return;
+  document.getElementById('startScreen').style.display = 'none';
+  startBattle();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SISTEMA DE COMBATE
+// ═══════════════════════════════════════════════════════════════════════════
+function startBattle() {
+  gameState.battleCount++;
+  
+  if (gameState.mode === 'story') {
+    // Modo Historia: progresión de enemigos
+    if (!gameState.player) {
+      gameState.player = new Battler(gameState.selectedCreature1, 1, true);
+      gameState.storyProgress = 0;
+    } else {
+      gameState.player.hp = gameState.player.maxHp;
+      gameState.player.statusEffects = [];
+      gameState.player.modifiers = { atk: 0, def: 0, spd: 0 };
+    }
+    
+    // Enemigos escalan con el progreso
+    gameState.storyProgress++;
+    const enemyIds = Object.keys(CREATURES).filter(id => id !== gameState.selectedCreature1);
+    const enemyId = enemyIds[Math.floor(Math.random() * enemyIds.length)];
+    
+    // Nivel del enemigo crece gradualmente
+    const enemyLevel = Math.max(1, Math.floor(gameState.storyProgress / 2) + 1);
+    gameState.enemy = new Battler(enemyId, enemyLevel, true);
+    
+    addLog(`Batalla ${gameState.storyProgress}: ¡${gameState.enemy.name} Nv.${enemyLevel} apareció!`);
+    
+  } else if (gameState.mode === 'ai') {
+    // Modo IA: jugador vs enemigo aleatorio
+    if (!gameState.player) {
+      gameState.player = new Battler(gameState.selectedCreature1, 1, false);
+    } else {
+      gameState.player.hp = gameState.player.maxHp;
+      gameState.player.statusEffects = [];
+      gameState.player.modifiers = { atk: 0, def: 0, spd: 0 };
+    }
+    
+    const enemyIds = Object.keys(CREATURES).filter(id => id !== gameState.selectedCreature1);
+    const enemyId = enemyIds[Math.floor(Math.random() * enemyIds.length)];
+    const enemyLevel = Math.max(1, gameState.player.level - 1 + Math.floor(Math.random() * 3));
+    gameState.enemy = new Battler(enemyId, enemyLevel, false);
+    
+    addLog(`¡Un ${gameState.enemy.name} salvaje apareció!`);
+  } else {
+    // Modo amigo: ambos jugadores nivel 1
+    gameState.player = new Battler(gameState.selectedCreature1, 1, false);
+    gameState.enemy = new Battler(gameState.selectedCreature2, 1, false);
+    
+    addLog(`¡${gameState.player.name} vs ${gameState.enemy.name}!`);
+  }
+  
+  gameState.phase = 'battle';
+  gameState.turn = 'player';
+  gameState.waiting = false;
+  
+  document.getElementById('battleUI').style.display = 'block';
+  
+  updateStatusDisplay();
+  buildActionPanel();
+  
+  draw();
+}
+
+function updateStatusDisplay() {
+  const p = gameState.player;
+  const e = gameState.enemy;
+  
+  if (!p || !e) return;
+  
+  // Player
+  document.getElementById('playerName').textContent = p.name;
+  document.getElementById('playerLevel').textContent = `Nv.${p.level}`;
+  const pHpPct = (p.hp / p.maxHp) * 100;
+  const pHpFill = document.getElementById('playerHP');
+  pHpFill.style.width = pHpPct + '%';
+  pHpFill.className = 'hpFill' + (pHpPct < 25 ? ' low' : pHpPct < 50 ? ' med' : '');
+  document.getElementById('playerHPText').textContent = `${p.hp}/${p.maxHp}`;
+  
+  // Player effects
+  const pEffects = document.getElementById('playerEffects');
+  pEffects.innerHTML = '';
+  p.statusEffects.forEach(ef => {
+    const badge = document.createElement('span');
+    badge.className = 'statusBadge ' + ef.type;
+    badge.textContent = ef.type.toUpperCase();
+    pEffects.appendChild(badge);
+  });
+  
+  // Enemy
+  document.getElementById('enemyName').textContent = e.name;
+  document.getElementById('enemyLevel').textContent = `Nv.${e.level}`;
+  const eHpPct = (e.hp / e.maxHp) * 100;
+  const eHpFill = document.getElementById('enemyHP');
+  eHpFill.style.width = eHpPct + '%';
+  eHpFill.className = 'hpFill' + (eHpPct < 25 ? ' low' : eHpPct < 50 ? ' med' : '');
+  document.getElementById('enemyHPText').textContent = `${e.hp}/${e.maxHp}`;
+  
+  // Enemy effects
+  const eEffects = document.getElementById('enemyEffects');
+  eEffects.innerHTML = '';
+  e.statusEffects.forEach(ef => {
+    const badge = document.createElement('span');
+    badge.className = 'statusBadge ' + ef.type;
+    badge.textContent = ef.type.toUpperCase();
+    eEffects.appendChild(badge);
+  });
+}
+
+function buildActionPanel() {
+  const panel = document.getElementById('actionPanel');
+  panel.innerHTML = '';
+  
+  // Determinar qué criatura está eligiendo
+  const activeBattler = gameState.turn === 'player' ? gameState.player : gameState.enemy;
+  if (!activeBattler) return;
+  
+  // En modo amigo, mostrar indicador de turno
+  if (gameState.mode === 'friend') {
+    const turnIndicator = document.createElement('div');
+    turnIndicator.style.cssText = 'grid-column: 1 / -1; text-align: center; color: #f39c12; font-size: 18px; font-weight: bold; margin-bottom: 8px;';
+    turnIndicator.textContent = gameState.turn === 'player' ? '🎮 Turno Jugador 1' : '🎮 Turno Jugador 2';
+    panel.appendChild(turnIndicator);
+  }
+  
+  activeBattler.moves.forEach(move => {
+    const btn = document.createElement('button');
+    btn.className = 'actionBtn';
+    btn.innerHTML = `
+      <div style="margin-bottom: 4px;">${move.name}</div>
+      <span class="moveType">${TYPES[move.type].name}</span>
+      <span class="movePower">${move.power > 0 ? 'POT: ' + move.power : 'ESTADO'}</span>
+    `;
+    
+    btn.addEventListener('click', () => {
+      if (gameState.waiting) return;
+      executePlayerTurn(move);
+    });
+    
+    panel.appendChild(btn);
+  });
+}
+
+function executePlayerTurn(playerMove) {
+  gameState.waiting = true;
+  setActionsEnabled(false);
+  
+  addLog(`${gameState.player.name} usó ${playerMove.name}!`);
+  
+  // Modo amigo: cambiar turno para que el otro jugador elija
+  if (gameState.mode === 'friend' && gameState.turn === 'player') {
+    gameState.playerMove = playerMove;
+    gameState.turn = 'enemy';
+    
+    addLog('Turno del Jugador 2...');
+    buildActionPanel();
+    gameState.waiting = false;
+    setActionsEnabled(true);
+    return;
+  }
+  
+  // Segundo jugador eligió o modo IA
+  let enemyMove;
+  if (gameState.mode === 'friend') {
+    enemyMove = playerMove;
+    playerMove = gameState.playerMove;
+  } else {
+    enemyMove = chooseEnemyMove();
+  }
+  
+  // Determinar orden según velocidad
+  const playerSpeed = gameState.player.getStat('spd');
+  const enemySpeed = gameState.enemy.getStat('spd');
+  
+  let first, second, firstMove, secondMove;
+  if (playerSpeed >= enemySpeed) {
+    first = gameState.player;
+    second = gameState.enemy;
+    firstMove = playerMove;
+    secondMove = enemyMove;
+  } else {
+    first = gameState.enemy;
+    second = gameState.player;
+    firstMove = enemyMove;
+    secondMove = playerMove;
+  }
+  
+  // Ejecutar movimientos en orden
+  setTimeout(() => {
+    executeMove(first, second, firstMove);
+    
+    if (checkBattleEnd()) return;
+    
+    setTimeout(() => {
+      executeMove(second, first, secondMove);
+      
+      if (checkBattleEnd()) return;
+      
+      // Aplicar efectos de final de turno
+      setTimeout(() => {
+        const pMessages = gameState.player.applyEndTurnEffects();
+        pMessages.forEach(msg => addLog(msg));
+        
+        const eMessages = gameState.enemy.applyEndTurnEffects();
+        eMessages.forEach(msg => addLog(msg));
+        
+        updateStatusDisplay();
+        
+        if (checkBattleEnd()) return;
+        
+        gameState.turn = 'player';
+        gameState.waiting = false;
+        buildActionPanel();
+        setActionsEnabled(true);
+      }, 800);
+      
+    }, 1200);
+  }, 600);
+}
+
+function executeMove(attacker, defender, move) {
+  const isPlayer = attacker === gameState.player;
+  
+  // Animación de ataque
+  createAttackAnimation(isPlayer);
+  
+  // Verificar precisión
+  if (Math.random() * 100 > move.accuracy) {
+    addLog(`¡Pero falló!`);
+    return;
+  }
+  
+  // Verificar parálisis
+  if (attacker.hasEffect('paralyze') && Math.random() < 0.25) {
+    addLog(`${attacker.name} está paralizado y no puede moverse`);
+    return;
+  }
+  
+  if (move.power > 0) {
+    // Movimiento de ataque
+    const effectiveness = TYPE_CHART[move.type][defender.type];
+    const atkStat = attacker.getStat('atk');
+    const defStat = defender.getStat('def');
+    
+    let damage = Math.floor(((2 * attacker.level / 5 + 2) * move.power * atkStat / defStat) / 50 + 2);
+    damage = Math.floor(damage * effectiveness);
+    
+    // Reducir daño si está quemado
+    if (attacker.hasEffect('burn')) {
+      damage = Math.floor(damage * 0.75);
+    }
+    
+    // Variación aleatoria
+    damage = Math.floor(damage * (0.85 + Math.random() * 0.15));
+    damage = Math.max(1, damage);
+    
+    defender.hp -= damage;
+    defender.hp = Math.max(0, defender.hp);
+    
+    addLog(`${defender.name} recibió ${damage} de daño`);
+    
+    if (effectiveness > 1) addLog('¡Es súper efectivo!');
+    if (effectiveness < 1) addLog('No es muy efectivo...');
+    
+    // Animación de impacto
+    createHitAnimation(!isPlayer);
+    
+  } else {
+    // Movimiento de estado
+    addLog(`${attacker.name} usó ${move.name}`);
+  }
+  
+  // Aplicar efectos secundarios
+  if (move.effect && Math.random() * 100 < move.effect.chance) {
+    applyEffect(move.effect, attacker, defender);
+  }
+  
+  updateStatusDisplay();
+}
+
+function applyEffect(effect, attacker, target) {
+  switch (effect.type) {
+    case 'poison':
+      if (!target.hasEffect('poison')) {
+        target.addEffect('poison', 4);
+        addLog(`${target.name} fue envenenado`);
+      }
+      break;
+    case 'burn':
+      if (!target.hasEffect('burn')) {
+        target.addEffect('burn', 4);
+        addLog(`${target.name} fue quemado`);
+      }
+      break;
+    case 'paralyze':
+      if (!target.hasEffect('paralyze')) {
+        target.addEffect('paralyze', 5);
+        addLog(`${target.name} fue paralizado`);
+      }
+      break;
+    case 'buff_def':
+      attacker.modifiers.def = Math.min(3, attacker.modifiers.def + 1);
+      addLog(`¡La defensa de ${attacker.name} aumentó!`);
+      break;
+    case 'buff_spd':
+      attacker.modifiers.spd = Math.min(3, attacker.modifiers.spd + 1);
+      addLog(`¡La velocidad de ${attacker.name} aumentó!`);
+      break;
+  }
+}
+
+function chooseEnemyMove() {
+  const enemy = gameState.enemy;
+  const player = gameState.player;
+  
+  // IA simple: preferir movimientos efectivos
+  let bestMove = enemy.moves[0];
+  let bestScore = 0;
+  
+  enemy.moves.forEach(move => {
+    let score = Math.random() * 50;
+    
+    if (move.power > 0) {
+      const eff = TYPE_CHART[move.type][player.type];
+      score += move.power * eff;
+    } else {
+      // Movimientos de estado son menos probables
+      score += 20;
+    }
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = move;
+    }
+  });
+  
+  addLog(`${enemy.name} usó ${bestMove.name}!`);
+  return bestMove;
+}
+
+function checkBattleEnd() {
+  if (gameState.player.hp <= 0) {
+    endBattle(false);
+    return true;
+  }
+  
+  if (gameState.enemy.hp <= 0) {
+    endBattle(true);
+    return true;
+  }
+  
+  return false;
+}
+
+function endBattle(playerWon) {
+  gameState.waiting = true;
+  setActionsEnabled(false);
+  
+  setTimeout(() => {
+    if (gameState.mode === 'story') {
+      // Modo Historia: progresión continua
+      if (playerWon) {
+        const expGained = gameState.enemy.level * 50;
+        addLog(`¡Victoria! ${gameState.player.name} ganó ${expGained} EXP`);
+        
+        const levelUpMessages = gameState.player.gainExp(expGained);
+        levelUpMessages.forEach(msg => addLog(msg));
+        
+        updateStatusDisplay();
+        
+        let msgText = `⚔️ BATALLA ${gameState.storyProgress} GANADA ⚔️<br><br>`;
+        msgText += `+${expGained} EXP<br>`;
+        if (levelUpMessages.length > 0) {
+          msgText += levelUpMessages.slice(0, 3).join('<br>');
+        }
+        msgText += `<br><br>Progreso: ${gameState.storyProgress} victorias`;
+        
+        showMessage(msgText, 'Continuar Aventura');
+      } else {
+        addLog(`${gameState.player.name} fue derrotado...`);
+        showMessage(
+          `💀 DERROTA 💀<br><br>Llegaste a ${gameState.storyProgress} victorias<br>Nivel alcanzado: ${gameState.player.level}`,
+          'Reiniciar Historia'
+        );
+      }
+    } else if (gameState.mode === 'ai') {
+      // Modo IA: experiencia y progresión
+      if (playerWon) {
+        const expGained = gameState.enemy.level * 50;
+        addLog(`¡Victoria! ${gameState.player.name} ganó ${expGained} EXP`);
+        
+        const levelUpMessages = gameState.player.gainExp(expGained);
+        levelUpMessages.forEach(msg => addLog(msg));
+        
+        updateStatusDisplay();
+        
+        showMessage(
+          `¡VICTORIA!<br><br>+${expGained} EXP<br>${levelUpMessages.length > 0 ? levelUpMessages.join('<br>') : ''}`,
+          'Siguiente Batalla'
+        );
+      } else {
+        addLog(`${gameState.player.name} fue derrotado...`);
+        showMessage('DERROTA<br><br>¡Inténtalo de nuevo!', 'Reiniciar');
+      }
+    } else {
+      // Modo amigo: declarar ganador
+      const winner = playerWon ? 'JUGADOR 1' : 'JUGADOR 2';
+      const winnerCreature = playerWon ? gameState.player.name : gameState.enemy.name;
+      addLog(`¡${winner} gana con ${winnerCreature}!`);
+      
+      showMessage(
+        `🏆 ${winner} GANA 🏆<br><br>${winnerCreature} se impone en combate`,
+        'Nueva Partida'
+      );
+    }
+  }, 1000);
+}
+
+function showMessage(text, buttonText) {
+  const msg = document.getElementById('message');
+  document.getElementById('messageText').innerHTML = text;
+  document.getElementById('messageBtn').textContent = buttonText;
+  msg.style.display = 'block';
+  
+  document.getElementById('messageBtn').onclick = () => {
+    msg.style.display = 'none';
+    
+    if (gameState.mode === 'friend') {
+      // Modo amigo: volver a pantalla de inicio
+      location.reload();
+    } else if (gameState.mode === 'story') {
+      // Modo historia
+      if (gameState.player.hp <= 0) {
+        location.reload();
+      } else {
+        startBattle();
+      }
+    } else {
+      // Modo IA
+      if (gameState.player.hp <= 0) {
+        location.reload();
+      } else {
+        startBattle();
+      }
+    }
+  };
+}
+
+function setActionsEnabled(enabled) {
+  document.querySelectorAll('.actionBtn').forEach(btn => {
+    btn.disabled = !enabled;
+  });
+}
+
+function addLog(text) {
+  const log = document.getElementById('battleLog');
+  const div = document.createElement('div');
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SISTEMA DE ANIMACIONES
+// ═══════════════════════════════════════════════════════════════════════════
+function createAttackAnimation(isPlayer) {
+  gameState.animations.push({
+    type: 'attack',
+    isPlayer: isPlayer,
+    progress: 0,
+    duration: 0.3
+  });
+}
+
+function createHitAnimation(isEnemy) {
+  gameState.animations.push({
+    type: 'hit',
+    isEnemy: isEnemy,
+    progress: 0,
+    duration: 0.2
+  });
+}
+
+function updateAnimations(dt) {
+  for (let i = gameState.animations.length - 1; i >= 0; i--) {
+    const anim = gameState.animations[i];
+    anim.progress += dt / anim.duration;
+    
+    if (anim.progress >= 1) {
+      gameState.animations.splice(i, 1);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDERIZADO
+// ═══════════════════════════════════════════════════════════════════════════
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  
+  // Fondo
+  const gradient = ctx.createLinearGradient(0, 0, 0, H);
+  gradient.addColorStop(0, '#87ceeb');
+  gradient.addColorStop(0.5, '#e0f6ff');
+  gradient.addColorStop(1, '#90c890');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, W, H);
+  
+  // Suelo
+  ctx.fillStyle = '#8b7355';
+  ctx.fillRect(0, H * 0.65, W, H * 0.35);
+  ctx.fillStyle = '#6b5345';
+  ctx.fillRect(0, H * 0.65, W, 4);
+  
+  if (gameState.phase !== 'battle') return;
+  
+  // Posiciones de las criaturas
+  const playerX = W * 0.25;
+  const playerY = H * 0.55;
+  const enemyX = W * 0.75;
+  const enemyY = H * 0.35;
+  
+  // Dibujar criaturas
+  drawCreature(gameState.player, playerX, playerY, false);
+  drawCreature(gameState.enemy, enemyX, enemyY, true);
+  
+  // Dibujar animaciones
+  gameState.animations.forEach(anim => {
+    if (anim.type === 'attack') {
+      const x = anim.isPlayer ? playerX : enemyX;
+      const y = anim.isPlayer ? playerY : enemyY;
+      const offset = Math.sin(anim.progress * Math.PI * 2) * 20;
+      
+      ctx.save();
+      ctx.globalAlpha = 1 - anim.progress;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(x + (anim.isPlayer ? 50 : -50) + offset, y, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    } else if (anim.type === 'hit') {
+      const x = anim.isEnemy ? enemyX : playerX;
+      const y = anim.isEnemy ? enemyY : playerY;
+      
+      ctx.save();
+      ctx.globalAlpha = 1 - anim.progress;
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(x, y, 60 + anim.progress * 40, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  });
+}
+
+function drawCreature(creature, x, y, flip) {
+  if (!creature) return;
+  
+  ctx.save();
+  
+  if (flip) {
+    ctx.translate(x, y);
+    ctx.scale(-1, 1);
+    ctx.translate(-x, -y);
+  }
+  
+  // Sombra
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.ellipse(x, y + 70, 50, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Cuerpo principal
+  ctx.fillStyle = creature.sprite.body;
+  ctx.beginPath();
+  ctx.ellipse(x, y, 55, 65, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Detalles
+  ctx.fillStyle = creature.sprite.accent;
+  ctx.beginPath();
+  ctx.ellipse(x, y + 15, 40, 45, 0, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Ojos
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(x - 15, y - 10, 12, 0, Math.PI * 2);
+  ctx.arc(x + 15, y - 10, 12, 0, Math.PI * 2);
+  ctx.fill();
+  
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(x - 15, y - 10, 6, 0, Math.PI * 2);
+  ctx.arc(x + 15, y - 10, 6, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Indicador de tipo
+  ctx.fillStyle = TYPES[creature.type].color;
+  ctx.beginPath();
+  ctx.arc(x, y - 50, 8, 0, Math.PI * 2);
+  ctx.fill();
+  
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GAME LOOP
+// ═══════════════════════════════════════════════════════════════════════════
+let lastTime = 0;
+function gameLoop(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
+  lastTime = timestamp;
+  
+  updateAnimations(dt);
+  draw();
+  
+  requestAnimationFrame(gameLoop);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INICIALIZACIÓN
+// ═══════════════════════════════════════════════════════════════════════════
+initCreatureSelect();
+requestAnimationFrame(gameLoop);
+
+</script>
+</body>
+</html>

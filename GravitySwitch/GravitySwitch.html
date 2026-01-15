@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Gravity Switch</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        canvas {
+            background: #000;
+            display: block;
+            margin: 20px auto;
+            border: 2px solid white;
+        }
+
+        #records {
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        #records h2 {
+            color: #00ffff;
+        }
+
+        #recordsList {
+            background: #222;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .record-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: #333;
+            border-radius: 5px;
+            border-left: 3px solid #00ffff;
+        }
+
+        .record-rank {
+            font-weight: bold;
+            color: #00ffff;
+            margin-right: 10px;
+        }
+
+        .record-time {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .no-records {
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+        }
+
+        button {
+            padding: 8px 15px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>⬆️⬇️ Gravity Switch</h1>
+    <p>Tiempo: <span id="time">0</span> s</p>
+    <canvas id="game" width="600" height="300"></canvas>
+    <button onclick="startGame()">Reiniciar</button>
+
+    <div id="records">
+        <h2>🏆 Récords de Supervivencia</h2>
+        <div id="recordsList"></div>
+        <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récords</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("game");
+        const ctx = canvas.getContext("2d");
+
+        let running = false;
+        let time = 0;
+        let speed = 3;
+        let gravity = 1;
+
+        const player = {
+            x: 100,
+            y: 140,
+            w: 20,
+            h: 20
+        };
+
+        let obstacles = [];
+        let spawnTimer = 0;
+        let spawnRate = 90; // irá bajando (más obstáculos)
+
+        /* ===== RÉCORDS ===== */
+        function loadRecords() {
+            const records = localStorage.getItem('gravitySwitchRecords');
+            return records ? JSON.parse(records) : [];
+        }
+
+        function saveRecord(time) {
+            const records = loadRecords();
+            records.push({
+                time: time,
+                date: new Date().toLocaleDateString()
+            });
+            // Ordenar de MAYOR a MENOR tiempo
+            records.sort((a, b) => b.time - a.time);
+            // Guardar solo los mejores 10
+            const top10 = records.slice(0, 10);
+            localStorage.setItem('gravitySwitchRecords', JSON.stringify(top10));
+            displayRecords();
+        }
+
+        function displayRecords() {
+            const records = loadRecords();
+            const recordsList = document.getElementById('recordsList');
+            
+            if (records.length === 0) {
+                recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero en sobrevivir!</div>';
+                return;
+            }
+
+            recordsList.innerHTML = records.map((record, index) => {
+                let medal = '';
+                if (index === 0) medal = '🥇';
+                else if (index === 1) medal = '🥈';
+                else if (index === 2) medal = '🥉';
+                
+                return `
+                    <div class="record-item">
+                        <span class="record-rank">${medal} #${index + 1}</span>
+                        <span class="record-time">${record.time}s</span>
+                        <span style="color: #666; font-size: 12px;">${record.date}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function clearRecords() {
+            if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+                localStorage.removeItem('gravitySwitchRecords');
+                displayRecords();
+            }
+        }
+
+        // Mostrar récords al cargar la página
+        displayRecords();
+
+        function spawnObstacle() {
+            const type = Math.random();
+
+            // Arriba
+            if (type < 0.33) {
+                obstacles.push({
+                    x: canvas.width,
+                    y: 0,
+                    w: 30,
+                    h: 50
+                });
+            }
+            // Abajo
+            else if (type < 0.66) {
+                obstacles.push({
+                    x: canvas.width,
+                    y: canvas.height - 50,
+                    w: 30,
+                    h: 50
+                });
+            }
+            // Centro (ANTI-CAMPING)
+            else {
+                obstacles.push({
+                    x: canvas.width,
+                    y: canvas.height / 2 - 25,
+                    w: 30,
+                    h: 50
+                });
+            }
+        }
+
+        function update() {
+            if (!running) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Movimiento jugador
+            player.y += gravity * 4;
+
+            // Límites
+            if (player.y < 0) player.y = 0;
+            if (player.y + player.h > canvas.height)
+                player.y = canvas.height - player.h;
+
+            // Dibujar jugador
+            ctx.fillStyle = "cyan";
+            ctx.fillRect(player.x, player.y, player.w, player.h);
+
+            // Generar obstáculos
+            spawnTimer++;
+            if (spawnTimer >= spawnRate) {
+                spawnObstacle();
+                spawnTimer = 0;
+            }
+
+            // Obstáculos
+            obstacles.forEach(o => {
+                o.x -= speed;
+                ctx.fillStyle = "red";
+                ctx.fillRect(o.x, o.y, o.w, o.h);
+
+                // Colisión
+                if (
+                    player.x < o.x + o.w &&
+                    player.x + player.w > o.x &&
+                    player.y < o.y + o.h &&
+                    player.y + player.h > o.y
+                ) {
+                    gameOver();
+                }
+            });
+
+            // Limpiar obstáculos
+            obstacles = obstacles.filter(o => o.x + o.w > 0);
+
+            requestAnimationFrame(update);
+        }
+
+        function gameOver() {
+            running = false;
+            clearInterval(timeLoop);
+            saveRecord(time);
+            alert("GAME OVER\nTiempo sobrevivido: " + time + " s");
+        }
+
+        function startGame() {
+            running = true;
+            time = 0;
+            speed = 3;
+            gravity = 1;
+            obstacles = [];
+            spawnTimer = 0;
+            spawnRate = 90;
+            player.y = canvas.height / 2 - 10;
+            document.getElementById("time").textContent = 0;
+
+            clearInterval(timeLoop);
+            timeLoop = setInterval(() => {
+                time++;
+                speed += 0.15;
+
+                // Más obstáculos con el tiempo (hasta un límite sano)
+                if (spawnRate > 35) spawnRate -= 3;
+
+                document.getElementById("time").textContent = time;
+            }, 1000);
+
+            update();
+        }
+
+        let timeLoop;
+
+        document.addEventListener("keydown", e => {
+            if (e.code === "Space") gravity *= -1;
+        });
+        document.addEventListener("click", () => gravity *= -1);
+
+        startGame();
+    </script>
+
+</body>
+</html>

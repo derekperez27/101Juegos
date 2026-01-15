@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Space Invaders</title>
+<style>
+    body {
+        margin: 0;
+        background: black;
+        color: white;
+        font-family: Arial, sans-serif;
+        text-align: center;
+    }
+    h1 {
+        margin: 10px;
+    }
+    canvas {
+        background: #000;
+        display: block;
+        margin: auto;
+        border: 2px solid white;
+    }
+
+    #records {
+        margin: 20px auto;
+        max-width: 500px;
+    }
+
+    #records h2 {
+        color: #00ff00;
+    }
+
+    #recordsList {
+        background: #111;
+        border: 2px solid #444;
+        border-radius: 8px;
+        padding: 15px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    .record-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px;
+        margin: 5px 0;
+        background: #222;
+        border-radius: 5px;
+        border-left: 3px solid #00ff00;
+    }
+
+    .record-rank {
+        font-weight: bold;
+        color: #00ff00;
+        margin-right: 10px;
+    }
+
+    .record-score {
+        color: #ffd700;
+        font-weight: bold;
+    }
+
+    .no-records {
+        color: #888;
+        font-style: italic;
+        padding: 20px;
+    }
+</style>
+</head>
+<body>
+
+<h1>👾 Space Invaders</h1>
+<p>Puntos: <span id="score">0</span> | Vidas: <span id="lives">3</span></p>
+
+<canvas id="game" width="600" height="500"></canvas>
+<button id="restartBtn" style="display:none; margin: 10px; padding: 10px 20px; cursor: pointer; font-size: 16px;" onclick="restartGame()">Volver a Jugar</button>
+
+<div id="records">
+    <h2>🏆 Récords</h2>
+    <div id="recordsList"></div>
+    <button onclick="clearRecords()" style="background: #d32f2f; color: white; padding: 8px 15px; cursor: pointer; border: none; border-radius: 5px; margin-top: 10px;">Borrar Récords</button>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const scoreSpan = document.getElementById("score");
+const livesSpan = document.getElementById("lives");
+
+/* ===== RÉCORDS ===== */
+function loadRecords() {
+    const records = localStorage.getItem('spaceInvadersRecords');
+    return records ? JSON.parse(records) : [];
+}
+
+function saveRecord(score) {
+    const records = loadRecords();
+    records.push({
+        score: score,
+        date: new Date().toLocaleDateString()
+    });
+    // Ordenar por puntuación (mayor a menor)
+    records.sort((a, b) => b.score - a.score);
+    // Guardar solo los mejores 10
+    const top10 = records.slice(0, 10);
+    localStorage.setItem('spaceInvadersRecords', JSON.stringify(top10));
+    displayRecords();
+}
+
+function displayRecords() {
+    const records = loadRecords();
+    const recordsList = document.getElementById('recordsList');
+    
+    if (records.length === 0) {
+        recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+        return;
+    }
+
+    recordsList.innerHTML = records.map((record, index) => {
+        let medal = '';
+        if (index === 0) medal = '🥇';
+        else if (index === 1) medal = '🥈';
+        else if (index === 2) medal = '🥉';
+        
+        return `
+            <div class="record-item">
+                <span class="record-rank">${medal} #${index + 1}</span>
+                <span class="record-score">${record.score} puntos</span>
+                <span style="color: #666; font-size: 12px;">${record.date}</span>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearRecords() {
+    if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+        localStorage.removeItem('spaceInvadersRecords');
+        displayRecords();
+    }
+}
+
+// Mostrar récords al cargar la página
+displayRecords();
+
+/* ===== JUGADOR ===== */
+const player = {
+    x: 280,
+    y: 450,
+    width: 40,
+    height: 20,
+    speed: 6,
+    bullets: []
+};
+
+/* ===== ENEMIGOS ===== */
+let enemies = [];
+let enemyDir = 1;
+let enemySpeed = 1;
+
+/* ===== ESTADO ===== */
+let score = 0;
+let lives = 3;
+let keys = {};
+let isGameOver = false;
+
+/* ===== CREAR ENEMIGOS ===== */
+function createEnemies() {
+    enemies = [];
+    for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < 8; col++) {
+            enemies.push({
+                x: 60 + col * 60,
+                y: 40 + row * 40,
+                width: 30,
+                height: 20,
+                alive: true
+            });
+        }
+    }
+}
+createEnemies();
+
+/* ===== INPUT ===== */
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+/* ===== DISPARO ===== */
+function shoot() {
+    player.bullets.push({
+        x: player.x + player.width / 2 - 2,
+        y: player.y,
+        width: 4,
+        height: 10
+    });
+}
+
+/* ===== GAME LOOP ===== */
+function update() {
+    if (isGameOver) return;
+    
+    // Movimiento jugador
+    if (keys["a"] || keys["ArrowLeft"]) player.x -= player.speed;
+    if (keys["d"] || keys["ArrowRight"]) player.x += player.speed;
+
+    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+
+    // Disparo
+    if (keys[" "] && player.bullets.length < 3) {
+        keys[" "] = false;
+        shoot();
+    }
+
+    // Mover balas
+    player.bullets.forEach(b => b.y -= 8);
+    player.bullets = player.bullets.filter(b => b.y > 0);
+
+    // Mover enemigos
+    let edge = false;
+    enemies.forEach(e => {
+        if (!e.alive) return;
+        e.x += enemySpeed * enemyDir;
+        if (e.x <= 10 || e.x + e.width >= canvas.width - 10) edge = true;
+    });
+
+    if (edge) {
+        enemyDir *= -1;
+        enemies.forEach(e => e.y += 15);
+    }
+
+    // Colisiones
+    player.bullets.forEach(b => {
+        enemies.forEach(e => {
+            if (e.alive &&
+                b.x < e.x + e.width &&
+                b.x + b.width > e.x &&
+                b.y < e.y + e.height &&
+                b.y + b.height > e.y) {
+                    e.alive = false;
+                    b.y = -100;
+                    score += 10;
+                    scoreSpan.textContent = score;
+            }
+        });
+    });
+
+    // Enemigos llegan abajo
+    enemies.forEach(e => {
+        if (e.alive && e.y + e.height >= player.y) {
+            gameOver();
+        }
+    });
+
+    // Victoria
+    if (enemies.every(e => !e.alive)) {
+        enemySpeed += 0.5;
+        createEnemies();
+    }
+}
+
+/* ===== DIBUJAR ===== */
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Jugador
+    ctx.fillStyle = "lime";
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+
+    // Balas
+    ctx.fillStyle = "yellow";
+    player.bullets.forEach(b => {
+        ctx.fillRect(b.x, b.y, b.width, b.height);
+    });
+
+    // Enemigos
+    ctx.fillStyle = "red";
+    enemies.forEach(e => {
+        if (e.alive) ctx.fillRect(e.x, e.y, e.width, e.height);
+    });
+}
+
+/* ===== GAME OVER ===== */
+function gameOver() {
+    isGameOver = true;
+    saveRecord(score);
+    document.getElementById("restartBtn").style.display = "inline-block";
+    alert("GAME OVER\nPuntuación: " + score);
+}
+
+/* ===== REINICIAR JUEGO ===== */
+function restartGame() {
+    // Resetear variables
+    isGameOver = false;
+    score = 0;
+    lives = 3;
+    enemySpeed = 1;
+    enemyDir = 1;
+    player.x = 280;
+    player.bullets = [];
+    
+    // Resetear UI
+    scoreSpan.textContent = 0;
+    livesSpan.textContent = 3;
+    document.getElementById("restartBtn").style.display = "none";
+    
+    // Recrear enemigos
+    createEnemies();
+}
+
+/* ===== LOOP ===== */
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+loop();
+</script>
+
+</body>
+</html>

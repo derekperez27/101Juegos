@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title> ComeManzanas </title>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+#configScreen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px;
+    background: rgba(0,0,0,0.6);
+    border-radius: 20px;
+    border: 3px solid #00ff41;
+    box-shadow: 0 0 30px rgba(0,255,65,0.5);
+}
+
+#configScreen h1 {
+    font-size: 56px;
+    margin-bottom: 30px;
+    color: #00ff41;
+    text-shadow: 0 0 20px rgba(0,255,65,0.8);
+}
+
+.config-option {
+    margin: 25px 0;
+    background: rgba(0,255,65,0.1);
+    padding: 25px 40px;
+    border-radius: 15px;
+    border: 2px solid #00ff41;
+}
+
+.config-option label {
+    font-size: 22px;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 15px;
+    color: #00ff41;
+}
+
+.config-option input {
+    width: 200px;
+    padding: 12px;
+    font-size: 20px;
+    border-radius: 8px;
+    border: 2px solid #00ff41;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    text-align: center;
+}
+
+#startBtn {
+    padding: 20px 60px;
+    font-size: 28px;
+    font-weight: bold;
+    background: linear-gradient(145deg, #00ff41, #00cc33);
+    color: #000;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+    margin-top: 30px;
+    transition: all 0.3s;
+    box-shadow: 0 5px 15px rgba(0,255,65,0.5);
+}
+
+#startBtn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 25px rgba(0,255,65,0.8);
+}
+
+#gameScreen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+
+#gameInfo {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 20px;
+    padding: 20px;
+    background: rgba(0,0,0,0.6);
+    border-radius: 15px;
+    border: 2px solid #00ff41;
+}
+
+.info-item {
+    text-align: center;
+}
+
+.info-label {
+    font-size: 16px;
+    color: #00ff41;
+    margin-bottom: 5px;
+}
+
+.info-value {
+    font-size: 32px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 0 0 10px rgba(0,255,65,0.5);
+}
+
+#gameCanvas {
+    border: 4px solid #00ff41;
+    background: #0a0a0a;
+    box-shadow: 0 0 40px rgba(0,255,65,0.6);
+    border-radius: 10px;
+}
+
+#controls {
+    margin-top: 20px;
+    display: flex;
+    gap: 15px;
+}
+
+button {
+    padding: 12px 25px;
+    font-size: 16px;
+    font-weight: bold;
+    border: 2px solid #00ff41;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: rgba(0,255,65,0.2);
+    color: #00ff41;
+}
+
+button:hover {
+    background: rgba(0,255,65,0.4);
+    transform: translateY(-2px);
+}
+
+#pauseBtn {
+    background: linear-gradient(145deg, #ffaa00, #ff8800);
+    color: #000;
+    border-color: #ffaa00;
+}
+
+#restartBtn {
+    background: linear-gradient(145deg, #ff4444, #cc0000);
+    color: #fff;
+    border-color: #ff4444;
+}
+
+#exitBtn {
+    background: linear-gradient(145deg, #666, #333);
+    color: #fff;
+    border-color: #666;
+}
+
+#gameOverScreen {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.95);
+    padding: 50px;
+    border-radius: 20px;
+    border: 4px solid #ff4444;
+    text-align: center;
+    box-shadow: 0 0 50px rgba(255,68,68,0.8);
+}
+
+#gameOverScreen h1 {
+    font-size: 64px;
+    color: #ff4444;
+    margin-bottom: 20px;
+    text-shadow: 0 0 20px rgba(255,68,68,0.8);
+}
+
+#gameOverScreen p {
+    font-size: 28px;
+    margin: 15px 0;
+    color: #fff;
+}
+
+#finalScore {
+    font-size: 48px;
+    color: #00ff41;
+    font-weight: bold;
+    margin: 20px 0;
+}
+
+.instruction {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(0,255,65,0.1);
+    border-radius: 10px;
+    border: 2px solid #00ff41;
+}
+
+.instruction p {
+    margin: 5px 0;
+    font-size: 16px;
+    color: #00ff41;
+}
+</style>
+</head>
+<body>
+
+<!-- PANTALLA DE CONFIGURACIÓN -->
+<div id="configScreen">
+    <h1>ComeManzanas</h1>
+    
+    <div class="config-option">
+        <label>🍎 Número de manzanas (1-10):</label>
+        <input type="number" id="appleCount" min="1" max="10" value="3">
+    </div>
+    
+    <div class="instruction">
+        <p>🎮 Usa las FLECHAS del teclado para moverte</p>
+        <p>🍎 Come manzanas para crecer y ganar puntos</p>
+        <p>💀 No choques con las paredes ni contigo mismo</p>
+    </div>
+    
+    <button id="startBtn" onclick="startGame()">JUGAR</button>
+</div>
+
+<!-- PANTALLA DE JUEGO -->
+<div id="gameScreen">
+    <div id="gameInfo">
+        <div class="info-item">
+            <div class="info-label">PUNTUACIÓN</div>
+            <div class="info-value" id="score">0</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">LONGITUD</div>
+            <div class="info-value" id="length">3</div>
+        </div>
+        <div class="info-item">
+            <div class="info-label">🍎</div>
+            <div class="info-value" id="appleCounter">0/3</div>
+        </div>
+    </div>
+    
+    <canvas id="gameCanvas" width="450" height="450"></canvas>
+    
+    <div id="controls">
+        <button id="pauseBtn" onclick="togglePause()">⏸ PAUSAR</button>
+        <button id="restartBtn" onclick="restartGame()">🔄 REINICIAR</button>
+        <button id="exitBtn" onclick="exitGame()">🚪 SALIR</button>
+    </div>
+</div>
+
+<!-- PANTALLA GAME OVER -->
+<div id="gameOverScreen">
+    <h1>💀 GAME OVER 💀</h1>
+    <p>Puntuación Final:</p>
+    <div id="finalScore">0</div>
+    <p>Longitud: <span id="finalLength">0</span></p>
+    <button onclick="restartGame()" style="margin-top: 30px; font-size: 24px; padding: 15px 40px;">🔄 JUGAR DE NUEVO</button>
+    <button onclick="exitGame()" style="margin-top: 10px; font-size: 20px; padding: 12px 30px;">🚪 MENÚ PRINCIPAL</button>
+</div>
+
+<script>
+// ========== CONFIGURACIÓN ==========
+const GRID_SIZE = 9;
+const CELL_SIZE = 50;
+let canvas, ctx;
+let maxApples = 3;
+
+// ========== VARIABLES DEL JUEGO ==========
+let snake = [];
+let direction = { x: 1, y: 0 };
+let nextDirection = { x: 1, y: 0 };
+let directionQueue = []; // Cola para movimientos rápidos
+let apples = [];
+let score = 0;
+let gameLoop = null;
+let isPaused = false;
+let gameSpeed = 150; // ms por frame
+
+// ========== INICIALIZACIÓN ==========
+function startGame() {
+    maxApples = parseInt(document.getElementById('appleCount').value);
+    
+    if(maxApples < 1 || maxApples > 10) {
+        alert('El número de manzanas debe estar entre 1 y 10');
+        return;
+    }
+    
+    document.getElementById('configScreen').style.display = 'none';
+    document.getElementById('gameScreen').style.display = 'flex';
+    
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+    
+    initGame();
+    setupControls();
+    gameLoop = setInterval(update, gameSpeed);
+}
+
+function initGame() {
+    // Serpiente inicial (3 segmentos en el centro)
+    snake = [
+        { x: 4, y: 4 },
+        { x: 3, y: 4 },
+        { x: 2, y: 4 }
+    ];
+    
+    direction = { x: 1, y: 0 };
+    nextDirection = { x: 1, y: 0 };
+    directionQueue = []; // Resetear cola
+    score = 0;
+    isPaused = false;
+    apples = [];
+    
+    // Generar manzanas iniciales
+    for(let i = 0; i < maxApples; i++) {
+        spawnApple();
+    }
+    
+    updateUI();
+    draw();
+}
+
+function setupControls() {
+    document.addEventListener('keydown', handleKeyPress);
+}
+
+function handleKeyPress(e) {
+    if(isPaused && e.key !== ' ') return;
+    
+    // Obtener la última dirección de la cola, o la dirección actual si la cola está vacía
+    const lastDirection = directionQueue.length > 0 
+        ? directionQueue[directionQueue.length - 1] 
+        : direction;
+    
+    let newDirection = null;
+    
+    switch(e.key) {
+        case 'ArrowUp':
+            if(lastDirection.y === 0) newDirection = { x: 0, y: -1 };
+            e.preventDefault();
+            break;
+        case 'ArrowDown':
+            if(lastDirection.y === 0) newDirection = { x: 0, y: 1 };
+            e.preventDefault();
+            break;
+        case 'ArrowLeft':
+            if(lastDirection.x === 0) newDirection = { x: -1, y: 0 };
+            e.preventDefault();
+            break;
+        case 'ArrowRight':
+            if(lastDirection.x === 0) newDirection = { x: 1, y: 0 };
+            e.preventDefault();
+            break;
+        case ' ':
+            togglePause();
+            e.preventDefault();
+            break;
+    }
+    
+    // Añadir a la cola si es válido (máximo 3 movimientos en cola para evitar lag)
+    if(newDirection && directionQueue.length < 3) {
+        directionQueue.push(newDirection);
+    }
+}
+
+// ========== LÓGICA DEL JUEGO ==========
+function update() {
+    if(isPaused) return;
+    
+    // Procesar siguiente dirección de la cola
+    if(directionQueue.length > 0) {
+        direction = directionQueue.shift();
+    }
+    
+    // Nueva posición de la cabeza
+    const head = { ...snake[0] };
+    head.x += direction.x;
+    head.y += direction.y;
+    
+    // Verificar colisión con paredes
+    if(head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) {
+        gameOver();
+        return;
+    }
+    
+    // Verificar colisión consigo mismo
+    for(let segment of snake) {
+        if(segment.x === head.x && segment.y === head.y) {
+            gameOver();
+            return;
+        }
+    }
+    
+    // Verificar colisión con manzanas
+    let ateApple = false;
+    for(let i = apples.length - 1; i >= 0; i--) {
+        if(apples[i].x === head.x && apples[i].y === head.y) {
+            score += 10;
+            ateApple = true;
+            apples.splice(i, 1);
+            spawnApple();
+            break;
+        }
+    }
+    
+    // Agregar nueva cabeza
+    snake.unshift(head);
+    
+    // Si no comió manzana, quitar cola
+    if(!ateApple) {
+        snake.pop();
+    }
+    
+    updateUI();
+    draw();
+}
+
+function spawnApple() {
+    let attempts = 0;
+    let newApple;
+    
+    while(attempts < 100) {
+        newApple = {
+            x: Math.floor(Math.random() * GRID_SIZE),
+            y: Math.floor(Math.random() * GRID_SIZE)
+        };
+        
+        // Verificar que no esté en la serpiente
+        let valid = true;
+        for(let segment of snake) {
+            if(segment.x === newApple.x && segment.y === newApple.y) {
+                valid = false;
+                break;
+            }
+        }
+        
+        // Verificar que no esté en otra manzana
+        if(valid) {
+            for(let apple of apples) {
+                if(apple.x === newApple.x && apple.y === newApple.y) {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        
+        if(valid) {
+            apples.push(newApple);
+            return;
+        }
+        
+        attempts++;
+    }
+}
+
+// ========== DIBUJO ==========
+function draw() {
+    // Limpiar canvas
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Dibujar cuadrícula
+    ctx.strokeStyle = '#1a1a1a';
+    ctx.lineWidth = 1;
+    for(let i = 0; i <= GRID_SIZE; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * CELL_SIZE, 0);
+        ctx.lineTo(i * CELL_SIZE, canvas.height);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.moveTo(0, i * CELL_SIZE);
+        ctx.lineTo(canvas.width, i * CELL_SIZE);
+        ctx.stroke();
+    }
+    
+    // Dibujar manzanas
+    ctx.fillStyle = '#ff0000';
+    for(let apple of apples) {
+        const x = apple.x * CELL_SIZE;
+        const y = apple.y * CELL_SIZE;
+        
+        // Manzana con brillo
+        const gradient = ctx.createRadialGradient(
+            x + CELL_SIZE * 0.3, y + CELL_SIZE * 0.3, 5,
+            x + CELL_SIZE / 2, y + CELL_SIZE / 2, CELL_SIZE * 0.5
+        );
+        gradient.addColorStop(0, '#ff6666');
+        gradient.addColorStop(1, '#cc0000');
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(x + CELL_SIZE / 2, y + CELL_SIZE / 2, CELL_SIZE * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Tallo
+        ctx.fillStyle = '#00aa00';
+        ctx.fillRect(x + CELL_SIZE / 2 - 2, y + CELL_SIZE * 0.1, 4, CELL_SIZE * 0.15);
+    }
+    
+    // Dibujar serpiente
+    for(let i = 0; i < snake.length; i++) {
+        const segment = snake[i];
+        const x = segment.x * CELL_SIZE;
+        const y = segment.y * CELL_SIZE;
+        
+        if(i === 0) {
+            // Cabeza
+            const gradient = ctx.createRadialGradient(
+                x + CELL_SIZE * 0.3, y + CELL_SIZE * 0.3, 5,
+                x + CELL_SIZE / 2, y + CELL_SIZE / 2, CELL_SIZE * 0.5
+            );
+            gradient.addColorStop(0, '#44ff44');
+            gradient.addColorStop(1, '#00cc00');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(x + 2, y + 2, CELL_SIZE - 4, CELL_SIZE - 4);
+            
+            // Ojos
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(x + CELL_SIZE * 0.35, y + CELL_SIZE * 0.35, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(x + CELL_SIZE * 0.65, y + CELL_SIZE * 0.35, 3, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            // Cuerpo
+            const alpha = 1 - (i / snake.length) * 0.5;
+            ctx.fillStyle = `rgba(0, 255, 65, ${alpha})`;
+            ctx.fillRect(x + 3, y + 3, CELL_SIZE - 6, CELL_SIZE - 6);
+        }
+    }
+    
+    // Mensaje de pausa
+    if(isPaused) {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#00ff41';
+        ctx.font = 'bold 48px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('⏸ PAUSADO', canvas.width / 2, canvas.height / 2);
+    }
+}
+
+// ========== UI ==========
+function updateUI() {
+    document.getElementById('score').textContent = score;
+    document.getElementById('length').textContent = snake.length;
+    document.getElementById('appleCounter').textContent = `${apples.length}/${maxApples}`;
+}
+
+function togglePause() {
+    isPaused = !isPaused;
+    document.getElementById('pauseBtn').textContent = isPaused ? '▶ REANUDAR' : '⏸ PAUSAR';
+    draw();
+}
+
+function restartGame() {
+    clearInterval(gameLoop);
+    document.getElementById('gameOverScreen').style.display = 'none';
+    initGame();
+    gameLoop = setInterval(update, gameSpeed);
+}
+
+function exitGame() {
+    clearInterval(gameLoop);
+    document.getElementById('gameScreen').style.display = 'none';
+    document.getElementById('gameOverScreen').style.display = 'none';
+    document.getElementById('configScreen').style.display = 'flex';
+}
+
+function gameOver() {
+    clearInterval(gameLoop);
+    
+    document.getElementById('finalScore').textContent = score;
+    document.getElementById('finalLength').textContent = snake.length;
+    document.getElementById('gameOverScreen').style.display = 'block';
+}
+</script>
+
+</body>
+</html>

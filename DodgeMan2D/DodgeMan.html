@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dodge Man 2D</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        #ui {
+            position: fixed;
+            top: 10px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        #hearts {
+            font-size: 26px;
+        }
+
+        #time {
+            font-size: 20px;
+        }
+
+        canvas {
+            display: block;
+            margin: 60px auto 0;
+            background: #000;
+            border: 2px solid white;
+        }
+
+        #records {
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        #records h2 {
+            color: #00ffff;
+        }
+
+        #recordsList {
+            background: #222;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .record-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: #333;
+            border-radius: 5px;
+            border-left: 3px solid #00ffff;
+        }
+
+        .record-rank {
+            font-weight: bold;
+            color: #00ffff;
+            margin-right: 10px;
+        }
+
+        .record-time {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .no-records {
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+        }
+
+        button {
+            padding: 8px 15px;
+            font-size: 16px;
+            margin: 10px 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="hearts">❤️ ❤️ ❤️</div>
+        <div id="time">Tiempo: 0.0 s</div>
+    </div>
+
+    <canvas id="game" width="600" height="500"></canvas>
+
+    <div id="records">
+        <h2>🏆 Récords de Supervivencia</h2>
+        <div id="recordsList"></div>
+        <button onclick="clearRecords()" style="background: #d32f2f; color: white;">Borrar Récords</button>
+        <button onclick="restartGame()" style="background: #4CAF50; color: white;">Reiniciar Juego</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("game");
+        const ctx = canvas.getContext("2d");
+
+        const heartsEl = document.getElementById("hearts");
+        const timeEl = document.getElementById("time");
+
+        const player = {
+            x: 300,
+            y: 250,
+            size: 20,
+            speed: 4
+        };
+
+        let keys = {};
+        let projectiles = [];
+        let lives = 3;
+        let timeAlive = 0;
+        let baseSpeed = 2;
+        let spawnCooldown = 1200;
+        let lastSpawn = 0;
+        let gameOver = false;
+
+        /* ===== RÉCORDS ===== */
+        function loadRecords() {
+            const records = localStorage.getItem('dodgeManRecords');
+            return records ? JSON.parse(records) : [];
+        }
+
+        function saveRecord(time) {
+            const records = loadRecords();
+            records.push({
+                time: parseFloat(time),
+                date: new Date().toLocaleDateString()
+            });
+            // Ordenar de MAYOR a MENOR tiempo
+            records.sort((a, b) => b.time - a.time);
+            // Guardar solo los mejores 10
+            const top10 = records.slice(0, 10);
+            localStorage.setItem('dodgeManRecords', JSON.stringify(top10));
+            displayRecords();
+        }
+
+        function displayRecords() {
+            const records = loadRecords();
+            const recordsList = document.getElementById('recordsList');
+            
+            if (records.length === 0) {
+                recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero en sobrevivir!</div>';
+                return;
+            }
+
+            recordsList.innerHTML = records.map((record, index) => {
+                let medal = '';
+                if (index === 0) medal = '🥇';
+                else if (index === 1) medal = '🥈';
+                else if (index === 2) medal = '🥉';
+                
+                return `
+                    <div class="record-item">
+                        <span class="record-rank">${medal} #${index + 1}</span>
+                        <span class="record-time">${record.time.toFixed(1)}s</span>
+                        <span style="color: #666; font-size: 12px;">${record.date}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function clearRecords() {
+            if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+                localStorage.removeItem('dodgeManRecords');
+                displayRecords();
+            }
+        }
+
+        function restartGame() {
+            location.reload();
+        }
+
+        // Mostrar récords al cargar la página
+        displayRecords();
+
+        // CONTROLES
+        document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+        document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+        // MOVIMIENTO
+        function movePlayer() {
+            if (keys["w"]) player.y -= player.speed;
+            if (keys["s"]) player.y += player.speed;
+            if (keys["a"]) player.x -= player.speed;
+            if (keys["d"]) player.x += player.speed;
+
+            player.x = Math.max(0, Math.min(canvas.width, player.x));
+            player.y = Math.max(0, Math.min(canvas.height, player.y));
+        }
+
+        // PROYECTILES
+        function spawnProjectile() {
+            const minDistance = 150;
+            let x, y;
+
+            do {
+                x = Math.random() * canvas.width;
+                y = Math.random() * canvas.height;
+            } while (Math.hypot(x - player.x, y - player.y) < minDistance);
+
+            const angle = Math.atan2(player.y - y, player.x - x);
+
+            // velocidad aumenta con tiempo + número de proyectiles
+            const speed = baseSpeed + timeAlive * 0.05 + projectiles.length * 0.2;
+
+            projectiles.push({
+                x, y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                size: 8
+            });
+        }
+
+        // UPDATE PROYECTILES
+        function updateProjectiles() {
+            projectiles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // Colisión
+                if (Math.hypot(p.x - player.x, p.y - player.y) < p.size + player.size) {
+                    loseLife();
+                    projectiles = [];
+                }
+            });
+
+            projectiles = projectiles.filter(p =>
+                p.x > -20 && p.x < canvas.width + 20 &&
+                p.y > -20 && p.y < canvas.height + 20
+            );
+        }
+
+        // VIDAS
+        function loseLife() {
+            lives--;
+            heartsEl.textContent = "❤️ ".repeat(lives);
+            if (lives <= 0) endGame();
+        }
+
+        // DIBUJO
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Jugador
+            ctx.fillStyle = "#0ff";
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Proyectiles
+            ctx.fillStyle = "red";
+            projectiles.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // GAME LOOP
+        let lastTime = performance.now();
+
+        function loop(now) {
+            if (gameOver) return;
+
+            const delta = now - lastTime;
+            lastTime = now;
+
+            timeAlive += delta / 1000;
+            timeEl.textContent = "Tiempo: " + timeAlive.toFixed(1) + " s";
+
+            movePlayer();
+            updateProjectiles();
+            draw();
+
+            // Spawn escalonado (nunca a la vez)
+            if (now - lastSpawn > spawnCooldown) {
+                spawnProjectile();
+                lastSpawn = now;
+
+                // dificultad progresiva
+                if (spawnCooldown > 400) spawnCooldown -= 20;
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        function endGame() {
+            gameOver = true;
+            const finalTime = timeAlive.toFixed(1);
+            saveRecord(finalTime);
+            alert("GAME OVER\nTiempo sobrevivido: " + finalTime + " s");
+        }
+
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>

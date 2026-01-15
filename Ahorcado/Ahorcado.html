@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title> AHORCADO </title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background: #f2f2f2;
+        }
+
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(5, 60px);
+            gap: 8px;
+            justify-content: center;
+            margin: 20px;
+        }
+
+        .cell {
+            width: 60px;
+            height: 60px;
+            line-height: 60px;
+            font-size: 32px;
+            font-weight: bold;
+            background: white;
+            border: 2px solid #ccc;
+            text-transform: uppercase;
+        }
+
+        .green {
+            background: #6aaa64;
+            color: white;
+        }
+
+        .yellow {
+            background: #c9b458;
+            color: white;
+        }
+
+        .red {
+            background: #d9534f;
+            color: white;
+        }
+
+        input {
+            font-size: 20px;
+            padding: 8px;
+            text-transform: uppercase;
+            width: 200px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #keyboard {
+            display: grid;
+            grid-template-columns: repeat(9, 40px);
+            gap: 6px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .key {
+            padding: 8px;
+            background: #ddd;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+
+        #message {
+            font-size: 18px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1> AHORCADO </h1>
+
+    <div id="grid"></div>
+
+    <input id="guess" maxlength="5" placeholder="PALABRA">
+    <br>
+    <button onclick="checkWord()">Probar</button>
+    <button onclick="newGame()">Nueva partida</button>
+
+    <div id="message"></div>
+
+    <div id="keyboard"></div>
+
+    <script>
+        const words = [
+            "perro", "gatos", "coche", "avion", "plaza",
+            "libro", "mesa", "raton", "flota", "silla"
+        ];
+
+        const letters = "ABCDEFGHIJKLMNÑOPQRSTUVWXYZ".split("");
+
+        let secret = "";
+        let attempt = 0;
+        let maxAttempts = 6;
+
+        function normalize(text) {
+            return text
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "");
+        }
+
+        function createGrid() {
+            const grid = document.getElementById("grid");
+            grid.innerHTML = "";
+            for (let i = 0; i < maxAttempts * 5; i++) {
+                const div = document.createElement("div");
+                div.className = "cell";
+                grid.appendChild(div);
+            }
+        }
+
+        function createKeyboard() {
+            const kb = document.getElementById("keyboard");
+            kb.innerHTML = "";
+            letters.forEach(l => {
+                const div = document.createElement("div");
+                div.className = "key";
+                div.id = "key-" + l;
+                div.textContent = l;
+                kb.appendChild(div);
+            });
+        }
+
+        function newGame() {
+            secret = normalize(words[Math.floor(Math.random() * words.length)]);
+            attempt = 0;
+            document.getElementById("message").textContent = "";
+            document.getElementById("guess").value = "";
+            createGrid();
+            createKeyboard();
+        }
+
+        function paintKey(letter, color) {
+            const key = document.getElementById("key-" + letter.toUpperCase());
+            if (!key) return;
+
+            if (key.classList.contains("green")) return;
+            if (key.classList.contains("yellow") && color === "red") return;
+
+            key.className = "key " + color;
+        }
+
+        function checkWord() {
+            const input = document.getElementById("guess");
+            let guess = normalize(input.value);
+
+            if (guess.length !== 5) return;
+
+            const cells = document.querySelectorAll(".cell");
+            const start = attempt * 5;
+
+            for (let i = 0; i < 5; i++) {
+                cells[start + i].textContent = guess[i].toUpperCase();
+
+                if (guess[i] === secret[i]) {
+                    cells[start + i].classList.add("green");
+                    paintKey(guess[i], "green");
+                } else if (secret.includes(guess[i])) {
+                    cells[start + i].classList.add("yellow");
+                    paintKey(guess[i], "yellow");
+                } else {
+                    cells[start + i].classList.add("red");
+                    paintKey(guess[i], "red");
+                }
+            }
+
+            if (guess === secret) {
+                document.getElementById("message").textContent = "🎉 ¡Has ganado!";
+                return;
+            }
+
+            attempt++;
+            input.value = "";
+
+            if (attempt === maxAttempts) {
+                document.getElementById("message").textContent =
+                    "❌ Has perdido. La palabra era: " + secret.toUpperCase();
+            }
+        }
+
+        document.getElementById("guess").addEventListener("keydown", e => {
+            if (e.key === "Enter") checkWord();
+        });
+
+        newGame();
+    </script>
+
+</body>
+</html>

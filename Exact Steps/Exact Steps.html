@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Exact Steps</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+button{
+    padding:10px 20px;
+    font-size:16px;
+    cursor:pointer;
+}
+#msg{
+    font-size:18px;
+    font-weight:bold;
+    color:#4CAF50;
+    min-height:30px;
+}
+</style>
+</head>
+<body>
+
+<h1>👣 EXACT STEPS</h1>
+<p>Nivel: <span id="level">1</span> | Pasos restantes: <span id="steps"></span></p>
+<p id="msg"></p>
+
+<canvas id="c" width="400" height="400"></canvas>
+<button id="restart" style="display:none">🔁 Volver a jugar</button>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const stepsSpan = document.getElementById("steps");
+const levelSpan = document.getElementById("level");
+const msg = document.getElementById("msg");
+const restartBtn = document.getElementById("restart");
+
+const GRID = 40;
+const SIZE = 10;
+
+let player, goal, stepsLeft, running, currentLevel, walls;
+
+/* ===== NIVELES ===== */
+const levels = [
+    // Nivel 1: Simple (Ruta: derecha x7, abajo x7 = 14 pasos)
+    {
+        player: {x: 1, y: 1},
+        goal: {x: 8, y: 8},
+        steps: 14,
+        walls: [
+            {x: 5, y: 0}, {x: 5, y: 1}, {x: 5, y: 2}
+        ]
+    },
+    // Nivel 2: Desvío simple (Ruta: derecha x1, abajo x5, derecha x7, arriba x1, derecha x1, abajo x4 = 19 pasos)
+    {
+        player: {x: 0, y: 0},
+        goal: {x: 9, y: 8},
+        steps: 19,
+        walls: [
+            {x: 2, y: 0}, {x: 2, y: 1}, {x: 2, y: 2}, {x: 2, y: 3}
+        ]
+    },
+    // Nivel 3: Laberinto en L (Ruta: abajo x5, derecha x7 = 12 pasos)
+    {
+        player: {x: 1, y: 1},
+        goal: {x: 8, y: 6},
+        steps: 12,
+        walls: [
+            {x: 4, y: 1}, {x: 4, y: 2}, {x: 4, y: 3}, {x: 4, y: 4}
+        ]
+    },
+    // Nivel 4: Habitación doble (Ruta: derecha x3, abajo x5, derecha x5, arriba x1 = 14 pasos)
+    {
+        player: {x: 0, y: 0},
+        goal: {x: 8, y: 4},
+        steps: 14,
+        walls: [
+            {x: 4, y: 0}, {x: 4, y: 1}, {x: 4, y: 2}, {x: 4, y: 3}, {x: 4, y: 4}
+        ]
+    },
+    // Nivel 5: Serpiente (Ruta: derecha x3, abajo x3, derecha x4, arriba x1 = 11 pasos)
+    {
+        player: {x: 1, y: 2},
+        goal: {x: 8, y: 4},
+        steps: 11,
+        walls: [
+            {x: 5, y: 2}, {x: 5, y: 3}, {x: 5, y: 4}, {x: 5, y: 5}
+        ]
+    },
+    // Nivel 6: Escalera (Ruta: derecha x2, abajo x2, derecha x2, abajo x2, derecha x2 = 10 pasos)
+    {
+        player: {x: 1, y: 1},
+        goal: {x: 7, y: 5},
+        steps: 10,
+        walls: [
+            {x: 4, y: 1}, {x: 4, y: 2},
+            {x: 6, y: 3}, {x: 6, y: 4}
+        ]
+    },
+    // Nivel 7: Cruz (Ruta: abajo x4, derecha x5, arriba x4 = 13 pasos)
+    {
+        player: {x: 0, y: 0},
+        goal: {x: 5, y: 0},
+        steps: 13,
+        walls: [
+            {x: 2, y: 0}, {x: 2, y: 1}, {x: 2, y: 2}
+        ]
+    },
+    // Nivel 8: Zigzag complejo (Ruta calculada: 20 pasos)
+    {
+        player: {x: 0, y: 0},
+        goal: {x: 9, y: 5},
+        steps: 20,
+        walls: [
+            {x: 3, y: 0}, {x: 3, y: 1}, {x: 3, y: 2},
+            {x: 6, y: 3}, {x: 6, y: 4}, {x: 6, y: 5}
+        ]
+    }
+];
+
+/* ===== INPUT ===== */
+document.addEventListener("keydown", e => {
+    if(!running) return;
+
+    let moved = false;
+
+    if(e.key==="w"){ player.y--; moved=true; }
+    if(e.key==="s"){ player.y++; moved=true; }
+    if(e.key==="a"){ player.x--; moved=true; }
+    if(e.key==="d"){ player.x++; moved=true; }
+
+    if(moved){
+        stepsLeft--;
+        checkState();
+    }
+});
+
+/* ===== INIT ===== */
+function startGame(){
+    currentLevel = 0;
+    loadLevel();
+}
+
+function loadLevel(){
+    if(currentLevel >= levels.length){
+        allLevelsComplete();
+        return;
+    }
+    
+    running = true;
+    const level = levels[currentLevel];
+    
+    stepsLeft = level.steps;
+    player = {...level.player};
+    goal = {...level.goal};
+    walls = [...level.walls];
+
+    msg.textContent = "";
+    restartBtn.style.display = "none";
+    updateUI();
+}
+
+/* ===== STATE ===== */
+function checkState(){
+    if(player.x < 0 || player.y < 0 || player.x >= SIZE || player.y >= SIZE){
+        die("Te saliste del mapa");
+        return;
+    }
+    
+    // Verificar colisión con paredes
+    if(walls.some(w => w.x === player.x && w.y === player.y)){
+        die("Chocaste con una pared");
+        return;
+    }
+
+    if(player.x === goal.x && player.y === goal.y){
+        if(stepsLeft === 0){
+            levelComplete();
+        }else{
+            die("Pasos incorrectos (te sobran " + stepsLeft + ")");
+        }
+        return;
+    }
+
+    if(stepsLeft < 0){
+        die("Demasiados pasos");
+    }
+    
+    updateUI();
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0,0,400,400);
+
+    // Grid
+    for(let y=0;y<SIZE;y++){
+        for(let x=0;x<SIZE;x++){
+            ctx.strokeStyle="#222";
+            ctx.strokeRect(x*GRID,y*GRID,GRID,GRID);
+        }
+    }
+    
+    // Paredes
+    ctx.fillStyle="#555";
+    walls.forEach(wall => {
+        ctx.fillRect(wall.x*GRID, wall.y*GRID, GRID, GRID);
+        // Borde de pared
+        ctx.strokeStyle="#888";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(wall.x*GRID, wall.y*GRID, GRID, GRID);
+    });
+
+    // Meta
+    ctx.fillStyle="lime";
+    ctx.fillRect(goal.x*GRID,goal.y*GRID,GRID,GRID);
+
+    // Jugador
+    ctx.fillStyle="cyan";
+    ctx.fillRect(player.x*GRID,player.y*GRID,GRID,GRID);
+}
+
+/* ===== UI ===== */
+function updateUI(){
+    stepsSpan.textContent = stepsLeft;
+    levelSpan.textContent = currentLevel + 1;
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    if(running){
+        draw();
+    }
+    requestAnimationFrame(loop);
+}
+
+/* ===== ENDINGS ===== */
+function die(reason){
+    running = false;
+    msg.textContent = "💀 " + reason;
+    restartBtn.textContent = "🔁 Reintentar nivel";
+    restartBtn.style.display = "inline-block";
+}
+
+function levelComplete(){
+    running = false;
+    currentLevel++;
+    
+    if(currentLevel >= levels.length){
+        allLevelsComplete();
+    }else{
+        msg.textContent = "✅ ¡Nivel completado! Siguiente nivel...";
+        setTimeout(() => {
+            loadLevel();
+        }, 1500);
+    }
+}
+
+function allLevelsComplete(){
+    running = false;
+    msg.textContent = "🎉 ¡FELICIDADES! ¡Completaste todos los niveles!";
+    restartBtn.textContent = "🔁 Volver a empezar";
+    restartBtn.style.display = "inline-block";
+}
+
+/* ===== RESTART ===== */
+restartBtn.onclick = () => {
+    if(currentLevel >= levels.length){
+        startGame(); // Reiniciar desde nivel 1
+    }else{
+        loadLevel(); // Reintentar nivel actual
+    }
+};
+
+startGame();
+loop();
+</script>
+
+</body>
+</html>

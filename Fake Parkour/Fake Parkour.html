@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Fake Parkour</title>
+<style>
+body{
+    margin:0;
+    background:#111;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+canvas{
+    background:#000;
+    display:block;
+    margin:20px auto;
+    border:2px solid white;
+}
+#msg{
+    color:#ffd700;
+    font-size:18px;
+    font-weight:bold;
+}
+</style>
+</head>
+<body>
+
+<h1> Fake Parkour</h1>
+<p id="msg">Llega al bloque verde</p>
+<p style="color:#666; font-size:12px;">A/D: Mover | W: Saltar | R: Reiniciar</p>
+
+<canvas id="c" width="800" height="400"></canvas>
+
+<script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+const msgSpan = document.getElementById("msg");
+
+let running = true;
+let frameCount = 0;
+let currentLevel = 1;
+const totalLevels = 4;
+
+/* ===== PLAYER ===== */
+const player = {
+    x: 30,
+    y: 300,
+    w: 20,
+    h: 30,
+    vx: 0,
+    vy: 0,
+    onGround: false
+};
+
+/* ===== LEVELS ===== */
+const levels = {
+    1: {
+        platforms: [
+            {x:0,   y:350, w:150, h:50, type:"solid"},
+            {x:120, y:300, w:80,  h:10, type:"solid"},
+            {x:180, y:220, w:80,  h:10, type:"fake"},
+            {x:230, y:300, w:80,  h:10, type:"solid"},
+            {x:340, y:300, w:100, h:10, type:"solid"},
+            {x:320, y:220, w:80,  h:10, type:"disappear", visible:true},
+            {x:470, y:280, w:80,  h:10, type:"solid"},
+            {x:550, y:240, w:80,  h:10, type:"invisible"},
+            {x:640, y:200, w:80,  h:10, type:"solid"},
+            {x:570, y:350, w:230, h:50, type:"solid"},
+        ],
+        walls: [{x:290, y:250, w:10, h:50}],
+        spikes: [{x:360, y:290, w:60, h:10, visible:false, triggerDistance:80}],
+        goals: [
+            {x:200, y:190, w:30, h:30, fake:true, message:"Esa no era la meta"},
+            {x:660, y:160, w:30, h:30, fake:true, message:"Intenta con otra"},
+            {x:750, y:310, w:30, h:30, fake:false},
+        ],
+        movingGoal: {x:400, y:180, w:30, h:30, vx:2, fake:true, message:"Objetivo inalcanzable"},
+        playerStart: {x:30, y:300}
+    },
+    2: {
+        platforms: [
+            {x:0,   y:350, w:100, h:50, type:"solid"},
+            {x:90,  y:300, w:70,  h:10, type:"solid"},
+            {x:180, y:250, w:70,  h:10, type:"solid"},
+            {x:150, y:180, w:70,  h:10, type:"disappear", visible:true},
+            {x:270, y:250, w:90,  h:10, type:"solid"},
+            {x:380, y:200, w:80,  h:10, type:"fake"},
+            {x:380, y:280, w:80,  h:10, type:"solid"},
+            {x:490, y:230, w:80,  h:10, type:"invisible"},
+            {x:590, y:280, w:80,  h:10, type:"solid"},
+            {x:700, y:350, w:100, h:50, type:"solid"},
+        ],
+        walls: [{x:460, y:200, w:10, h:80}],
+        spikes: [{x:600, y:270, w:50, h:10, visible:false, triggerDistance:70}],
+        goals: [
+            {x:170, y:150, w:30, h:30, fake:true, message:"No es esta"},
+            {x:400, y:160, w:30, h:30, fake:true, message:"Sigue buscando"},
+            {x:740, y:310, w:30, h:30, fake:false},
+        ],
+        movingGoal: {x:300, y:120, w:30, h:30, vx:2.5, fake:true, message:"Inalcanzable"},
+        playerStart: {x:30, y:300}
+    },
+    3: {
+        platforms: [
+            {x:0,   y:350, w:120, h:50, type:"solid"},
+            {x:110, y:280, w:80,  h:10, type:"solid"},
+            {x:210, y:220, w:80,  h:10, type:"solid"},
+            {x:180, y:150, w:80,  h:10, type:"fake"},
+            {x:310, y:280, w:80,  h:10, type:"disappear", visible:true},
+            {x:320, y:200, w:70,  h:10, type:"solid"},
+            {x:420, y:260, w:80,  h:10, type:"solid"},
+            {x:530, y:210, w:80,  h:10, type:"invisible"},
+            {x:520, y:300, w:100, h:10, type:"solid"},
+            {x:640, y:250, w:80,  h:10, type:"solid"},
+            {x:650, y:350, w:150, h:50, type:"solid"},
+        ],
+        walls: [{x:400, y:150, w:10, h:110}],
+        spikes: [
+            {x:440, y:250, w:40, h:10, visible:false, triggerDistance:60},
+            {x:540, y:290, w:50, h:10, visible:false, triggerDistance:75},
+        ],
+        goals: [
+            {x:200, y:120, w:30, h:30, fake:true, message:"Objetivo erróneo"},
+            {x:660, y:210, w:30, h:30, fake:true, message:"No es el correcto"},
+            {x:760, y:310, w:30, h:30, fake:false},
+        ],
+        movingGoal: {x:250, y:90, w:30, h:30, vx:3, fake:true, message:"No alcanzable"},
+        playerStart: {x:30, y:300}
+    },
+    4: {
+        platforms: [
+            {x:0,   y:350, w:100, h:50, type:"solid"},
+            {x:90,  y:290, w:70,  h:10, type:"solid"},
+            {x:180, y:240, w:70,  h:10, type:"disappear", visible:true},
+            {x:170, y:180, w:70,  h:10, type:"fake"},
+            {x:270, y:290, w:90,  h:10, type:"solid"},
+            {x:380, y:240, w:80,  h:10, type:"solid"},
+            {x:350, y:160, w:80,  h:10, type:"fake"},
+            {x:490, y:200, w:80,  h:10, type:"invisible"},
+            {x:490, y:290, w:100, h:10, type:"solid"},
+            {x:610, y:240, w:80,  h:10, type:"solid"},
+            {x:710, y:190, w:80,  h:10, type:"solid"},
+            {x:600, y:350, w:200, h:50, type:"solid"},
+        ],
+        walls: [
+            {x:460, y:150, w:10, h:90},
+            {x:690, y:240, w:10, h:60},
+        ],
+        spikes: [
+            {x:290, y:280, w:50, h:10, visible:false, triggerDistance:65},
+            {x:510, y:280, w:60, h:10, visible:false, triggerDistance:70},
+        ],
+        goals: [
+            {x:190, y:150, w:30, h:30, fake:true, message:"Meta incorrecta"},
+            {x:370, y:130, w:30, h:30, fake:true, message:"Todavía no"},
+            {x:730, y:150, w:30, h:30, fake:true, message:"Casi lo tienes"},
+            {x:750, y:310, w:30, h:30, fake:false},
+        ],
+        movingGoal: {x:200, y:80, w:30, h:30, vx:3.5, fake:true, message:"Imposible de alcanzar"},
+        playerStart: {x:30, y:300}
+    }
+};
+
+// Variables del nivel actual
+let platforms = [];
+let invisibleWalls = [];
+let spikes = [];
+let goals = [];
+let movingGoal = {};
+
+function loadLevel(levelNum) {
+    const level = levels[levelNum];
+    platforms = JSON.parse(JSON.stringify(level.platforms));
+    invisibleWalls = JSON.parse(JSON.stringify(level.walls));
+    spikes = JSON.parse(JSON.stringify(level.spikes));
+    goals = JSON.parse(JSON.stringify(level.goals));
+    movingGoal = JSON.parse(JSON.stringify(level.movingGoal));
+    
+    player.x = level.playerStart.x;
+    player.y = level.playerStart.y;
+    player.vx = 0;
+    player.vy = 0;
+    player.onGround = false;
+    
+    frameCount = 0;
+    msgSpan.textContent = "Nivel " + levelNum + " - Llega al bloque verde";
+}
+
+// Cargar nivel inicial
+loadLevel(1);
+
+/* ===== INPUT ===== */
+document.addEventListener("keydown",e=>{
+    if(!running) {
+        if(e.key==="r" || e.key==="R") restart();
+        return;
+    }
+
+    if(e.key==="a" || e.key==="A") player.vx = -5;
+    if(e.key==="d" || e.key==="D") player.vx = 5;
+    if((e.key==="w" || e.key==="W") && player.onGround){
+        player.vy = -12;
+        player.onGround = false;
+    }
+});
+document.addEventListener("keyup",e=>{
+    if(e.key==="a" || e.key==="A" || e.key==="d" || e.key==="D") player.vx = 0;
+});
+
+/* ===== UPDATE ===== */
+function update(){
+    if(!running) return;
+
+    frameCount++;
+
+    player.vy += 0.6;
+    player.x += player.vx;
+    player.y += player.vy;
+    player.onGround = false;
+
+    // Mover meta móvil
+    movingGoal.x += movingGoal.vx;
+    if(movingGoal.x > 450 || movingGoal.x < 150) movingGoal.vx *= -1;
+
+    // Aparecer pinchos por proximidad del jugador
+    spikes.forEach(s => {
+        const distance = Math.abs(player.x - s.x);
+        if(distance < s.triggerDistance) s.visible = true;
+    });
+
+    // Colisión con plataformas
+    platforms.forEach(p=>{
+        if(!p.visible && p.type === "disappear") return;
+        
+        if(
+            player.x < p.x+p.w &&
+            player.x+player.w > p.x &&
+            player.y+player.h > p.y &&
+            player.y+player.h < p.y+p.h+10 &&
+            player.vy > 0
+        ){
+            if(p.type==="fake"){
+                die("Plataforma inestable");
+            }
+            if(p.type==="solid" || p.type==="invisible" || p.type==="disappear"){
+                player.y = p.y - player.h;
+                player.vy = 0;
+                player.onGround = true;
+                
+                // Hacer desaparecer plataforma
+                if(p.type==="disappear" && p.visible){
+                    setTimeout(() => p.visible = false, 500);
+                }
+            }
+        }
+    });
+
+    // Paredes invisibles
+    invisibleWalls.forEach(w=>{
+        if(
+            player.x < w.x+w.w &&
+            player.x+player.w > w.x &&
+            player.y < w.y+w.h &&
+            player.y+player.h > w.y
+        ){
+            // Empujar hacia atrás
+            if(player.vx > 0) player.x = w.x - player.w;
+            else player.x = w.x + w.w;
+            player.vx = 0;
+            
+            // Mostrar mensaje temporal
+            const currentMsg = msgSpan.textContent;
+            msgSpan.textContent = "Te chocas contra una pared";
+            setTimeout(() => msgSpan.textContent = currentMsg, 1500);
+        }
+    });
+
+    // Colisión con pinchos
+    spikes.forEach(s=>{
+        if(!s.visible) return;
+        if(
+            player.x < s.x+s.w &&
+            player.x+player.w > s.x &&
+            player.y < s.y+s.h &&
+            player.y+player.h > s.y
+        ){
+            die("Has caído en los pinchos");
+        }
+    });
+
+    // Caer fuera
+    if(player.y > 400) die("Has caído del nivel");
+
+    // Colisión con meta móvil
+    if(
+        player.x < movingGoal.x+movingGoal.w &&
+        player.x+player.w > movingGoal.x &&
+        player.y < movingGoal.y+movingGoal.h &&
+        player.y+player.h > movingGoal.y
+    ){
+        msgSpan.textContent = movingGoal.message;
+        setTimeout(() => msgSpan.textContent = "Continúa hacia la meta", 1500);
+    }
+
+    // Colisión con metas
+    goals.forEach(g=>{
+        if(
+            player.x < g.x+g.w &&
+            player.x+player.w > g.x &&
+            player.y < g.y+g.h &&
+            player.y+player.h > g.y
+        ){
+            if(g.fake){
+                msgSpan.textContent = g.message;
+                setTimeout(() => msgSpan.textContent = "Meta Falsa", 1500);
+            } else {
+                win();
+            }
+        }
+    });
+}
+
+/* ===== DRAW ===== */
+function draw(){
+    ctx.clearRect(0,0,800,400);
+
+    // Fondo con líneas
+    ctx.strokeStyle="#222";
+    for(let i = 0; i < 800; i += 50){
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, 400);
+        ctx.stroke();
+    }
+
+    // Plataformas
+    platforms.forEach(p=>{
+        if(p.type==="solid"){
+            ctx.fillStyle="#555";
+            ctx.fillRect(p.x,p.y,p.w,p.h);
+        }
+        if(p.type==="fake"){
+            ctx.fillStyle="#888"; // Parece normal
+            ctx.fillRect(p.x,p.y,p.w,p.h);
+        }
+        if(p.type==="disappear" && p.visible){
+            ctx.fillStyle="#555";
+            ctx.fillRect(p.x,p.y,p.w,p.h);
+            // Indicador sutil de que es especial
+            ctx.fillStyle="rgba(255,255,0,0.2)";
+            ctx.fillRect(p.x,p.y,p.w,p.h);
+        }
+        // Invisibles NO se dibujan
+    });
+
+    // Pinchos (solo si son visibles)
+    spikes.forEach(s=>{
+        if(!s.visible) return;
+        ctx.fillStyle="red";
+        for(let i = 0; i < s.w; i += 10){
+            ctx.beginPath();
+            ctx.moveTo(s.x + i, s.y + s.h);
+            ctx.lineTo(s.x + i + 5, s.y);
+            ctx.lineTo(s.x + i + 10, s.y + s.h);
+            ctx.fill();
+        }
+    });
+
+    // Metas
+    goals.forEach(g=>{
+        ctx.fillStyle = g.fake ? "lime" : "#00ff00"; // Todas parecen iguales
+        ctx.fillRect(g.x, g.y, g.w, g.h);
+        ctx.strokeStyle = "#00aa00";
+        ctx.strokeRect(g.x, g.y, g.w, g.h);
+    });
+
+    // Meta móvil
+    ctx.fillStyle="lime";
+    ctx.fillRect(movingGoal.x, movingGoal.y, movingGoal.w, movingGoal.h);
+    ctx.strokeStyle = "#00aa00";
+    ctx.strokeRect(movingGoal.x, movingGoal.y, movingGoal.w, movingGoal.h);
+
+    // Jugador
+    ctx.fillStyle="cyan";
+    ctx.fillRect(player.x,player.y,player.w,player.h);
+    
+    // Ojos del jugador
+    ctx.fillStyle="black";
+    ctx.fillRect(player.x+5, player.y+8, 3, 3);
+    ctx.fillRect(player.x+12, player.y+8, 3, 3);
+}
+
+/* ===== LOOP ===== */
+function loop(){
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ===== ENDINGS ===== */
+function die(message = "Game Over"){
+    running = false;
+    msgSpan.textContent = message + " - Presiona R para reiniciar desde el nivel 1";
+    currentLevel = 1; // Volver al nivel 1 al morir
+}
+
+function win(){
+    if(currentLevel < totalLevels) {
+        currentLevel++;
+        msgSpan.textContent = "¡Nivel completado! Cargando nivel " + currentLevel + "...";
+        setTimeout(() => {
+            loadLevel(currentLevel);
+            running = true;
+        }, 2000);
+        running = false;
+    } else {
+        running = false;
+        msgSpan.textContent = " ¡FELICIDADES! Has completado todos los niveles del Fake Parkour.";
+    }
+}
+
+function restart(){
+    running = true;
+    currentLevel = 1;
+    loadLevel(1);
+}
+
+loop();
+</script>
+
+</body>
+</html>

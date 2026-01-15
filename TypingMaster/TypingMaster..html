@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Typing Master</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        h1 {
+            margin: 10px;
+        }
+
+        #game {
+            position: relative;
+            width: 600px;
+            height: 500px;
+            margin: auto;
+            border: 2px solid white;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .word {
+            position: absolute;
+            top: 0;
+            font-size: 22px;
+            color: #0ff;
+            font-weight: bold;
+            text-shadow: 0 0 5px cyan;
+        }
+
+        input {
+            width: 300px;
+            font-size: 20px;
+            padding: 8px;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        #info {
+            margin-top: 10px;
+        }
+
+        button {
+            padding: 8px 15px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #records {
+            margin: 20px auto;
+            max-width: 500px;
+        }
+
+        #records h2 {
+            color: #00ff00;
+        }
+
+        #recordsList {
+            background: #222;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .record-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: #333;
+            border-radius: 5px;
+            border-left: 3px solid #00ff00;
+        }
+
+        .record-rank {
+            font-weight: bold;
+            color: #00ff00;
+            margin-right: 10px;
+        }
+
+        .record-time {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .no-records {
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Typing Master</h1>
+    <div id="game"></div>
+    <input id="input" placeholder="Escribe la palabra y ENTER" disabled>
+
+    <div id="info">
+        <p>Tiempo: <span id="time">0</span> s</p>
+        <button onclick="startGame()">Empezar</button>
+    </div>
+
+    <div id="records">
+        <h2>🏆 Récords</h2>
+        <div id="recordsList"></div>
+        <button onclick="clearRecords()" style="background: #d32f2f; color: white; padding: 8px 15px; border: none; border-radius: 5px; margin-top: 10px;">Borrar Récords</button>
+    </div>
+
+    <script>
+        /* ===== DICCIONARIO (MAX 5 LETRAS + TILDES) ===== */
+        const WORDS = [
+            // Comida
+            "café", "pan", "sal", "vino", "pez", "pollo", "arroz", "pasta",
+            "sopa", "queso", "leche", "huevo", "carne", "pizza", "tarta", "fruta",
+            "jugo", "té", "miel", "azúcar", "aceite", "salsa", "chile", "jamón",
+            
+            // Animales
+            "perro", "gato", "ratón", "tigre", "león", "oso", "lobo", "zorro",
+            "ave", "pato", "cisne", "águila", "pollo", "gallo", "vaca", "toro",
+            "cabra", "oveja", "cerdo", "burro", "mula", "rana", "sapo", "pez",
+            
+            // Naturaleza
+            "árbol", "flor", "rosa", "lirio", "hoja", "rama", "raíz", "tronco",
+            "agua", "fuego", "tierra", "aire", "nube", "sol", "luna", "cielo",
+            "mar", "río", "lago", "ola", "arena", "roca", "piedra", "nieve",
+            "hielo", "frío", "calor", "viento", "lluvia", "niebla", "rayo", "luz",
+            
+            // Colores
+            "rojo", "azul", "verde", "negro", "blanco", "gris", "rosa", "ámbar",
+            "oro", "plata", "cobre", "bronce", 
+            
+            // Objetos
+            "mesa", "silla", "cama", "sofá", "puerta", "llave", "reloj", "libro",
+            "lápiz", "pluma", "papel", "caja", "bolsa", "vaso", "plato", "copa",
+            "cuchara", "tenedor", "jarra", "botella", "taza", "bol", "pared", "suelo",
+            "techo", "ventana", "espejo", "cuadro", "lámpara", "luz", "teléfono", "móvil",
+            
+            // Transporte
+            "coche", "auto", "moto", "bici", "bus", "tren", "barco", "avión",
+            "camión", "taxi", "metro", "cohete",
+            
+            // Ropa
+            "sombrero", "gorro", "boina", "gorra", "camisa", "pantalón", "falda", "vestido",
+            "zapato", "bota", "guante", "bufanda", "abrigo", "chaqueta", "jersey",
+            
+            // Cuerpo
+            "cabeza", "cara", "ojo", "nariz", "boca", "labio", "diente", "lengua",
+            "ore ja", "cuello", "pecho", "brazo", "mano", "dedo", "uña", "pierna",
+            "pie", "rodilla", "codo", "espalda", "pelo", "piel",
+            
+            // Acciones y otros
+            "salir", "entrar", "subir", "bajar", "correr", "andar", "saltar", "volar",
+            "nadar", "comer", "beber", "dormir", "ver", "oír", "oler", "tocar",
+            "hablar", "leer", "escribir", "pensar", "amar", "odiar", "reír", "llorar",
+            "fácil", "difícil", "rápido", "lento", "grande", "pequeño", "alto", "bajo",
+            "largo", "corto", "ancho", "estrecho", "bueno", "malo", "nuevo", "viejo",
+            "joven", "niño", "bebé", "adulto", "anciano", "héroe", "rey", "reina",
+            "día", "noche", "hora", "minuto", "segundo", "año", "mes", "semana",
+            "casa", "hogar", "ciudad", "pueblo", "país", "mundo", "vida", "muerte"
+        ];
+
+        function getRandomWord() {
+            return WORDS[Math.floor(Math.random() * WORDS.length)];
+        }
+
+        /* ===== VARIABLES ===== */
+        const game = document.getElementById("game");
+        const input = document.getElementById("input");
+        const timeSpan = document.getElementById("time");
+
+        let words = [];
+        let speed = 1;
+        let spawnRate = 2000;
+        let timer = 0;
+        let gameLoop, spawnLoop, timeLoop;
+
+        /* ===== RÉCORDS ===== */
+        function loadRecords() {
+            const records = localStorage.getItem('typingMasterRecords');
+            return records ? JSON.parse(records) : [];
+        }
+
+        function saveRecord(time) {
+            const records = loadRecords();
+            records.push({
+                time: time,
+                date: new Date().toLocaleDateString()
+            });
+            // Ordenar por tiempo (mayor a menor)
+            records.sort((a, b) => b.time - a.time);
+            // Guardar solo los mejores 10
+            const top10 = records.slice(0, 10);
+            localStorage.setItem('typingMasterRecords', JSON.stringify(top10));
+            displayRecords();
+        }
+
+        function displayRecords() {
+            const records = loadRecords();
+            const recordsList = document.getElementById('recordsList');
+            
+            if (records.length === 0) {
+                recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+                return;
+            }
+
+            recordsList.innerHTML = records.map((record, index) => {
+                let medal = '';
+                if (index === 0) medal = '🥇';
+                else if (index === 1) medal = '🥈';
+                else if (index === 2) medal = '🥉';
+                
+                return `
+                    <div class="record-item">
+                        <span class="record-rank">${medal} #${index + 1}</span>
+                        <span class="record-time">${record.time}s</span>
+                        <span style="color: #666; font-size: 12px;">${record.date}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function clearRecords() {
+            if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+                localStorage.removeItem('typingMasterRecords');
+                displayRecords();
+            }
+        }
+
+        // Mostrar récords al cargar la página
+        displayRecords();
+
+        /* ===== CREAR PALABRA ===== */
+        function createWord() {
+            const el = document.createElement("div");
+            el.className = "word";
+            el.textContent = getRandomWord();
+            el.style.left = Math.random() * (game.clientWidth - 120) + "px";
+            game.appendChild(el);
+
+            words.push({
+                element: el,
+                y: 0
+            });
+        }
+
+        /* ===== MOVER PALABRAS ===== */
+        function moveWords() {
+            words.forEach((w, i) => {
+                w.y += speed;
+                w.element.style.top = w.y + "px";
+
+                if (w.y > game.clientHeight - 30) {
+                    gameOver();
+                }
+            });
+        }
+
+        /* ===== COMPROBAR INPUT ===== */
+        function checkInput() {
+            const text = input.value.trim();
+            if (!text) return;
+
+            const index = words.findIndex(
+                w => w.element.textContent === text
+            );
+
+            if (index !== -1) {
+                game.removeChild(words[index].element);
+                words.splice(index, 1);
+            }
+            
+            // Siempre limpiar el input, coincida o no
+            input.value = "";
+        }
+
+        /* ===== DIFICULTAD PROGRESIVA ===== */
+        function increaseDifficulty() {
+            speed += 0.15; // Incremento más rápido de velocidad
+            if (spawnRate > 400) { // Spawn más frecuente (antes 600)
+                spawnRate -= 150; // Reducción más agresiva (antes 100)
+                clearInterval(spawnLoop);
+                spawnLoop = setInterval(createWord, spawnRate);
+            }
+        }
+
+        /* ===== START ===== */
+        function startGame() {
+            game.innerHTML = "";
+            words = [];
+            speed = 1;
+            spawnRate = 2000;
+            timer = 0;
+
+            input.disabled = false;
+            input.value = "";
+            input.focus();
+            timeSpan.textContent = "0";
+
+            clearInterval(gameLoop);
+            clearInterval(spawnLoop);
+            clearInterval(timeLoop);
+
+            gameLoop = setInterval(moveWords, 30);
+            spawnLoop = setInterval(createWord, spawnRate);
+            timeLoop = setInterval(() => {
+                timer++;
+                timeSpan.textContent = timer;
+                if (timer % 5 === 0) increaseDifficulty(); // Cada 5 segundos en vez de 10
+            }, 1000);
+        }
+
+        /* ===== GAME OVER ===== */
+        function gameOver() {
+            clearInterval(gameLoop);
+            clearInterval(spawnLoop);
+            clearInterval(timeLoop);
+            input.disabled = true;
+            saveRecord(timer);
+            alert("GAME OVER\nTiempo: " + timer + " segundos");
+        }
+
+        /* ===== ENTER ===== */
+        input.addEventListener("keydown", e => {
+            if (e.key === "Enter") checkInput();
+        });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Piedra Papel Tijeras</title>
+
+    <style>
+        body {
+            margin: 0;
+            background: #1e1e1e;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .game {
+            text-align: center;
+        }
+
+        .buttons button {
+            font-size: 40px;
+            padding: 15px;
+            margin: 10px;
+            cursor: pointer;
+        }
+
+        .result {
+            margin-top: 20px;
+            font-size: 20px;
+        }
+
+        .score {
+            margin-top: 15px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="game">
+        <h1>Piedra Papel Tijeras</h1>
+
+        <p>Elige:</p>
+        <div class="buttons">
+            <button onclick="play('piedra')">🪨</button>
+            <button onclick="play('papel')">📄</button>
+            <button onclick="play('tijeras')">✂️</button>
+        </div>
+
+        <div class="result">
+            <p id="playerChoice"></p>
+            <p id="cpuChoice"></p>
+            <h2 id="result"></h2>
+        </div>
+
+        <div class="score">
+            <p>Jugador: <span id="playerScore">0</span></p>
+            <p>Máquina: <span id="cpuScore">0</span></p>
+        </div>
+    </div>
+
+    <script>
+        const options = ["piedra", "papel", "tijeras"];
+        let playerWins = 0;
+        let cpuWins = 0;
+
+        function play(player) {
+            const cpu = options[Math.floor(Math.random() * options.length)];
+
+            document.getElementById("playerChoice").textContent =
+                "Jugador: " + emoji(player);
+            document.getElementById("cpuChoice").textContent =
+                "Máquina: " + emoji(cpu);
+
+            let result = "";
+
+            if (player === cpu) {
+                result = "🤝 Empate";
+            } else if (
+                (player === "piedra" && cpu === "tijeras") ||
+                (player === "papel" && cpu === "piedra") ||
+                (player === "tijeras" && cpu === "papel")
+            ) {
+                result = "🎉 ¡Has ganado!";
+                playerWins++;
+            } else {
+                result = "🤖 Gana la máquina";
+                cpuWins++;
+            }
+
+            document.getElementById("result").textContent = result;
+            document.getElementById("playerScore").textContent = playerWins;
+            document.getElementById("cpuScore").textContent = cpuWins;
+        }
+
+        function emoji(choice) {
+            if (choice === "piedra") return "🪨 Piedra";
+            if (choice === "papel") return "📄 Papel";
+            return "✂️ Tijeras";
+        }
+    </script>
+
+</body>
+</html>

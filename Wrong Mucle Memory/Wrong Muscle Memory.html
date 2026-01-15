@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Wrong Muscle Memory</title>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Courier New', monospace;
+    background: #0a0a0a;
+    color: #fff;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+#game-container {
+    width: 100%;
+    max-width: 800px;
+    text-align: center;
+    padding: 20px;
+}
+
+h1 {
+    font-size: 56px;
+    margin-bottom: 10px;
+    text-shadow: 0 0 20px rgba(255,255,255,0.5);
+    letter-spacing: 3px;
+}
+
+.subtitle {
+    font-size: 24px;
+    color: #ff4444;
+    margin-bottom: 40px;
+    font-style: italic;
+}
+
+#menu {
+    background: rgba(255,255,255,0.05);
+    padding: 40px;
+    border-radius: 15px;
+    border: 2px solid rgba(255,255,255,0.1);
+}
+
+#instructions {
+    text-align: left;
+    margin: 30px 0;
+    font-size: 18px;
+    line-height: 1.8;
+}
+
+#instructions h3 {
+    color: #4CAF50;
+    margin: 20px 0 10px 0;
+}
+
+#instructions ul {
+    list-style: none;
+    padding-left: 20px;
+}
+
+#instructions li {
+    margin: 8px 0;
+}
+
+.warning {
+    background: rgba(255,68,68,0.2);
+    border-left: 4px solid #ff4444;
+    padding: 15px;
+    margin: 20px 0;
+    font-size: 16px;
+}
+
+#start-btn, #restart-btn {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    border: none;
+    padding: 20px 60px;
+    font-size: 28px;
+    color: white;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 20px;
+    transition: all 0.3s;
+    box-shadow: 0 5px 20px rgba(76,175,80,0.4);
+    font-family: 'Courier New', monospace;
+}
+
+#start-btn:hover, #restart-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 30px rgba(76,175,80,0.6);
+}
+
+#game {
+    display: none;
+}
+
+#stats {
+    display: flex;
+    justify-content: space-around;
+    margin: 30px 0;
+    font-size: 20px;
+}
+
+.stat {
+    background: rgba(255,255,255,0.05);
+    padding: 15px 30px;
+    border-radius: 10px;
+    border: 2px solid rgba(255,255,255,0.2);
+}
+
+#game-area {
+    position: relative;
+    min-height: 500px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+#signal-display {
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    margin: 40px auto;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 60px rgba(255,255,255,0.3);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 80px;
+    font-weight: bold;
+}
+
+#signal-display.green {
+    background: #4CAF50;
+    box-shadow: 0 0 80px rgba(76,175,80,0.8);
+}
+
+#signal-display.red {
+    background: #ff4444;
+    box-shadow: 0 0 80px rgba(255,68,68,0.8);
+}
+
+#instruction-text {
+    font-size: 28px;
+    margin: 20px 0;
+    min-height: 40px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+#instruction-text.show {
+    opacity: 1;
+}
+
+#action-btn {
+    background: rgba(255,255,255,0.9);
+    border: 4px solid #fff;
+    padding: 30px 80px;
+    font-size: 36px;
+    color: #000;
+    border-radius: 15px;
+    cursor: pointer;
+    font-weight: bold;
+    margin: 30px;
+    transition: all 0.1s;
+    box-shadow: 0 10px 40px rgba(255,255,255,0.3);
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+}
+
+#action-btn:active {
+    transform: scale(0.95);
+    box-shadow: 0 5px 20px rgba(255,255,255,0.2);
+}
+
+#timer-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255,255,255,0.1);
+    margin-top: 30px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+#timer-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4CAF50, #ff4444);
+    transition: width 0.1s linear;
+}
+
+#phase-indicator {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    font-size: 14px;
+    color: rgba(255,255,255,0.5);
+    text-align: right;
+}
+
+#game-over {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.95);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+#game-over-content {
+    background: linear-gradient(135deg, #1a1a1a, #0a0a0a);
+    padding: 60px;
+    border-radius: 20px;
+    border: 3px solid #ff4444;
+    text-align: center;
+    max-width: 600px;
+}
+
+#game-over h2 {
+    font-size: 56px;
+    color: #ff4444;
+    margin-bottom: 30px;
+}
+
+#death-reason {
+    font-size: 24px;
+    margin: 20px 0;
+    color: #ffaa00;
+}
+
+#final-stats {
+    font-size: 20px;
+    margin: 30px 0;
+    line-height: 1.8;
+}
+
+.countdown {
+    font-size: 120px;
+    font-weight: bold;
+    color: #4CAF50;
+    text-shadow: 0 0 40px rgba(76,175,80,0.8);
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.shake {
+    animation: shake 0.5s;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-20px); }
+    75% { transform: translateX(20px); }
+}
+</style>
+</head>
+<body>
+
+<div id="game-container">
+    <h1>⚠️ WRONG MUSCLE MEMORY</h1>
+    <p class="subtitle">"Tus reflejos te matan"</p>
+    
+    <div id="menu">
+        <div id="instructions">
+            <h3>📋 REGLAS INICIALES</h3>
+            <ul>
+                <li>🟢 <strong>VERDE</strong> → PULSA el botón</li>
+                <li>🔴 <strong>ROJO</strong> → NO pulses el botón</li>
+            </ul>
+            
+            <h3>⏱️ MECÁNICA</h3>
+            <ul>
+                <li>Tienes 2 segundos para decidir</li>
+                <li>Respuesta correcta = +10 puntos</li>
+                <li>Error = GAME OVER</li>
+            </ul>
+            
+            <div class="warning">
+                <strong>⚠️ ADVERTENCIA:</strong> Las reglas que aprendes al principio... pueden no ser las mismas después. El juego no te avisará cuando cambien. Confía en tu instinto, no en tu memoria muscular.
+            </div>
+        </div>
+        
+        <button id="start-btn">🎮 COMENZAR</button>
+    </div>
+    
+    <div id="game">
+        <div id="stats">
+            <div class="stat">
+                Puntuación: <span id="score">0</span>
+            </div>
+            <div class="stat">
+                Ronda: <span id="round">0</span>
+            </div>
+            <div class="stat">
+                Aciertos: <span id="correct">0</span>
+            </div>
+        </div>
+        
+        <div id="game-area">
+            <div id="phase-indicator"></div>
+            
+            <div id="signal-display"></div>
+            
+            <div id="instruction-text"></div>
+            
+            <button id="action-btn">PULSAR</button>
+            
+            <div id="timer-bar">
+                <div id="timer-fill"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="game-over">
+        <div id="game-over-content">
+            <h2>💀 GAME OVER</h2>
+            <p id="death-reason"></p>
+            <div id="final-stats">
+                <p>Puntuación Final: <span id="final-score" style="color: #4CAF50; font-size: 32px;">0</span></p>
+                <p>Rondas Completadas: <span id="final-round">0</span></p>
+                <p>Aciertos Consecutivos: <span id="final-correct">0</span></p>
+            </div>
+            <button id="restart-btn">🔄 INTENTAR DE NUEVO</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let score = 0;
+let round = 0;
+let correctStreak = 0;
+let currentSignal = null;
+let rulesInverted = false;
+let timerInterval = null;
+let responseTime = 2000;
+let waitingForResponse = false;
+let buttonPressed = false;
+let inversionRound = 0; // En qué ronda se invirtieron las reglas
+
+const TRAINING_ROUNDS = 8; // Primeras rondas para aprender
+const INVERSION_POINT = 15; // Ronda en la que se invierten las reglas
+
+function startGame() {
+    score = 0;
+    round = 0;
+    correctStreak = 0;
+    rulesInverted = false;
+    inversionRound = 0;
+    
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('game').style.display = 'block';
+    document.getElementById('game-over').style.display = 'none';
+    
+    updateStats();
+    startCountdown();
+}
+
+function startCountdown() {
+    const signalDisplay = document.getElementById('signal-display');
+    const instructionText = document.getElementById('instruction-text');
+    
+    signalDisplay.innerHTML = '<div class="countdown">3</div>';
+    signalDisplay.className = '';
+    
+    setTimeout(() => {
+        signalDisplay.innerHTML = '<div class="countdown">2</div>';
+    }, 1000);
+    
+    setTimeout(() => {
+        signalDisplay.innerHTML = '<div class="countdown">1</div>';
+    }, 2000);
+    
+    setTimeout(() => {
+        signalDisplay.innerHTML = '<div class="countdown">GO!</div>';
+    }, 3000);
+    
+    setTimeout(() => {
+        nextRound();
+    }, 4000);
+}
+
+function updateStats() {
+    document.getElementById('score').textContent = score;
+    document.getElementById('round').textContent = round;
+    document.getElementById('correct').textContent = correctStreak;
+}
+
+function nextRound() {
+    round++;
+    buttonPressed = false;
+    
+    // Verificar si es momento de invertir las reglas
+    if(round === INVERSION_POINT && !rulesInverted) {
+        rulesInverted = true;
+        inversionRound = round;
+        // NO mostrar ningún mensaje - ese es el punto
+    }
+    
+    updateStats();
+    updatePhaseIndicator();
+    
+    // Generar señal aleatoria
+    currentSignal = Math.random() > 0.5 ? 'green' : 'red';
+    
+    showSignal();
+}
+
+function updatePhaseIndicator() {
+    const indicator = document.getElementById('phase-indicator');
+    if(round <= TRAINING_ROUNDS) {
+        indicator.textContent = 'Fase: Entrenamiento';
+        indicator.style.color = 'rgba(76,175,80,0.5)';
+    } else if(round < INVERSION_POINT) {
+        indicator.textContent = 'Fase: Activa';
+        indicator.style.color = 'rgba(255,255,255,0.5)';
+    } else {
+        indicator.textContent = 'Fase: ???';
+        indicator.style.color = 'rgba(255,68,68,0.5)';
+    }
+}
+
+function showSignal() {
+    const signalDisplay = document.getElementById('signal-display');
+    const instructionText = document.getElementById('instruction-text');
+    
+    signalDisplay.className = currentSignal + ' fade-in';
+    signalDisplay.textContent = '';
+    
+    // Mostrar instrucciones solo en las primeras rondas
+    if(round <= TRAINING_ROUNDS) {
+        instructionText.className = 'show';
+        if(currentSignal === 'green') {
+            instructionText.textContent = '¡PULSA!';
+            instructionText.style.color = '#4CAF50';
+        } else {
+            instructionText.textContent = '¡NO PULSES!';
+            instructionText.style.color = '#ff4444';
+        }
+    } else {
+        instructionText.className = '';
+        instructionText.textContent = '';
+    }
+    
+    waitingForResponse = true;
+    startTimer();
+}
+
+function startTimer() {
+    const timerFill = document.getElementById('timer-fill');
+    timerFill.style.width = '100%';
+    
+    let startTime = Date.now();
+    
+    timerInterval = setInterval(() => {
+        let elapsed = Date.now() - startTime;
+        let remaining = Math.max(0, responseTime - elapsed);
+        let percentage = (remaining / responseTime) * 100;
+        
+        timerFill.style.width = percentage + '%';
+        
+        if(remaining <= 0) {
+            clearInterval(timerInterval);
+            if(waitingForResponse) {
+                checkResponse(false); // Tiempo agotado = no pulsó
+            }
+        }
+    }, 50);
+}
+
+function checkResponse(pressed) {
+    if(!waitingForResponse) return;
+    
+    waitingForResponse = false;
+    clearInterval(timerInterval);
+    
+    let correct = false;
+    let expectedAction = '';
+    
+    // Determinar la acción correcta según las reglas actuales
+    if(!rulesInverted) {
+        // Reglas normales
+        if(currentSignal === 'green') {
+            correct = pressed;
+            expectedAction = 'pulsar';
+        } else {
+            correct = !pressed;
+            expectedAction = 'no pulsar';
+        }
+    } else {
+        // Reglas invertidas (verde = peligro, rojo = seguro)
+        if(currentSignal === 'green') {
+            correct = !pressed;
+            expectedAction = 'no pulsar';
+        } else {
+            correct = pressed;
+            expectedAction = 'pulsar';
+        }
+    }
+    
+    if(correct) {
+        score += 10;
+        correctStreak++;
+        updateStats();
+        
+        // Feedback visual positivo
+        document.getElementById('signal-display').classList.add('fade-in');
+        
+        setTimeout(() => {
+            nextRound();
+        }, 800);
+    } else {
+        // Game Over
+        let reason = '';
+        if(pressed) {
+            if(rulesInverted && currentSignal === 'green') {
+                reason = `💥 Pulsaste en VERDE. Tu memoria muscular te traicionó.<br><br>Las reglas cambiaron en la ronda ${inversionRound}.`;
+            } else if(!rulesInverted && currentSignal === 'red') {
+                reason = '💥 Pulsaste en ROJO. Error básico.';
+            } else {
+                reason = '💥 No debiste pulsar.';
+            }
+        } else {
+            if(rulesInverted && currentSignal === 'red') {
+                reason = `💥 No pulsaste en ROJO. Tenías miedo de tu propio reflejo.<br><br>Las reglas cambiaron en la ronda ${inversionRound}.`;
+            } else if(!rulesInverted && currentSignal === 'green') {
+                reason = '💥 No pulsaste en VERDE. Demasiado lento.';
+            } else {
+                reason = '💥 Debiste haber pulsado.';
+            }
+        }
+        
+        gameOver(reason);
+    }
+}
+
+function gameOver(reason) {
+    document.getElementById('death-reason').innerHTML = reason;
+    document.getElementById('final-score').textContent = score;
+    document.getElementById('final-round').textContent = round - 1;
+    document.getElementById('final-correct').textContent = correctStreak;
+    
+    document.getElementById('game-over').style.display = 'flex';
+}
+
+// Event Listeners
+document.getElementById('start-btn').onclick = startGame;
+document.getElementById('restart-btn').onclick = startGame;
+
+document.getElementById('action-btn').onclick = () => {
+    if(waitingForResponse && !buttonPressed) {
+        buttonPressed = true;
+        checkResponse(true);
+    }
+};
+
+// También permitir pulsar con la barra espaciadora
+document.addEventListener('keydown', (e) => {
+    if(e.code === 'Space' && waitingForResponse && !buttonPressed) {
+        e.preventDefault();
+        buttonPressed = true;
+        document.getElementById('action-btn').style.transform = 'scale(0.95)';
+        setTimeout(() => {
+            document.getElementById('action-btn').style.transform = 'scale(1)';
+        }, 100);
+        checkResponse(true);
+    }
+});
+</script>
+
+</body>
+</html>

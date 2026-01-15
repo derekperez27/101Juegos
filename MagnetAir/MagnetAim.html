@@ -1,0 +1,278 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Magnet Aim</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: white;
+            text-align: center;
+            font-family: Arial;
+        }
+
+        canvas {
+            background: #000;
+            display: block;
+            margin: 20px auto;
+            border: 2px solid white;
+        }
+
+        #records {
+            margin: 20px auto;
+            max-width: 400px;
+        }
+
+        #records h2 {
+            color: #00ff00;
+        }
+
+        #recordsList {
+            background: #222;
+            border: 2px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .record-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background: #333;
+            border-radius: 5px;
+            border-left: 3px solid #00ff00;
+        }
+
+        .record-rank {
+            font-weight: bold;
+            color: #00ff00;
+            margin-right: 10px;
+        }
+
+        .record-level {
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        .no-records {
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+        }
+
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+        }
+
+        #restartBtn {
+            background: #4CAF50;
+            color: white;
+        }
+
+        #clearRecordsBtn {
+            background: #d32f2f;
+            color: white;
+            padding: 8px 15px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🧲 MAGNET AIM</h1>
+    <p>Nivel: <span id="level">1</span></p>
+    <p id="msg">Mueve el ratón</p>
+    <canvas id="c" width="400" height="400"></canvas>
+    <button id="restartBtn" style="display:none;" onclick="restartGame()">Volver a Jugar</button>
+
+    <div id="records">
+        <h2>🏆 Récords</h2>
+        <div id="recordsList"></div>
+        <button id="clearRecordsBtn" onclick="clearRecords()">Borrar Récords</button>
+    </div>
+
+    <script>
+        const c = document.getElementById("c");
+        const ctx = c.getContext("2d");
+        const levelSpan = document.getElementById("level");
+        const msg = document.getElementById("msg");
+
+        let mouse = { x: 200, y: 200 };
+        let enemies = [];
+        let level = 1;
+        let running = true;
+
+        const player = { x: 200, y: 200, r: 8 };
+
+        /* ===== RÉCORDS ===== */
+        function loadRecords() {
+            const records = localStorage.getItem('magnetAimRecords');
+            return records ? JSON.parse(records) : [];
+        }
+
+        function saveRecord(level) {
+            const records = loadRecords();
+            records.push({
+                level: level,
+                date: new Date().toLocaleDateString()
+            });
+            // Ordenar por nivel (mayor a menor)
+            records.sort((a, b) => b.level - a.level);
+            // Guardar solo los mejores 10
+            const top10 = records.slice(0, 10);
+            localStorage.setItem('magnetAimRecords', JSON.stringify(top10));
+            displayRecords();
+        }
+
+        function displayRecords() {
+            const records = loadRecords();
+            const recordsList = document.getElementById('recordsList');
+            
+            if (records.length === 0) {
+                recordsList.innerHTML = '<div class="no-records">No hay récords aún. ¡Sé el primero!</div>';
+                return;
+            }
+
+            recordsList.innerHTML = records.map((record, index) => {
+                let medal = '';
+                if (index === 0) medal = '🥇';
+                else if (index === 1) medal = '🥈';
+                else if (index === 2) medal = '🥉';
+                
+                return `
+                    <div class="record-item">
+                        <span class="record-rank">${medal} #${index + 1}</span>
+                        <span class="record-level">Nivel ${record.level}</span>
+                        <span style="color: #666; font-size: 12px;">${record.date}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function clearRecords() {
+            if (confirm('¿Estás seguro de que quieres borrar todos los récords?')) {
+                localStorage.removeItem('magnetAimRecords');
+                displayRecords();
+            }
+        }
+
+        // Mostrar récords al cargar la página
+        displayRecords();
+
+        c.addEventListener("mousemove", e => {
+            const r = c.getBoundingClientRect();
+            mouse.x = e.clientX - r.left;
+            mouse.y = e.clientY - r.top;
+        });
+
+        function spawnEnemy() {
+            const side = Math.floor(Math.random() * 4);
+            let x, y;
+            if (side === 0) { x = 0; y = Math.random() * 400; }
+            if (side === 1) { x = 400; y = Math.random() * 400; }
+            if (side === 2) { x = Math.random() * 400; y = 0; }
+            if (side === 3) { x = Math.random() * 400; y = 400; }
+            enemies.push({
+                x, y,
+                r: Math.max(10 - level * 0.3, 4), // Más pequeños cada nivel (mínimo 4)
+                speed: 0.5 + level * 0.2 // Más rápidos cada nivel
+            });
+        }
+
+        function newLevel() {
+            enemies = [];
+            // Generar más enemigos según el nivel
+            const enemyCount = 1 + Math.floor(level / 2);
+            for (let i = 0; i < enemyCount; i++) {
+                spawnEnemy();
+            }
+            levelSpan.textContent = level;
+        }
+
+        function update() {
+            if (!running) return;
+
+            ctx.clearRect(0, 0, 400, 400);
+
+            // jugador
+            ctx.fillStyle = "cyan";
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+            ctx.fill();
+
+            // mira
+            ctx.strokeStyle = "white";
+            ctx.beginPath();
+            ctx.moveTo(mouse.x - 5, mouse.y);
+            ctx.lineTo(mouse.x + 5, mouse.y);
+            ctx.moveTo(mouse.x, mouse.y - 5);
+            ctx.lineTo(mouse.x, mouse.y + 5);
+            ctx.stroke();
+
+            enemies.forEach(e => {
+                // magnetismo
+                const dx = mouse.x - e.x;
+                const dy = mouse.y - e.y;
+                const dist = Math.hypot(dx, dy);
+                e.x += (dx / dist) * e.speed;
+                e.y += (dy / dist) * e.speed;
+
+                // render enemigo
+                ctx.fillStyle = "red";
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+                ctx.fill();
+
+                // colisión
+                const d = Math.hypot(player.x - e.x, player.y - e.y);
+                if (d < player.r + e.r) {
+                    endGame();
+                }
+            });
+
+            // ganar nivel
+            if (enemies.length && enemies.every(e => {
+                return Math.hypot(e.x - mouse.x, e.y - mouse.y) < 15;
+            })) {
+                level++;
+                newLevel();
+            }
+
+            requestAnimationFrame(update);
+        }
+
+        function endGame() {
+            running = false;
+            saveRecord(level);
+            document.getElementById("restartBtn").style.display = "inline-block";
+            msg.textContent = "💀 GAME OVER - Nivel alcanzado: " + level;
+        }
+
+        function restartGame() {
+            running = true;
+            level = 1;
+            enemies = [];
+            mouse = { x: 200, y: 200 };
+            
+            levelSpan.textContent = 1;
+            msg.textContent = "Mueve el ratón";
+            document.getElementById("restartBtn").style.display = "none";
+            
+            newLevel();
+        }
+
+        newLevel();
+        update();
+    </script>
+
+</body>
+</html>
