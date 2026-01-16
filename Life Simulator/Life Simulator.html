@@ -3,192 +3,176 @@
 <head>
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width,initial-scale=1" />
-	<title>Life Simulator - Simulador de Vida</title>
+	<title>Simulador de Vida</title>
 	<style>
-		:root{--bg:#0b1226;--panel:#0f1724;--accent:#6dd3b0;--accent-2:#ff9aa2;--muted:#9aa7ff;--text:#ffffff}
+		:root{--bg:#0b1226;--panel:#0f1724;--accent:#6dd3b0;--accent-2:#ff9aa2;--muted:#9aa7ff;--text:#EAF6FF}
 		*{box-sizing:border-box;margin:0;padding:0}
-		html,body{height:100%;font-family:Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#071028 0%,#0b1226 100%);color:var(--text)}
-		.app{padding:14px;display:flex;gap:12px;height:100vh}
-		.sidebar{width:320px;background:var(--panel);border-radius:10px;padding:12px;overflow:auto}
-		.main{flex:1;display:flex;flex-direction:column;gap:12px}
-		.panel{background:rgba(255,255,255,0.03);border-radius:10px;padding:12px;min-height:120px}
-		h1{color:var(--accent);font-size:20px;margin-bottom:8px}
-		.attr{display:flex;flex-direction:column;gap:8px}
+		html,body{height:100%;font-family:Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#071028 0%,#0b1226 100%);color:var(--text);font-size:12px}
+		.app{padding:6px;display:flex;gap:6px;height:100vh}
+		.sidebar{width:260px;background:var(--panel);border-radius:8px;padding:6px;overflow:auto}
+		.main{flex:1;display:flex;flex-direction:column;gap:6px}
+		.panel{background:rgba(255,255,255,0.03);border-radius:8px;padding:6px;min-height:80px;color:rgba(255,255,255,0.92)}
+		h1{color:var(--accent);font-size:18px;margin-bottom:6px}
+		.attr{display:flex;flex-direction:column;gap:6px}
 		.attr-row{display:flex;justify-content:space-between;align-items:center}
-		.bar{height:12px;background:rgba(255,255,255,0.06);border-radius:8px;overflow:hidden;flex:1;margin-left:8px}
+		.bar{height:10px;background:rgba(255,255,255,0.04);border-radius:6px;overflow:hidden;flex:1;margin-left:8px}
 		.bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#ffd1a9)}
-		.controls{display:flex;gap:8px}
-		button{background:var(--accent);color:#061225;border:none;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:700}
+		.controls{display:flex;gap:6px}
+		button{background:var(--accent);color:#061225;border:none;padding:5px 6px;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px}
 		button.secondary{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--text)}
 		.timeline{display:flex;gap:8px;align-items:center}
 		.age-display{font-weight:700;color:var(--muted)}
-		.event-area{display:flex;gap:12px}
-		.log{height:180px;overflow:auto;background:rgba(0,0,0,0.15);border-radius:8px;padding:8px;font-size:14px}
+		.event-area{display:flex;gap:8px}
+		.log{height:140px;overflow:auto;background:rgba(0,0,0,0.12);border-radius:6px;padding:6px;font-size:12px}
 		.event-panel{flex:1}
-		.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:8px}
+		.choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px}
 		.choice-btn{width:100%;box-sizing:border-box}
-		.choice-btn{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);padding:10px;border-radius:8px;cursor:pointer;text-align:left}
-		.minigame{background:rgba(255,255,255,0.02);border-radius:8px;padding:10px;margin-top:8px}
-		.timeline-visual{height:44px;background:rgba(255,255,255,0.03);border-radius:8px;padding:6px;display:flex;align-items:center;gap:8px}
+		.choice-btn{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);padding:6px;border-radius:8px;cursor:pointer;text-align:center;font-size:12px}
+		.minigame{background:rgba(255,255,255,0.02);border-radius:8px;padding:8px;margin-top:8px}
+		.timeline-visual{height:34px;background:rgba(255,255,255,0.03);border-radius:6px;padding:6px;display:flex;align-items:center;gap:8px}
 		.timeline-line{height:6px;background:rgba(255,255,255,0.06);border-radius:6px;flex:1;position:relative}
-		.timeline-marker{position:absolute;top:-8px;width:8px;height:20px;border-radius:4px;background:var(--accent);cursor:pointer}
-		.marker-label{position:absolute;top:22px;left:-20px;font-size:11px;color:rgba(255,255,255,0.8)}
+		.timeline-marker{position:absolute;top:-6px;width:8px;height:16px;border-radius:4px;background:var(--accent);cursor:pointer}
+		.marker-label{position:absolute;top:18px;left:-12px;font-size:11px;color:rgba(255,255,255,0.8)}
 		.keynote{background:linear-gradient(90deg,var(--accent),var(--accent-2));padding:6px;border-radius:6px;color:#061225;font-weight:700}
 		.center{display:flex;justify-content:center;align-items:center}
-		footer{font-size:12px;color:rgba(255,255,255,0.35);text-align:center;margin-top:8px}
+		footer{font-size:11px;color:rgba(255,255,255,0.35);text-align:center;margin-top:8px}
 
 		/* Character creator modal */
 		.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:none;align-items:center;justify-content:center;z-index:9999}
-		.modal-card{background:var(--panel);padding:18px;border-radius:10px;width:420px;box-shadow:0 10px 30px rgba(0,0,0,0.6)}
-	    .modal-card h2{color:var(--accent);margin-bottom:8px}
-	    .modal-note{font-size:13px;color:rgba(255,255,255,0.85);margin-bottom:6px}
-		.trait-row{display:flex;justify-content:space-between;align-items:center;margin:8px 0}
-		.trait-row input[type=range]{width:60%}
-		.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+		.modal-card{background:var(--panel);padding:12px;border-radius:8px;width:380px;box-shadow:0 8px 20px rgba(0,0,0,0.6)}
+	    .modal-card h2{color:var(--accent);margin-bottom:6px}
+	    .modal-note{font-size:12px;color:rgba(255,255,255,0.85);margin-bottom:6px}
+		.trait-row{display:flex;justify-content:space-between;align-items:center;margin:6px 0}
+		.trait-row input[type=range]{width:58%}
+		.modal-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:10px}
 	</style>
 </head>
 <body>
-	<div class="app">
 
-	  <!-- Character Creator Modal -->
-	  <div id="charModal" class="modal-overlay">
-		<div class="modal-card">
-		  <h2>Crear Personaje</h2>
-		  <div style="margin-bottom:8px">Nombre: <input id="charName" style="width:60%" /></div>
-		  <div style="margin-bottom:6px">Nombre amigo inicial: <input id="initial_friend_name" style="width:50%" placeholder="Sam" /></div>
-		  <div style="margin-bottom:8px">Nombre rival inicial: <input id="initial_rival_name" style="width:50%" placeholder="Rival" /></div>
-		<div class="trait-row"><div>Concienzudo</div><input id="trait_conscientious" type="range" min="0" max="100" value="50"><div id="val_cons">50</div></div>
-		<div class="trait-row"><div>Extroversión</div><input id="trait_extroversion" type="range" min="0" max="100" value="50"><div id="val_ext">50</div></div>
-		<div class="trait-row"><div>Riesgo</div><input id="trait_risk" type="range" min="0" max="100" value="50"><div id="val_risk">50</div></div>
-		<div class="trait-row"><div>Ambicioso</div><input id="trait_ambitious" type="range" min="0" max="100" value="50"><div id="val_amb">50</div></div>
-		<div class="trait-row"><div>Sociable</div><input id="trait_sociable" type="range" min="0" max="100" value="50"><div id="val_soc">50</div></div>
-		<div class="trait-row"><div>Responsable</div><input id="trait_responsible" type="range" min="0" max="100" value="50"><div id="val_resp">50</div></div>
-		<div class="modal-note">Ajusta los rasgos permanentes de tu personaje. Afectarán minijuegos y eventos.</div>
-		<div style="margin-top:8px;font-weight:700">Puntos restantes: <span id="traitRemaining">150</span></div>
-		  <div class="modal-actions">
-			<button id="randomizeChar" class="secondary">Aleatorio</button>
-			<button id="cancelChar" class="secondary">Cancelar</button>
-			<button id="confirmChar">Comenzar</button>
-		  </div>
-		</div>
+	<body>
+	  <div class="app">
+	    <!-- Character Creator Modal -->
+	    <div id="charModal" class="modal-overlay">
+	      <div class="modal-card">
+	        <h2>Crear Personaje</h2>
+	        <div style="margin-bottom:8px">Nombre: <input id="charName" style="width:60%" /></div>
+	        <div style="margin-bottom:6px">Nombre amigo inicial: <input id="initial_friend_name" style="width:50%" placeholder="Sam" /></div>
+	        <div style="margin-bottom:8px">Nombre rival inicial: <input id="initial_rival_name" style="width:50%" placeholder="Rival" /></div>
+	        <div class="trait-row"><div>Concienzudo</div><input id="trait_conscientious" type="range" min="0" max="100" value="50"><div id="val_cons">50</div></div>
+	        <div class="trait-row"><div>Extroversión</div><input id="trait_extroversion" type="range" min="0" max="100" value="50"><div id="val_ext">50</div></div>
+	        <div class="trait-row"><div>Riesgo</div><input id="trait_risk" type="range" min="0" max="100" value="50"><div id="val_risk">50</div></div>
+	        <div class="modal-note">Ajusta los rasgos permanentes de tu personaje. Afectarán minijuegos y eventos.</div>
+	        <div style="margin-top:8px;font-weight:700">Puntos restantes: <span id="traitRemaining">150</span></div>
+	        <div class="modal-actions">
+	          <button id="randomizeChar" class="secondary">Aleatorio</button>
+	          <button id="cancelChar" class="secondary">Cancelar</button>
+	          <button id="confirmChar">Comenzar</button>
+	        </div>
+	      </div>
+	    </div>
 
-		<!-- What-If Comparator Modal -->
-		<div id="whatIfModal" class="modal-overlay">
-			<div class="modal-card">
-				<h2>Comparador: ¿Qué habría pasado si...?</h2>
-				<div class="modal-note">Selecciona un escenario alternativo y verás cómo habrían cambiado tus atributos (no afecta la partida guardada).</div>
-				<div style="margin-top:8px" id="whatIfPresets"></div>
-				<div style="margin-top:12px"><strong>Resultado hipotético</strong><div id="whatIfResult" style="margin-top:8px"></div></div>
-				<div class="modal-actions">
-					<button id="closeWhatIf" class="secondary">Cerrar</button>
-				</div>
-			</div>
-		</div>
+	    <!-- What-If Comparator Modal -->
+	    <div id="whatIfModal" class="modal-overlay">
+	      <div class="modal-card">
+	        <h2>Comparador: ¿Qué habría pasado si...?</h2>
+	        <div class="modal-note">Selecciona un escenario alternativo y verás cómo habrían cambiado tus atributos (no afecta la partida guardada).</div>
+	        <div style="margin-top:8px" id="whatIfPresets"></div>
+	        <div style="margin-top:12px"><strong>Resultado hipotético</strong><div id="whatIfResult" style="margin-top:8px"></div></div>
+	        <div class="modal-actions"><button id="closeWhatIf" class="secondary">Cerrar</button></div>
+	      </div>
+	    </div>
+
+	    <div class="sidebar">
+	      <h1>Simulador de Vida</h1>
+	      <div class="panel">
+	        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+	          <div>
+	            <div id="playerName">Nombre: <strong id="nameTxt">Alex</strong></div>
+	            <div class="age-display">Edad: <span id="ageTxt">18</span></div>
+	            <div style="margin-top:8px;color:#ffffff">Estudios: <strong id="studyTxt">Ninguno</strong></div>
+	            <div style="margin-top:4px">Trabajo: <strong id="jobTxt">Ninguno</strong></div>
+	          </div>
+	          <div class="controls">
+	            <button id="saveBtn">Guardar</button>
+	            <button id="loadBtn" class="secondary">Cargar</button>
+	            <button id="resetBtn" class="secondary">Reiniciar Vida</button>
+	          </div>
+	        </div>
+	        <div class="attr" id="attributes"></div>
+	        <div style="margin-top:10px">
+	          <strong>Personalidad</strong>
+	          <div id="traits" style="margin-top:8px;max-height:140px;overflow:auto;background:rgba(0,0,0,0.06);padding:8px;border-radius:6px;font-size:13px"></div>
+	        </div>
+	        <div style="margin-top:10px">
+	          <strong>Relaciones</strong>
+	          <div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Personas recurrentes que aparecen a lo largo de tu vida.</div>
+	          <div id="relationships" style="margin-top:8px;max-height:160px;overflow:auto;background:rgba(0,0,0,0.06);padding:8px;border-radius:6px;font-size:13px"></div>
+	          <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end"><button id="createRel" class="secondary">Crear relación</button></div>
+	        </div>
+	      </div>
+	      <div class="panel" style="margin-top:12px">
+	        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+	          <strong>Progreso</strong>
+	          <div id="yearRange">Años: <span id="startAge">18</span> - <span id="endAge">60</span></div>
+	        </div>
+	        <div class="log" id="log"></div>
+	      </div>
+		<div style="margin-top:8px;display:flex;gap:6px"><button id="whatIfBtn" class="secondary" disabled>¿Qué habría pasado si...?</button><button id="musicToggle" class="secondary">Música: Desactivada</button></div>
+	    </div>
+
+	    <div class="main">
+	      <div class="panel">
+	        <div style="display:flex;justify-content:space-between;align-items:center">
+	          <div><strong id="stageTitle">Inicio</strong><div style="font-size:13px;color:rgba(255,255,255,0.5)" id="stageDesc">Comienza tu viaje</div></div>
+	          <div class="timeline">
+	            <div>Avanzar año</div>
+	            <button id="advanceBtn">▶</button>
+	            <div style="margin-left:12px">Edad actual: <strong id="ageBig">18</strong></div>
+	          </div>
+	        </div>
+	        <div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Consejo: Las decisiones y minijuegos avanzan el tiempo automáticamente.</div>
+	      </div>
+
+	      <div class="panel event-area">
+	        <div class="event-panel">
+	          <div id="eventBox">
+	            <h3 id="eventTitle">Sin eventos</h3>
+	            <div id="eventText">Pulsa Avanzar para empezar a recibir eventos.</div>
+	            <div class="choices" id="choices"></div>
+	          </div>
+	          <div id="minigameBox"></div>
+	        </div>
+	        <div style="width:300px">
+	          <div class="panel">
+	            <strong>Vida cotidiana</strong>
+	            <div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Gestiona energía, sueño y estrés con decisiones diarias.</div>
+	            <div id="dailyActions" style="margin-top:10px"></div>
+	          </div>
+	          <div class="panel">
+	            <strong>Mini-juegos disponibles</strong>
+	            <div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Cuando un evento requiere una prueba, aparecerá aquí.</div>
+	            <div id="miniInfo" style="margin-top:10px"></div>
+	          </div>
+	          <div class="panel" style="margin-top:12px">
+	            <strong>Línea de vida</strong>
+	            <div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Hitos importantes visualizados en una línea temporal.</div>
+	            <div id="timeline" class="timeline-visual" style="margin-top:10px">
+	              <div id="timelineLine" class="timeline-line"></div>
+	              <div style="margin-left:8px"><span id="timelineSummary" style="font-size:12px;color:rgba(255,255,255,0.8)"></span></div>
+	            </div>
+	          </div>
+	          <div class="panel" style="margin-top:12px">
+	            <strong>Estado final</strong>
+	            <div id="endingBox" style="margin-top:8px"></div>
+	          </div>
+	        </div>
+	      </div>
+
+	      <footer class="center">Prototipo: decisiones, atributos, minijuegos y guardado local.</footer>
+	    </div>
 	  </div>
-		<div class="sidebar">
-			<h1>Life Simulator</h1>
-			<div class="panel">
-				<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-					<div>
-						<div id="playerName">Nombre: <strong id="nameTxt">Alex</strong></div>
-						<div class="age-display">Edad: <span id="ageTxt">18</span></div>
-						<div style="margin-top:8px">Estudios: <strong id="studyTxt">Ninguno</strong></div>
-						<div style="margin-top:4px">Trabajo: <strong id="jobTxt">Ninguno</strong></div>
-					</div>
-							<div class="controls">
-								<button id="saveBtn">Guardar</button>
-								<button id="loadBtn" class="secondary">Cargar</button>
-							<button id="resetBtn" class="secondary">Reiniciar Vida</button>
-							<button id="whatIfBtn" class="secondary" disabled>¿Qué habría pasado si...?</button>
-							<button id="musicToggle" class="secondary">Música: Off</button>
-							</div>
-				</div>
-				<div class="attr" id="attributes">
-					<!-- attributes injected -->
-				</div>
-				<div style="margin-top:10px">
-					<strong>Historial de decisiones</strong>
-					<div id="history" style="margin-top:8px;max-height:120px;overflow:auto;background:rgba(0,0,0,0.12);padding:8px;border-radius:6px;font-size:13px"></div>
-				</div>
-				<div style="margin-top:10px">
-				  <strong>Personalidad</strong>
-				  <div id="traits" style="margin-top:8px;max-height:140px;overflow:auto;background:rgba(0,0,0,0.06);padding:8px;border-radius:6px;font-size:13px"></div>
-				</div>
 
-				<div style="margin-top:10px">
-				  <strong>Relaciones</strong>
-				  <div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Personas recurrentes que aparecen a lo largo de tu vida.</div>
-				  <div id="relationships" style="margin-top:8px;max-height:160px;overflow:auto;background:rgba(0,0,0,0.06);padding:8px;border-radius:6px;font-size:13px"></div>
-				  <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end"><button id="createRel" class="secondary">Crear relación</button></div>
-				</div>
-			</div>
-
-			<div class="panel" style="margin-top:12px">
-				<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-					<strong>Progreso</strong>
-					<div id="yearRange">Años: <span id="startAge">18</span> - <span id="endAge">60</span></div>
-				</div>
-				<div class="log" id="log"></div>
-			</div>
-		</div>
-
-		<div class="main">
-				<div class="panel">
-					<div style="display:flex;justify-content:space-between;align-items:center">
-						<div><strong id="stageTitle">Inicio</strong><div style="font-size:13px;color:rgba(255,255,255,0.5)" id="stageDesc">Comienza tu viaje</div></div>
-						<div class="timeline">
-							<div>Avanzar año</div>
-							<button id="advanceBtn">▶</button>
-							<div style="margin-left:12px">Edad actual: <strong id="ageBig">18</strong></div>
-						</div>
-					</div>
-					<div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Consejo: Las decisiones y minijuegos avanzan el tiempo automáticamente.</div>
-				</div>
-
-			<div class="panel event-area">
-				<div class="event-panel">
-					<div id="eventBox">
-						<h3 id="eventTitle">Sin eventos</h3>
-						<div id="eventText">Pulsa Avanzar para empezar a recibir eventos.</div>
-						<div class="choices" id="choices"></div>
-					</div>
-					<div id="minigameBox"></div>
-				</div>
-
-				<div style="width:320px">
-					<div class="panel">
-						<strong>Vida cotidiana</strong>
-						<div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Gestiona energía, sueño y estrés con decisiones diarias.</div>
-						<div id="dailyActions" style="margin-top:10px"></div>
-					</div>
-
-					<div class="panel">
-						<strong>Mini-juegos disponibles</strong>
-						<div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Cuando un evento requiere una prueba, aparecerá aquí.</div>
-						<div id="miniInfo" style="margin-top:10px"></div>
-					</div>
-
-					<div class="panel" style="margin-top:12px">
-						<strong>Línea de vida</strong>
-						<div style="margin-top:8px;font-size:13px;color:rgba(255,255,255,0.6)">Hitos importantes visualizados en una línea temporal.</div>
-						<div id="timeline" class="timeline-visual" style="margin-top:10px">
-							<div id="timelineLine" class="timeline-line"></div>
-							<div style="margin-left:8px"><span id="timelineSummary" style="font-size:12px;color:rgba(255,255,255,0.8)"></span></div>
-						</div>
-					</div>
-
-					<div class="panel" style="margin-top:12px">
-						<strong>Estado final</strong>
-						<div id="endingBox" style="margin-top:8px"></div>
-					</div>
-				</div>
-			</div>
-
-			<footer class="center">Prototipo: decisiones, atributos, minijuegos y guardado local.</footer>
-		</div>
-	</div>
-
-	<script>
+	  <script>
 	// ======= LIFE SIMULATOR - Simple prototype =======
 	class AttributeManager {
 		constructor(container) {
@@ -214,9 +198,19 @@
 		}
 		render() {
 			this.container.innerHTML = '';
+			const ATTR_LABELS = {
+				intelligence: 'Inteligencia',
+				money: 'Dinero',
+				health: 'Salud',
+				happiness: 'Felicidad',
+				reputation: 'Reputación',
+				energy: 'Energía',
+				sleep: 'Sueño',
+				stress: 'Estrés'
+			};
 			for (const [k,v] of Object.entries(this.attrs)){
 				const row = document.createElement('div'); row.className='attr-row';
-				const label = document.createElement('div'); label.textContent = k.charAt(0).toUpperCase()+k.slice(1);
+				const label = document.createElement('div'); label.textContent = ATTR_LABELS[k] || (k.charAt(0).toUpperCase()+k.slice(1));
 				const barWrap = document.createElement('div'); barWrap.className='bar';
 				const bar = document.createElement('i'); bar.style.width = v + '%'; barWrap.appendChild(bar);
 				row.appendChild(label); row.appendChild(barWrap);
@@ -234,130 +228,188 @@
 		buildEvents(){
 			// Events can have 'requires' functions (game) => boolean and choices can set flags
 			return [
+				// Education & early career
 				{id:'study',title:'Examen importante',text:'Hay un examen que puede mejorar tu carrera. ¿Estudias o copias?',choices:[
-					{text:'Estudiar (riesgo de tiempo)',effect:{intelligence:5,energy:-10,happiness:-5},flag:'studied_attempt'},
-					{text:'Copiar (riesgo reputacional)',effect:{intelligence:0,reputation:-20,happiness:5}},
-					{text:'Omitir (irse a divertirse)',effect:{happiness:15,intelligence:-10}},
+					{text:'Estudiar',effect:{intelligence:5,energy:-10,happiness:-5},flag:'studied_attempt'},
+					{text:'Copiar',effect:{intelligence:0,reputation:-20,happiness:5}},
+					{text:'Salir de fiesta',effect:{happiness:15,intelligence:-10}},
 				],minigame:'exam'},
 				{id:'scholarship',title:'Beca disponible',text:'Has sido nominado para una beca. ¿Quieres aplicar?',choices:[
 					{text:'Aplicar',effect:{intelligence:10,money:10},flag:'got_scholarship'},
 					{text:'No aplicar',effect:{happiness:-2}}
 				],requires:(game)=> !!game.flags.studied_attempt && game.age<22},
-				{id:'job',title:'Entrevista de trabajo',text:'Entrevista a una oferta estable. Preparas portfolio o vas improvisando?',choices:[
-					{text:'Preparar portfolio',effect:{reputation:10,energy:-10}},
-					{text:'Improvisar',effect:{reputation:-5,energy:-5}},
+				{id:'job',title:'Entrevista',text:'Tienes una entrevista. ¿Preparas portfolio o improvisas?',choices:[
+					{text:'Preparar portfolio',effect:{reputation:10,energy:-8}},
+					{text:'Improvisar',effect:{reputation:-5,energy:-4}},
 				],minigame:'interview'},
-				{id:'loan',title:'Oportunidad de negocio',text:'Te ofrecen invertir en un negocio. Arriesgas dinero?',choices:[
-					{text:'Invertir mucho',effect:{money:-20,energy:-5},risk:'high'},
-					{text:'Invertir poco',effect:{money:-8},risk:'medium'},
-					{text:'No invertir',effect:{money:0},risk:'low'},
-				],minigame:'budget'},
-				{id:'health',title:'Chequeo médico',text:'Tu salud necesita atención. Vas al doctor?',choices:[
-					{text:'Sí, curarme',effect:{health:15,money:-10,energy:-10}},
-					{text:'No, lo dejo',effect:{health:-10,happiness:5}},
-				]},
-				{id:'relationship',title:'Conversación seria',text:'Una relación necesita una decisión importante.',choices:[
-					{text:'Comprometerme',effect:{happiness:15,reputation:5,energy:-10},flag:'committed'},
-					{text:'Tomar distancia',effect:{happiness:-10,reputation:-5}},
-				],minigame:'conversation'},
-				{id:'negotiation',title:'Negociación salarial',text:'Te ofrecen un trabajo. Negocia el salario.',choices:[
-					{text:'Negociar salario',effect:{reputation:5},minigame:'negotiation',flag:'negotiated'}
+				{id:'promotion',title:'Posible promoción',text:'Tu jefe considera ascenderte. ¿Intentas negociar el puesto?',choices:[
+					{text:'Negociar el rol',effect:{reputation:8,money:5},minigame:'negotiation',flag:'tried_promotion'},
+					{text:'Aceptar sin pelear',effect:{reputation:3}},
 				],requires:(game)=> !!game.currentJob},
-				{id:'startup_offer',title:'Oferta de Startup',text:'Una startup busca cofundadores. ¿Te unes al proyecto arriesgado?',choices:[
-					{text:'Unirme (alto riesgo, alta recompensa)',effect:{money:-15,energy:-10},traitEffect:{ambitious:5,risk:5},flag:'joined_startup'},
-					{text:'No, seguir camino seguro',effect:{happiness:2},traitEffect:{ambitious:-2}}
-				],requires:(game)=> game.traits && game.traits.ambitious>55 && game.age<40},
-				{id:'networking',title:'Evento de networking',text:'Un evento profesional puede abrir puertas. ¿Participas?',choices:[
-					{text:'Participar y hacer contactos',effect:{reputation:8},traitEffect:{sociable:3}},
-					{text:'Evitar multitudes',effect:{energy:5},traitEffect:{sociable:-3}}
-				],requires:(game)=> game.traits && game.traits.sociable>45},
-				{id:'impulse_buy',title:'Compra impulsiva',text:'Ves una oferta y te tienta comprar algo caro.',choices:[
-					{text:'Comprar (impulsivo)',effect:{happiness:8,money:-20},traitEffect:{responsible:-5,risk:3}},
-					{text:'Resistir',effect:{happiness:-2},traitEffect:{responsible:2}}
-				],requires:(game)=> game.traits && game.traits.responsible<50},
-
-				// New: Help request that can chain into a job offer years later
-				{id:'help_request',title:'Alguien pide ayuda',text:'Un desconocido te pide ayuda con un proyecto pequeño. ¿Lo ayudas?',choices:[
-					{text:'Ayudar desinteresadamente',effect:{happiness:5},delayedEffect:{
-						desc:'Ayudaste a alguien importante',
-						delayYears: 10 + Math.floor(Math.random()*11),
-						revealEvent:{
-							id:'old_friend_offer',
-							title:'Oferta inesperada',
-							text:'Años después, la persona a la que ayudaste te contacta con una oferta laboral. ¿La aceptas?',
-							choices:[{text:'Aceptar oferta',effect:{money:25,reputation:10}},{text:'Rechazar',effect:{reputation:2}}]
-						}
-					}},
-					{text:'Cobrar por tu ayuda',effect:{money:10,happiness:-2},delayedEffect:{
-						desc:'Recibiste reconocimiento limitado',
-						delayYears: 12 + Math.floor(Math.random()*9),
-						revealEvent:{
-							id:'small_recognition',
-							title:'Reconocimiento tardío',
-							text:'Años después, alguien recuerda tu trabajo y te envía una nota y una pequeña recomendación.',
-							choices:[{text:'Agradecer',effect:{reputation:5}},{text:'Ignorar',effect:{reputation:0}}]
-						}
-					}},
-				],requires:()=> Math.random()<0.8},
-
-				// New: Risky investment with hidden outcome revealed later
-				{id:'risky_investment',title:'Inversión arriesgada',text:'Te ofrecen invertir en un producto que promete mucho. ¿Invertirás?',choices:[
-					{text:'Invertir una suma',effect:{money:-15},delayedEffect:{
-						desc:'Inversión a largo plazo',
-						delayYears: 5 + Math.floor(Math.random()*11),
-						outcomes:[
-							{prob:0.5,desc:'La inversión fue un éxito',effect:{money:40}},
-							{prob:0.5,desc:'La inversión fracasó',effect:{money:-30}}
-						]
-					}},
-					{text:'No invertir',effect:{happiness:0}}
+				{id:'boss_conflict',title:'Conflicto con jefe',text:'Surgió un malentendido con tu jefe. ¿Cómo respondes?',choices:[
+					{text:'Dialogar y arreglarlo',effect:{reputation:5,energy:-5},traitEffect:{sociable:2}},
+					{text:'Defenderte públicamente',effect:{reputation:-8},traitEffect:{ambitious:2}},
+				],requires:(game)=> !!game.currentJob},
+				// Finance & risk
+				{id:'loan',title:'Oportunidad de negocio',text:'Te ofrecen invertir en un negocio prometedor. ¿Arriesgas?',choices:[
+					{text:'Invertir agresivo',effect:{money:-20},traitEffect:{risk:4}},
+					{text:'Invertir moderado',effect:{money:-8}},
+					{text:'No invertir',effect:{happiness:0}},
+				],minigame:'budget'},
+				{id:'investment_tip',title:'Consejo de inversión',text:'Un conocido te da una pista de inversión. ¿La sigues?',choices:[
+					{text:'Seguir pista',effect:{money:-10},traitEffect:{risk:2}},
+					{text:'Investigar más',effect:{intelligence:2,energy:-3}},
+				],requires:()=> Math.random()<0.7},
+				{id:'risky_investment',title:'Inversión arriesgada',text:'Inversión con alto retorno potencial. ¿Invertirás?',choices:[
+					{text:'Invertir',effect:{money:-15},delayedEffect:{desc:'Inversión a largo plazo',delayYears:5 + Math.floor(Math.random()*8),outcomes:[{prob:0.45,desc:'Gran éxito',effect:{money:45}},{prob:0.55,desc:'Fracaso',effect:{money:-35}}]}},
+					{text:'No invertir',effect:{happiness:0}},
 				],requires:()=> Math.random()<0.6},
-
-				// New: Moral dilemma examples (always trade-offs)
-				{id:'moral_dilemma_help_vs_career',title:'Dilema moral: Ayuda o carrera',text:'Tu equipo necesita apoyo para un proyecto importante, pero ayudar te hará perder tiempo de preparación para una gran entrevista. ¿Qué haces?',choices:[
-					{text:'Ayudar al equipo (sacrificar preparación)',effect:{reputation:8,energy:-15},traitEffect:{responsible:2}},
-					{text:'Preparar la entrevista (ignorar al equipo)',effect:{reputation:-10,energy:5,money:0},traitEffect:{ambitious:2}}
+				// Health & wellbeing
+				{id:'health',title:'Chequeo médico',text:'Tu salud necesita atención. ¿Vas al médico?',choices:[
+					{text:'Ir al médico',effect:{health:15,money:-10,energy:-8}},
+					{text:'Ignorar',effect:{health:-10,happiness:5}},
 				]},
+				{id:'burnout_warning',title:'Señales de agotamiento',text:'Te sientes agotado tras un periodo intenso. ¿Bajas el ritmo?',choices:[
+					{text:'Tomar descanso',effect:{energy:12,stress:-12}},
+					{text:'Seguir adelante',effect:{energy:-8,stress:10}},
+				],requires:(game)=> game.attrMgr && game.attrMgr.get().stress>55},
+				// Relationships & social
+				{id:'relationship',title:'Conversación seria',text:'Una relación necesita una decisión.',choices:[
+					{text:'Comprometerme',effect:{happiness:12,reputation:5,energy:-8},flag:'committed'},
+					{text:'Distanciarme',effect:{happiness:-8,reputation:-4}},
+				],minigame:'conversation'},
+				{id:'office_romance',title:'Romance en la oficina',text:'Alguien en el trabajo muestra interés. ¿Respondes?',choices:[
+					{text:'Correspondere',effect:{happiness:10,reputation:-2},requires:(game)=> !!game.currentJob},
+					{text:'Mantener distancia',effect:{reputation:2}},
+				],requires:(game)=> !!game.currentJob},
+				{id:'networking',title:'Evento de networking',text:'Un evento profesional puede abrir puertas. ¿Vas?',choices:[
+					{text:'Ir y conectar',effect:{reputation:8},traitEffect:{sociable:3}},
+					{text:'No ir',effect:{energy:5},traitEffect:{sociable:-2}}
+				],requires:(game)=> game.traits && game.traits.sociable>40},
+				// Moral dilemmas
+				{id:'moral_dilemma_help_vs_career',title:'Dilema moral',text:'Tu equipo necesita ayuda pero pierdes oportunidad personal. ¿Qué eliges?',choices:[
+					{text:'Ayudar',effect:{reputation:8,energy:-12},traitEffect:{responsible:2}},
+					{text:'Priorizar carrera',effect:{reputation:-8,energy:6},traitEffect:{ambitious:2}}
+				]},
+				{id:'ethical_choice',title:'Decisión ética',text:'Encuentras evidencia de mala praxis en el proyecto. ¿Denuncias?',choices:[
+					{text:'Denunciar',effect:{reputation:-5,happiness:-4},traitEffect:{responsible:2}},
+					{text:'Callar',effect:{reputation:5,happiness:2},traitEffect:{risk:1}}
+				],requires:()=> Math.random()<0.6},
+				// Personality-exclusive events (visible traits and profile)
+				{id:'startup_pitch',title:'Pitch de startup',text:'Te invitan a pitch una idea riesgosa. ¿Participas?',choices:[
+					{text:'Unirme',effect:{money:-10,energy:-8},traitEffect:{ambitious:4,risk:3},flag:'joined_pitch'},
+					{text:'No',effect:{happiness:1}},
+				],requires:(game)=> (game.traits && game.traits.ambitious>60) || (game.profile && game.profile.id==='ambitious')},
+				{id:'volunteer_drive',title:'Campaña voluntaria',text:'Un proyecto social busca voluntarios. ¿Te apuntas?',choices:[
+					{text:'Apoyar',effect:{happiness:6,reputation:4},traitEffect:{sociable:2}},
+					{text:'No tengo tiempo',effect:{happiness:-2}},
+				],requires:(game)=> (game.traits && game.traits.sociable>55) || (game.profile && game.profile.id==='empathetic')},
+				{id:'high_roller',title:'Evento de alto riesgo',text:'Una apuesta grande aparece. ¿Arriesgas todo?',choices:[
+					{text:'Apostar fuerte',effect:{money:-30},minigame:'risk_bet',requires:(game)=> true},
+					{text:'Pasar',effect:{happiness:0}},
+				],requires:(game)=> (game.traits && game.traits.risk>65) || (game.profile && game.profile.id==='risky')},
+				{id:'discipline_training',title:'Entrenamiento intensivo',text:'Un mentor ofrece entrenarte intensamente. ¿Aceptas?',choices:[
+					{text:'Aceptar',effect:{intelligence:6,energy:-10},traitEffect:{responsible:3}},
+					{text:'Rechazar',effect:{happiness:0}},
+				],requires:(game)=> (game.traits && game.traits.responsible>60) || (game.profile && game.profile.id==='disciplined')},
+				// Job-specific events
+				{id:'team_lead_offer',title:'Liderazgo de equipo',text:'Te ofrecen liderar un equipo. ¿Aceptas el puesto?',choices:[
+					{text:'Aceptar liderazgo',effect:{reputation:10,energy:-10},flag:'became_lead'},
+					{text:'Rechazar por seguridad',effect:{happiness:2}},
+				],requires:(game)=> !!game.currentJob},
+				{id:'corporate_politics',title:'Política interna',text:'Una decisión política en la empresa te involucra. ¿Tomar partido?',choices:[
+					{text:'Apoyar a la facción',effect:{reputation:5},traitEffect:{ambitious:2}},
+					{text:'Mantener neutralidad',effect:{reputation:-2}},
+				],requires:(game)=> !!game.currentJob},
+				// Long-term / life events
+				{id:'old_friend_offer',title:'Oferta inesperada',text:'Años después, alguien te contacta con una oferta. ¿La aceptas?',choices:[{text:'Aceptar',effect:{money:25,reputation:10}},{text:'Rechazar',effect:{reputation:2}}]},
+				{id:'small_recognition',title:'Reconocimiento tardío',text:'Alguien te recuerda y te recomienda. ¿Responder?',choices:[{text:'Agradecer',effect:{reputation:5}},{text:'Ignorar',effect:{reputation:0}}]},
 				{id:'family',title:'Decisión familiar',text:'Se presenta la opción de tener hijos. ¿Lo intentas?',choices:[
 					{text:'Intentarlo',effect:{happiness:10,energy:-15},flag:'has_child'},
 					{text:'No por ahora',effect:{happiness:-2}},
-				],requires:(game)=> game.age>25}
+				],requires:(game)=> game.age>25},
+				{id:'family_health_crisis',title:'Crisis familiar',text:'Una persona cercana enferma gravemente. ¿Cómo actúas?',choices:[
+					{text:'Apoyar',effect:{happiness:-5,stress:8},traitEffect:{sociable:2}},
+					{text:'Organizar ayuda profesional',effect:{money:-10,health:5}},
+				],requires:(game)=> game.age>30 && Math.random()<0.25}
 			];
 		}
 		nextEvent(age) {
-			// Choose event based on age and randomness
-			// Filter by requirements
-			const avail = this.events.filter(e=>{ if(e.requires) return e.requires(this.game); return true; });
+			console.log('nextEvent -> edad', age);
+			// Choose event based on age and randomness with weighted biases for variety
+			let avail = this.events.filter(e=>{ if(e.requires) try{ return e.requires(this.game); }catch(_) { return false; } return true; });
+			console.log('nextEvent -> disponibles', avail.length);
+			if(!avail || avail.length===0){
+				console.warn('nextEvent -> no hay eventos disponibles por filtros, usando lista completa como fallback');
+				// fallback to all events ignoring requires to avoid empty years
+				avail = this.events.slice();
+			}
 
-			// Prioritize events according to player's hidden profile (if available)
+			// base weights
+			const weights = avail.map(_=>1);
+
+			// profile-based boosts (map to existing event ids)
 			try{
 				const profile = this.game && this.game.profile ? this.game.profile.id : null;
 				if(profile){
-					// mapping of profile -> preferred events
 					const mapping = {
-						'ambitious':['startup_offer','negotiation','loan'],
-						'empathetic':['help_request','relationship','family'],
-						'risky':['risky_investment','loan'],
+						'ambitious':['startup_pitch','risky_investment','loan'],
+						'empathetic':['volunteer_drive','relationship','family'],
+						'risky':['risky_investment','high_roller','loan'],
 						'stable':['job','health'],
-						'disciplined':['study','scholarship']
+						'disciplined':['study','scholarship','discipline_training']
 					};
 					const prefer = mapping[profile] || [];
-					for(const pid of prefer){ const e = avail.find(x=>x.id===pid); if(e && Math.random()<0.45) return e; }
+					for(let i=0;i<avail.length;i++){ if(prefer.indexOf(avail[i].id)!==-1) weights[i] += 1.4; }
 				}
-			}catch(e){ /* ignore */ }
-			// Age-priority events
-			// Trait-driven priority: ambitious players see startup offers more
-			if (age < 22) return this.find('study');
-			if (this.game && this.game.traits){
-				if(this.game.traits.ambitious>60 && Math.random()<0.4 && avail.find(e=>e.id==='startup_offer')) return this.find('startup_offer');
-				if(this.game.traits.sociable>60 && Math.random()<0.35 && avail.find(e=>e.id==='networking')) return this.find('networking');
-				if(this.game.traits.responsible<40 && Math.random()<0.25 && avail.find(e=>e.id==='impulse_buy')) return this.find('impulse_buy');
+			}catch(e){ }
+
+			// trait-based adjustments
+			const traitWeights = {
+				study:{conscientious:0.45,responsible:0.25},
+				scholarship:{conscientious:0.35},
+				job:{conscientious:0.2,extroversion:0.25},
+				startup_pitch:{ambitious:0.35,risk:0.25},
+				networking:{sociable:0.45},
+				impulse_buy:{risk:0.35,responsible:-0.25},
+				risky_investment:{risk:0.5,ambitious:0.2},
+				health:{responsible:0.25}
+			};
+			for(let i=0;i<avail.length;i++){
+				const e = avail[i]; let w = 0; const map = traitWeights[e.id] || {};
+				for(const tk in map){ const tv = (this.game && this.game.traits && this.game.traits[tk])? this.game.traits[tk]:50; w += ((tv - 50)/50) * map[tk]; }
+				weights[i] += w;
 			}
-			if (age >=22 && age <35) return this.find('job');
-			if (age >=35 && Math.random()<0.3 && avail.find(e=>e.id==='loan')) return this.find('loan');
-			if (Math.random()<0.2 && avail.find(e=>e.id==='health')) return this.find('health');
-			// pick random from available events
-			return avail[Math.floor(Math.random()*avail.length)];
+
+			// age-based subtle bias (avoid deterministic returns to increase variety)
+			for(let i=0;i<avail.length;i++){
+				const id = avail[i].id;
+				if(age < 22 && (id==='study' || id==='scholarship')) weights[i] += 1.2;
+				if(age >=22 && age <35 && (id==='job' || id==='promotion' || id==='interview')) weights[i] += 0.6;
+				if(age >=35 && (id==='loan' || id==='family' || id==='family_health_crisis')) weights[i] += 0.8;
+			}
+
+			// relationships influence: if there are strong relationships, increase chance of social/relationship events
+			try{
+				if(this.game && this.game.relationships && this.game.relationships.length){
+					const maxAff = Math.max(...this.game.relationships.map(r=>r.affinity||0));
+					for(let i=0;i<avail.length;i++){
+						if(avail[i].id==='relationship' || avail[i].id==='old_friend_offer' || avail[i].id==='family'){
+							weights[i] += (maxAff/100) * 1.2; // up to +1.2 boost
+						}
+					}
+				}
+			}catch(e){}
+
+			// normalize and pick weighted
+			for(let i=0;i<weights.length;i++) if(weights[i]<0.1) weights[i]=0.1;
+			const total = weights.reduce((s,n)=>s+n,0);
+			let r = Math.random()*total;
+			for(let i=0;i<weights.length;i++){ r -= weights[i]; if(r<=0){ console.log('nextEvent -> seleccionado', avail[i].id); return avail[i]; } }
+			// fallback: random pick to maximize variety
+			const pick = avail[Math.floor(Math.random()*avail.length)] || null;
+			console.log('nextEvent -> fallback seleccionado', pick && pick.id);
+			return pick;
 		}
 		find(id){return this.events.find(e=>e.id===id)}
 	}
@@ -389,7 +441,7 @@
 		}
 		exam(node,done){
 			node.innerHTML = '<strong>Minijuego: Examen</strong><div>Escribe la palabra que aparece lo más rápido posible:</div>';
-			const word = ['FOCUS','STUDY','LEVEL','MUSIC'][Math.floor(Math.random()*4)];
+			const word = ['CONCENTRA','ESTUDIO','NIVEL','MÚSICA'][Math.floor(Math.random()*4)];
 			const span = document.createElement('div'); span.style.fontSize='20px'; span.style.margin='8px 0'; span.textContent = word; node.appendChild(span);
 			const input = document.createElement('input'); input.style.width='100%'; node.appendChild(input); input.focus();
 			const start = performance.now();
@@ -405,7 +457,7 @@
 					} else done('fail'); }});
 		}
 		interview(node,done){
-			node.innerHTML = '<strong>Minijuego: Entrevista</strong><div>Haz click cuando el círculo esté VERDE (búscala rápido)</div>';
+			node.innerHTML = '<strong>Minijuego: Entrevista</strong><div>Haz clic cuando el círculo esté VERDE (búscala rápido)</div>';
 			const circle = document.createElement('div'); circle.style.width='80px'; circle.style.height='80px'; circle.style.borderRadius='50%'; circle.style.background='red'; circle.style.margin='12px auto'; node.appendChild(circle);
 			// Adjust reaction thresholds by extroversion trait
 			const ext = (this.game && this.game.traits && this.game.traits.extroversion) ? this.game.traits.extroversion : 50;
@@ -565,7 +617,7 @@
 	let audioCtx, osc, gainNode, musicOn=false;
 	function setupAudio(){ try{ if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); osc = audioCtx.createOscillator(); gainNode = audioCtx.createGain(); osc.type='sine'; osc.connect(gainNode); gainNode.connect(audioCtx.destination); osc.start(); gainNode.gain.value = 0; } }catch(e){ console.warn('Audio no disponible',e); } }
 	musicToggle && musicToggle.addEventListener('click', ()=>{
-		setupAudio(); musicOn = !musicOn; musicToggle.textContent = `Música: ${musicOn? 'On' : 'Off'}`; if(!musicOn){ if(gainNode) gainNode.gain.value = 0; } else updateMoodAudio();
+		setupAudio(); musicOn = !musicOn; musicToggle.textContent = `Música: ${musicOn? 'Activada' : 'Desactivada'}`; if(!musicOn){ if(gainNode) gainNode.gain.value = 0; } else updateMoodAudio();
 	});
 	function updateMoodAudio(){ if(!audioCtx || !osc || !gainNode || !musicOn) return; const gameInst = window.game; if(!gameInst) return; const attrs = gameInst.attrMgr.get(); const happy = attrs.happiness||50; const stress = attrs.stress||10; osc.frequency.value = 220 + (happy/100)*440 - (stress/100)*80; gainNode.gain.value = Math.max(0.02, ( (100-stress)/200 )); }
 
@@ -577,7 +629,8 @@
 
 	function showWhatIf(){ if(!modal) return; presetsEl.innerHTML=''; presets.forEach(p=>{ const b=document.createElement('button'); b.className='choice-btn'; b.textContent = p.name; b.title = p.desc; b.addEventListener('click', ()=> applyPreset(p)); presetsEl.appendChild(b); }); modal.style.display='flex'; }
 	function applyPreset(p){ const clone = Object.assign({}, window.game.attrMgr.get()); const out = {}; for(const k in clone) out[k]=clone[k]; for(const d in p.delta) out[d] = Math.max(0, Math.min(100, out[d] + p.delta[d])); // compute diff
-		const diffs = Object.keys(out).map(k=> `${k}: ${clone[k]} → ${out[k]}` ).join('<br>'); resultEl.innerHTML = `<div class="keynote">${p.name}</div><div style="margin-top:8px">${diffs}</div>`; }
+		const ATTR_LABELS = {intelligence:'Inteligencia',money:'Dinero',health:'Salud',happiness:'Felicidad',reputation:'Reputación',energy:'Energía',sleep:'Sueño',stress:'Estrés'};
+		const diffs = Object.keys(out).map(k=> `${ATTR_LABELS[k] || k}: ${clone[k]} → ${out[k]}` ).join('<br>'); resultEl.innerHTML = `<div class="keynote">${p.name}</div><div style="margin-top:8px">${diffs}</div>`; }
 	whatIfBtn && whatIfBtn.addEventListener('click', showWhatIf);
 	closeBtn && closeBtn.addEventListener('click', ()=>{ if(modal) modal.style.display='none'; });
 
@@ -638,8 +691,7 @@
 			document.getElementById('saveBtn').addEventListener('click', ()=>{ SaveManager.save(this.snapshot()); this.log('Juego guardado.');});
 			document.getElementById('loadBtn').addEventListener('click', ()=>{ const s=SaveManager.load(); if(s) this.loadSnapshot(s); else this.log('No hay partida guardada.');});
 			// quick study chooser for prototype
-			const historyEl = document.getElementById('history');
-			historyEl.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.6)">Sin decisiones aún.</div>';
+			// Historial UI eliminado para una experiencia más compacta
 			this.renderStudyOptions();
 		}
 
@@ -722,11 +774,38 @@
 			this.advanceYear();
 		}
 		presentEvent(ev){
+			// Handle case where no event is returned
+			if(!ev){
+				this.currentEvent = null;
+				const titleEl = document.getElementById('eventTitle'); if(titleEl) titleEl.textContent = 'Sin eventos';
+				const textEl = document.getElementById('eventText'); if(textEl) textEl.textContent = 'No hay eventos este año.';
+				const choices = document.getElementById('choices'); if(choices) choices.innerHTML='';
+				const mini = document.getElementById('minigameBox'); if(mini) mini.innerHTML='';
+				document.getElementById('stageDesc').textContent = this.generateNarration('yearStart');
+				return;
+			}
 			this.currentEvent = ev; document.getElementById('eventTitle').textContent = ev.title; document.getElementById('eventText').textContent = ev.text;
+			// compact event text: show snippet + tooltip; add Toggle for full text
+			const evTextEl = document.getElementById('eventText');
+			evTextEl.title = ev.text || '';
+			const full = ev.text || '';
+			const snippet = full.length>90? full.slice(0,90)+'…': full;
+			evTextEl.textContent = snippet;
+			// small details toggle
+			let moreBtn = document.getElementById('evMoreBtn');
+			if(!moreBtn){ moreBtn = document.createElement('button'); moreBtn.id='evMoreBtn'; moreBtn.className='secondary'; moreBtn.style.marginLeft='8px'; moreBtn.style.padding='4px 6px'; moreBtn.style.fontSize='12px'; moreBtn.textContent='Detalles'; document.getElementById('eventBox').appendChild(moreBtn); }
+			moreBtn.onclick = ()=>{ if(evTextEl.textContent === snippet){ evTextEl.textContent = full; moreBtn.textContent='Ocultar'; } else { evTextEl.textContent = snippet; moreBtn.textContent='Detalles'; } };
 			// adaptive narrator for event
 			document.getElementById('stageDesc').textContent = this.generateNarration('event');
 			const choices = document.getElementById('choices'); choices.innerHTML=''; document.getElementById('minigameBox').innerHTML='';
-			ev.choices.forEach((c,idx)=>{ const btn=document.createElement('button'); btn.className='choice-btn'; btn.textContent = c.text; btn.addEventListener('click', ()=> this.resolveChoice(ev,c)); choices.appendChild(btn); });
+			try{
+				if(Array.isArray(ev.choices)){
+					ev.choices.forEach((c,idx)=>{ const btn=document.createElement('button'); btn.className='choice-btn'; const short = (c.text && c.text.length>28)? c.text.slice(0,28)+'…' : c.text || '...'; btn.textContent = short; btn.title = c.text || ''; btn.addEventListener('click', ()=> this.resolveChoice(ev,c)); choices.appendChild(btn); });
+				} else {
+					// no choices defined: provide a default continue button
+					const btn = document.createElement('button'); btn.className='choice-btn'; btn.textContent = 'Continuar'; btn.addEventListener('click', ()=> this.postDecisionAdvance()); choices.appendChild(btn);
+				}
+			}catch(e){ console.warn('Error al renderizar opciones de evento',e); const btn = document.createElement('button'); btn.className='choice-btn'; btn.textContent = 'Continuar'; btn.addEventListener('click', ()=> this.postDecisionAdvance()); choices.appendChild(btn); }
 			// Trait-influenced extra dialogue options
 			try{
 				if(ev.id==='relationship' && this.traits && this.traits.sociable>60){
@@ -769,7 +848,24 @@
 				return;
 			}
 			const applyOutcome = (rating, extra)=>{
-				const multiplier = (rating==='success'?1.2:rating==='partial'?1:0.6);
+				// base multiplier from minijuego rating
+				let multiplier = (rating==='success'?1.2:rating==='partial'?1:0.6);
+				// trait alignment bonus: events are easier/better if your traits match the event
+				try{
+					const eventTraitAdv = {
+						startup_offer:{ambitious:0.25,risk:0.12},
+						interview:{extroversion:0.2,conscientious:0.15},
+						study:{conscientious:0.25},
+						networking:{sociable:0.3},
+						risky_investment:{risk:0.35},
+						help_request:{empathy:0.3,morality:0.15},
+						conversation:{sociable:0.25}
+					};
+					const map = eventTraitAdv[event.id] || {};
+					let bonus = 0;
+					for(const tk in map){ const tv = (this.traits && this.traits[tk])? this.traits[tk] : 50; bonus += ((tv-50)/100) * map[tk]; }
+					multiplier = Math.max(0.5, multiplier * (1 + bonus));
+				}catch(e){ }
 				const deltas = {};
 				for(const k in choice.effect||{}) deltas[k] = Math.round((choice.effect[k]||0)*multiplier);
 				// detect major life changes: large deltas or specific flags
@@ -792,14 +888,14 @@
 							// Update hidden profile based on this decision (small deltas)
 							try{
 								const actionMap = {
-									'study':{discipline:0.6},
-									'scholarship':{ambition:0.4,discipline:0.4},
-									'job':{ambition:0.3,discipline:0.2},
+									'study':{responsible:0.6},
+									'scholarship':{ambition:0.4,responsible:0.4},
+									'job':{ambition:0.3,responsible:0.2},
 									'loan':{risk:0.5,ambition:0.2},
-									'help_request':{empathy:0.6,morality:0.4},
+									'help_request':{sociable:0.6,responsible:0.4},
 									'risky_investment':{risk:0.8,ambition:0.3},
-									'moral_dilemma_help_vs_career':{morality:0.7,ambition:-0.2},
-									'family':{morality:0.5,empathy:0.4}
+									'moral_dilemma_help_vs_career':{responsible:0.3,ambition:-0.2},
+									'family':{responsible:0.5,sociable:0.4}
 								};
 								const del = actionMap[event.id] || {};
 								// Also consider traitEffect as hint for hiddenProfile
@@ -854,7 +950,7 @@
 	}
 
 	// History helper and snapshot updated to include study/job
-	Game.prototype.pushHistory = function(txt){ this.history.unshift(`<div>${this.age}: ${txt}</div>`); const h=document.getElementById('history'); h.innerHTML = this.history.slice(0,50).join(''); };
+	Game.prototype.pushHistory = function(txt){ this.history.unshift(`<div>${this.age}: ${txt}</div>`); /* historial mantenido en memoria, UI desactivada */ };
 
 	Game.prototype.snapshot = function(){
 		return {
@@ -901,14 +997,25 @@
 			this.difficultyModifier = (typeof s.difficultyModifier !== 'undefined') ? s.difficultyModifier : (this.difficultyModifier || 1);
 			document.getElementById('studyTxt').textContent = this.study.name || 'Ninguno';
 			document.getElementById('jobTxt').textContent = this.currentJob? this.currentJob.title:'Ninguno';
-			const h = document.getElementById('history'); h.innerHTML = this.history.join('');
+			// Historial UI eliminado, no actualizar DOM
 			this.refreshUI();
 			this.renderTraits();
 			this.renderRelationships();
 		};
 
-		// Render personality traits in UI
-		Game.prototype.renderTraits = function(){ const el = document.getElementById('traits'); if(!el) return; el.innerHTML = ''; for(const [k,v] of Object.entries(this.traits)){ const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.marginBottom='6px'; const label=document.createElement('div'); label.textContent = k.charAt(0).toUpperCase()+k.slice(1); const val = document.createElement('div'); val.textContent = v; row.appendChild(label); row.appendChild(val); el.appendChild(row);} };
+		// Compact trait rendering with emoji and bars
+		Game.prototype.renderTraits = function(){
+			const el = document.getElementById('traits'); if(!el) return; el.innerHTML = '';
+			const EMOJI = {conscientious:'📚',extroversion:'😄',risk:'🎲',ambitious:'🚀',sociable:'🤝',responsible:'✅'};
+			for(const [k,v] of Object.entries(this.traits)){
+				const wrap=document.createElement('div'); wrap.style.display='flex'; wrap.style.alignItems='center'; wrap.style.gap='8px'; wrap.style.marginBottom='6px';
+				const badge=document.createElement('div'); badge.textContent = EMOJI[k] || k.charAt(0).toUpperCase(); badge.style.width='28px'; badge.style.height='28px'; badge.style.borderRadius='6px'; badge.style.display='flex'; badge.style.alignItems='center'; badge.style.justifyContent='center'; badge.style.background='rgba(255,255,255,0.03)'; badge.style.fontWeight='700'; badge.style.fontSize='14px';
+				const barWrap=document.createElement('div'); barWrap.style.flex='1'; barWrap.style.height='10px'; barWrap.style.background='rgba(255,255,255,0.04)'; barWrap.style.borderRadius='6px'; const bar=document.createElement('i'); bar.style.display='block'; bar.style.height='100%'; bar.style.width = Math.max(6,Math.round(v)) + '%'; bar.style.background='linear-gradient(90deg,var(--accent),#ffd1a9)'; bar.style.borderRadius='6px'; barWrap.appendChild(bar);
+				const label = document.createElement('div'); label.textContent = '';
+				wrap.appendChild(badge); wrap.appendChild(barWrap); wrap.appendChild(label);
+				el.appendChild(wrap);
+			}
+		};
 
 		// --- Relationships system ---
 		Game.prototype.addRelationship = function(opts){
@@ -924,54 +1031,70 @@
 			const el = document.getElementById('relationships'); if(!el) return; el.innerHTML='';
 			if(!this.relationships || this.relationships.length===0){ el.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.6)">Sin relaciones aún.</div>'; return; }
 			this.relationships.forEach(r=>{
-				const wrap = document.createElement('div'); wrap.style.marginBottom='8px'; wrap.style.borderBottom='1px solid rgba(255,255,255,0.03)'; wrap.style.paddingBottom='6px';
-				const title = document.createElement('div'); title.style.display='flex'; title.style.justifyContent='space-between'; title.style.marginBottom='6px';
-				const name = document.createElement('div'); name.textContent = `${r.name} (${r.type})`;
-				const status = document.createElement('div'); status.style.color='rgba(255,255,255,0.6)'; status.textContent = r.status;
-				title.appendChild(name); title.appendChild(status);
-				const bars = document.createElement('div'); bars.style.display='flex'; bars.style.flexDirection='column'; bars.style.gap='4px';
-				const aff = document.createElement('div'); aff.textContent = `Afinidad: ${r.affinity}`; const tr = document.createElement('div'); tr.textContent = `Confianza: ${r.trust}`;
-				bars.appendChild(aff); bars.appendChild(tr);
-				const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='6px'; actions.style.marginTop='6px';
-				const btnI = document.createElement('button'); btnI.className='secondary'; btnI.textContent='Interactuar'; btnI.addEventListener('click', ()=> this.interactRelationship(r.id));
-				const btnR = document.createElement('button'); btnR.className='secondary'; btnR.textContent='Resolver conflicto'; btnR.addEventListener('click', ()=> this.resolveConflict(r.id));
-				const btnN = document.createElement('button'); btnN.className='secondary'; btnN.textContent='Renombrar'; btnN.addEventListener('click', ()=>{
+				const row = document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.justifyContent='space-between'; row.style.padding='6px 0'; row.style.borderBottom='1px solid rgba(255,255,255,0.03)';
+				const info = document.createElement('div'); info.style.display='flex'; info.style.alignItems='center'; info.style.gap='8px';
+				const name = document.createElement('div'); name.textContent = r.name; name.style.fontWeight='700'; name.style.fontSize='13px';
+				const mini = document.createElement('div'); mini.style.display='flex'; mini.style.flexDirection='column'; mini.style.gap='4px';
+				const bars = document.createElement('div'); bars.style.display='flex'; bars.style.gap='6px';
+				const a = document.createElement('div'); a.textContent = '💖 ' + (r.affinity||0); a.style.fontSize='12px'; a.title='Afinidad';
+				const t = document.createElement('div'); t.textContent = '🤝 ' + (r.trust||0); t.style.fontSize='12px'; t.title='Confianza';
+				bars.appendChild(a); bars.appendChild(t);
+				mini.appendChild(bars);
+				info.appendChild(name); info.appendChild(mini);
+				const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='6px';
+				const btnI = document.createElement('button'); btnI.className='secondary'; btnI.textContent='💬'; btnI.title='Interactuar'; btnI.addEventListener('click', ()=> this.interactRelationship(r.id));
+				const btnR = document.createElement('button'); btnR.className='secondary'; btnR.textContent='⚖️'; btnR.title='Resolver conflicto'; btnR.addEventListener('click', ()=> this.resolveConflict(r.id));
+				const btnN = document.createElement('button'); btnN.className='secondary'; btnN.textContent='✏️'; btnN.title='Renombrar'; btnN.addEventListener('click', ()=>{
 					const nn = prompt('Nuevo nombre para ' + r.name + ':', r.name); if(!nn) return; r.name = nn; this.pushHistory(`Renombrada relación: ${nn}`); this.renderRelationships(); SaveManager.save(this.snapshot());
 				});
 				actions.appendChild(btnI); actions.appendChild(btnR); actions.appendChild(btnN);
-				wrap.appendChild(title); wrap.appendChild(bars); wrap.appendChild(actions);
-				el.appendChild(wrap);
+				row.appendChild(info); row.appendChild(actions);
+				el.appendChild(row);
 			});
 		};
 
+	// Yearly update for recurring relationships (decay/drift and years known)
+	Game.prototype.updateRelationshipsYearly = function(){
+		if(!this.relationships || !Array.isArray(this.relationships)) return;
+		this.relationships.forEach(r=>{
+			r.yearsKnown = (r.yearsKnown||0) + 1;
+			// small random affinity/trust drift each year
+			try{
+				r.affinity = Math.max(0, Math.min(100, Math.round((r.affinity||50) + (Math.random()*4 - 2))));
+				r.trust = Math.max(0, Math.min(100, Math.round((r.trust||50) + (Math.random()*4 - 2))));
+			}catch(e){}
+		});
+		// re-render relationships UI
+		try{ this.renderRelationships(); }catch(e){}
+	};
+
 		Game.prototype.interactRelationship = function(id){
-			const rel = this.relationships.find(r=>r.id===id); if(!rel) return;
-			const ev = {
-				id: 'rel_'+rel.id,
-				title: `Interacción: ${rel.name}`,
-				text: `Interactúas con ${rel.name} (${rel.type}). ¿Cómo actúas?`,
-				meta: {relId: rel.id},
-				choices: [
-					{text:'Apoyar y escuchar',effect:{happiness:5},relMod:{affinity:8,trust:6}},
-					{text:'Ser práctico y ofrecer ayuda',effect:{reputation:2},relMod:{affinity:5,trust:4}},
-					{text:'Ser distante (proteges tu tiempo)',effect:{energy:5},relMod:{affinity:-6,trust:-4}}
-				]
-			};
-			this.presentEvent(ev);
-		};
-
-		Game.prototype.resolveConflict = function(id){
-			const rel = this.relationships.find(r=>r.id===id); if(!rel) return;
-			if(!rel.conflicts || rel.conflicts.length===0){ this.log(`No hay conflictos pendientes con ${rel.name}.`); this.pushHistory(`Intentaste resolver conflictos con ${rel.name}, pero no hay.`); return; }
-			// Resolve the oldest conflict
-			rel.conflicts.shift(); rel.trust = Math.min(100, rel.trust + 8); rel.affinity = Math.min(100, rel.affinity + 6);
-			this.pushHistory(`Resolviste un conflicto con ${rel.name}.`); this.renderRelationships(); SaveManager.save(this.snapshot());
-		};
-
-		Game.prototype.updateRelationshipsYearly = function(){
-			if(!this.relationships) return;
+			const el = document.getElementById('relationships'); if(!el) return; el.innerHTML='';
+			if(!this.relationships || this.relationships.length===0){ el.innerHTML = '<div style="font-size:12px;color:rgba(255,255,255,0.6)">Sin relaciones aún.</div>'; return; }
 			this.relationships.forEach(r=>{
-				r.yearsKnown = (r.yearsKnown||0) + 1;
+				const row = document.createElement('div'); row.style.display='flex'; row.style.alignItems='center'; row.style.justifyContent='space-between'; row.style.padding='6px 0'; row.style.borderBottom='1px solid rgba(255,255,255,0.04)';
+				// avatar + name
+				const left = document.createElement('div'); left.style.display='flex'; left.style.alignItems='center'; left.style.gap='10px';
+				const avatar = document.createElement('div'); avatar.textContent = (r.name||'P').charAt(0).toUpperCase(); avatar.style.width='36px'; avatar.style.height='36px'; avatar.style.borderRadius='8px'; avatar.style.display='flex'; avatar.style.alignItems='center'; avatar.style.justifyContent='center'; avatar.style.fontWeight='700'; avatar.style.background = 'linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.06))';
+				const info = document.createElement('div'); info.style.display='flex'; info.style.flexDirection='column'; info.style.gap='4px';
+				const name = document.createElement('div'); name.textContent = r.name; name.style.fontWeight='700'; name.style.fontSize='13px';
+				const sub = document.createElement('div'); sub.style.display='flex'; sub.style.gap='8px'; sub.style.alignItems='center';
+				// affinity bar
+				const affWrap = document.createElement('div'); affWrap.style.width='120px'; affWrap.style.height='8px'; affWrap.style.background='rgba(255,255,255,0.04)'; affWrap.style.borderRadius='6px'; const affBar = document.createElement('i'); affBar.style.display='block'; affBar.style.height='100%'; affBar.style.width = Math.max(4, (r.affinity||0)) + '%'; affBar.style.background = r.affinity>70? 'linear-gradient(90deg,#6dd3b0,#4ec2a0)': 'linear-gradient(90deg,#ffd1a9,#ff9aa2)'; affBar.style.borderRadius='6px'; affWrap.appendChild(affBar);
+				const trustWrap = document.createElement('div'); trustWrap.style.width='60px'; trustWrap.style.height='6px'; trustWrap.style.background='rgba(255,255,255,0.03)'; trustWrap.style.borderRadius='6px'; const trustBar = document.createElement('i'); trustBar.style.display='block'; trustBar.style.height='100%'; trustBar.style.width = Math.max(4,(r.trust||0)) + '%'; trustBar.style.background = r.trust>70? '#9aa7ff':'#ccc'; trustBar.style.borderRadius='6px'; trustWrap.appendChild(trustBar);
+				sub.appendChild(affWrap); sub.appendChild(trustWrap);
+				info.appendChild(name); info.appendChild(sub);
+				left.appendChild(avatar); left.appendChild(info);
+				// actions
+				const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='6px';
+				const btnI = document.createElement('button'); btnI.className='secondary'; btnI.textContent='Interactuar'; btnI.title='Interactuar'; btnI.style.padding='6px'; btnI.addEventListener('click', ()=> this.interactRelationship(r.id));
+				const btnR = document.createElement('button'); btnR.className='secondary'; btnR.textContent='Resolver'; btnR.title='Resolver conflicto'; btnR.style.padding='6px'; btnR.addEventListener('click', ()=> this.resolveConflict(r.id));
+				const btnN = document.createElement('button'); btnN.className='secondary'; btnN.textContent='✏️'; btnN.title='Renombrar'; btnN.style.padding='6px'; btnN.addEventListener('click', ()=>{
+					const nn = prompt('Nuevo nombre para ' + r.name + ':', r.name); if(!nn) return; r.name = nn; this.pushHistory(`Renombrada relación: ${nn}`); this.renderRelationships(); SaveManager.save(this.snapshot());
+				});
+				actions.appendChild(btnI); actions.appendChild(btnR); actions.appendChild(btnN);
+				row.appendChild(left); row.appendChild(actions);
+				el.appendChild(row);
 				// Passive drift: if not recently interacted, small decay
 				if(!r._lastInteracted){ r.affinity = Math.max(0, r.affinity - 1); r.trust = Math.max(0, r.trust - 1); }
 				// Status recalculation
@@ -1053,13 +1176,15 @@
 			const attrs = this.attrMgr.get();
 			const stats = document.createElement('div'); stats.style.marginBottom='8px'; stats.innerHTML = `Energía: ${attrs.energy} • Sueño: ${attrs.sleep} • Estrés: ${attrs.stress}`;
 			container.appendChild(stats);
-			const btnRest = document.createElement('button'); btnRest.className='choice-btn'; btnRest.textContent='Descansar (recupera energía/sueño)'; btnRest.addEventListener('click', ()=> this.doRest());
-			const btnOverwork = document.createElement('button'); btnOverwork.className='choice-btn'; btnOverwork.textContent='Trabajar más (gana dinero, aumenta estrés)'; btnOverwork.addEventListener('click', ()=> this.doOverwork());
-			const btnSave = document.createElement('button'); btnSave.className='choice-btn'; btnSave.textContent='Ahorrar (pequeña ganancia futura)'; btnSave.addEventListener('click', ()=> this.doSave());
-			const btnSpend = document.createElement('button'); btnSpend.className='choice-btn'; btnSpend.textContent='Gastar en ocio (felicidad pero gasta dinero)'; btnSpend.addEventListener('click', ()=> this.doSpend());
-			const btnCare = document.createElement('button'); btnCare.className='choice-btn'; btnCare.textContent='Cuidar salud (gasta dinero, mejora salud/reduce estrés)'; btnCare.addEventListener('click', ()=> this.doCare());
-			const btnIgnore = document.createElement('button'); btnIgnore.className='choice-btn'; btnIgnore.textContent='Ignorar salud (ahorras dinero, salud puede bajar)'; btnIgnore.addEventListener('click', ()=> this.doIgnoreHealth());
-			[btnRest,btnOverwork,btnSave,btnSpend,btnCare,btnIgnore].forEach(b=> container.appendChild(b));
+			// compact icon buttons with tooltips
+			const make = (emoji, title, handler)=>{ const b=document.createElement('button'); b.className='choice-btn'; b.textContent=emoji; b.title=title; b.style.fontSize='18px'; b.addEventListener('click', handler); return b; };
+			const btnRest = make('🛌','Descansar: recupera energía y sueño', ()=> this.doRest());
+			const btnOverwork = make('💼','Trabajar más: ganar dinero pero aumenta estrés', ()=> this.doOverwork());
+			const btnSave = make('💰','Ahorrar: pequeña ganancia futura', ()=> this.doSave());
+			const btnSpend = make('🎉','Gastar en ocio: felicidad ahora', ()=> this.doSpend());
+			const btnCare = make('🏥','Cuidar salud: mejora salud, cuesta dinero', ()=> this.doCare());
+			const btnIgnore = make('🙈','Ignorar salud: ahorrar dinero, riesgo salud', ()=> this.doIgnoreHealth());
+			const row = document.createElement('div'); row.style.display='flex'; row.style.gap='6px'; row.appendChild(btnRest); row.appendChild(btnOverwork); row.appendChild(btnSave); row.appendChild(btnSpend); row.appendChild(btnCare); row.appendChild(btnIgnore); container.appendChild(row);
 		};
 
 		Game.prototype.doRest = function(){ this.attrMgr.modify({energy:12,sleep:10,stress:-8}); this.pushHistory('Decisión diaria: Descansar'); this.log('Descansaste: energía y sueño +, estrés -'); SaveManager.save(this.snapshot()); };
@@ -1181,7 +1306,7 @@
 		showCharacterCreator();
 	}
 
-	console.log('Life Simulator cargado');
+	console.log('Simulador de Vida cargado');
 
 	// Character creator logic
 	function showCharacterCreator(){
@@ -1223,7 +1348,7 @@
 	document.getElementById('trait_risk').addEventListener('input', updateTraitVals);
 
 	document.getElementById('randomizeChar').addEventListener('click', ()=>{
-		document.getElementById('charName').value = ['Alex','Jordan','Casey','Taylorsi has '][Math.floor(Math.random()*4)];
+		document.getElementById('charName').value = ['Alejandro','Beatriz','Carlos','Sofía'][Math.floor(Math.random()*4)];
 		// Randomize three trait values that sum to TRAIT_BUDGET (point-buy)
 		const r1 = Math.random(), r2 = Math.random(), r3 = Math.random();
 		const s = r1 + r2 + r3;

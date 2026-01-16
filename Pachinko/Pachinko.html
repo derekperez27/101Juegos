@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pachinko — Arcade de Riesgo</title>
+  <style>
+    :root{--bg:#0a1628;--primary:#4a9eff;--success:#4ade80;--danger:#f87171;--warn:#fbbf24;--ui:#e2e8f0}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--ui);overflow:hidden;height:100vh;display:flex;flex-direction:column}
+    .header{background:rgba(0,0,0,0.4);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid rgba(74,158,255,0.3)}
+    .balance{font-size:28px;font-weight:700;color:var(--success)}
+    .balance .label{font-size:14px;opacity:0.8;font-weight:400}
+    .main{flex:1;display:flex;gap:20px;padding:20px;overflow:hidden}
+    .game-area{flex:1;display:flex;flex-direction:column;gap:12px}
+    canvas{background:linear-gradient(180deg, #1e3a5f 0%, #0f2744 100%);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.6);display:block;width:100%;height:100%;max-height:calc(100vh - 280px)}
+    .controls{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:20px;width:340px;display:flex;flex-direction:column;gap:18px}
+    .control-group{display:flex;flex-direction:column;gap:8px}
+    .control-group label{font-size:13px;font-weight:600;opacity:0.9;text-transform:uppercase;letter-spacing:0.5px}
+    input[type="range"]{width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,0.15);outline:none;-webkit-appearance:none}
+    input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--primary);cursor:pointer;box-shadow:0 2px 8px rgba(74,158,255,0.5)}
+    input[type="range"]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--primary);cursor:pointer;border:none}
+    .value-display{display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.3);padding:8px 12px;border-radius:6px;font-size:15px;font-weight:600}
+    .risk-selector{display:flex;gap:8px}
+    .risk-btn{flex:1;padding:12px 8px;border:2px solid transparent;border-radius:8px;cursor:pointer;font-weight:600;font-size:13px;transition:all 0.2s;text-align:center}
+    .risk-btn.low{background:rgba(74,222,128,0.15);color:var(--success)}
+    .risk-btn.medium{background:rgba(251,191,36,0.15);color:var(--warn)}
+    .risk-btn.high{background:rgba(248,113,113,0.15);color:var(--danger)}
+    .risk-btn.active{border-color:currentColor;transform:scale(1.05)}
+    .risk-btn:hover{opacity:0.8}
+    .launch-btn{background:linear-gradient(135deg, var(--primary), #3b82f6);border:none;color:#fff;padding:18px;border-radius:10px;font-size:18px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(74,158,255,0.4);transition:all 0.2s;text-transform:uppercase;letter-spacing:1px}
+    .launch-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 6px 20px rgba(74,158,255,0.6)}
+    .launch-btn:disabled{opacity:0.5;cursor:not-allowed}
+    .info{font-size:12px;opacity:0.7;line-height:1.5}
+    .stats{display:flex;gap:12px;margin-top:8px}
+    .stat{flex:1;background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;text-align:center}
+    .stat .label{font-size:11px;opacity:0.7;margin-bottom:4px}
+    .stat .value{font-size:16px;font-weight:700}
+    .message{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);padding:32px 48px;border-radius:16px;border:2px solid var(--primary);text-align:center;z-index:1000;min-width:320px;box-shadow:0 12px 48px rgba(0,0,0,0.8)}
+    .message h2{font-size:24px;margin-bottom:12px;color:var(--warn)}
+    .message p{font-size:16px;opacity:0.9;margin-bottom:20px}
+    .message button{background:var(--primary);border:none;color:#fff;padding:12px 28px;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer}
+    .hidden{display:none}
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1 style="font-size:24px;margin-bottom:4px">🎰 Pachinko</h1>
+      <div style="font-size:12px;opacity:0.7">Arcade de Riesgo</div>
+    </div>
+    <div class="balance">
+      <div class="label">Saldo</div>
+      <div id="balance">1000</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="game-area">
+      <canvas id="canvas"></canvas>
+      <div class="stats">
+        <div class="stat">
+          <div class="label">Apostado</div>
+          <div class="value" id="betAmount">0</div>
+        </div>
+        <div class="stat">
+          <div class="label">Ganado</div>
+          <div class="value" style="color:var(--success)" id="wonAmount">0</div>
+        </div>
+        <div class="stat">
+          <div class="label">Beneficio</div>
+          <div class="value" id="profit">0</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="control-group">
+        <label>Número de bolas</label>
+        <input type="range" id="ballCount" min="1" max="100" value="10" />
+        <div class="value-display">
+          <span>Bolas</span>
+          <span id="ballCountVal">10</span>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label>Valor por bola</label>
+        <input type="number" id="ballValue" min="1" value="10" style="width:100%;padding:10px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.3);color:var(--ui);font-size:16px;font-weight:600" />
+        <div class="value-display">
+          <span>Monedas por bola</span>
+          <span id="ballValueVal">10</span>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label>Nivel de riesgo</label>
+        <div class="risk-selector">
+          <div class="risk-btn low" data-risk="low">
+            <div>Bajo</div>
+            <div style="font-size:10px;opacity:0.8;margin-top:4px">x0.1 mín</div>
+          </div>
+          <div class="risk-btn medium active" data-risk="medium">
+            <div>Medio</div>
+            <div style="font-size:10px;opacity:0.8;margin-top:4px">x0.3 mín</div>
+          </div>
+          <div class="risk-btn high" data-risk="high">
+            <div>Alto</div>
+            <div style="font-size:10px;opacity:0.8;margin-top:4px">x0.2 mín</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <div class="value-display" style="font-size:16px;background:rgba(74,158,255,0.15);border:1px solid rgba(74,158,255,0.3)">
+          <span>Coste Total</span>
+          <span id="totalCost" style="color:var(--primary)">100</span>
+        </div>
+      </div>
+
+      <button class="launch-btn" id="launchBtn">Lanzar Bolas [Espacio]</button>
+
+      <div class="info">
+        💡 <strong>Consejo:</strong> Presiona <strong>Espacio</strong> para lanzar (cooldown 1s). Mayor riesgo = premios extremos.
+      </div>
+    </div>
+  </div>
+
+  <div class="message hidden" id="bankruptMessage">
+    <h2>💸 Sin dinero</h2>
+    <p>Te has quedado sin saldo. Recibes <strong>500 monedas</strong> de recuperación.</p>
+    <button id="continueBtn">Continuar</button>
+  </div>
+
+  <script>
+  (()=>{
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let W = canvas.width = 800;
+    let H = canvas.height = 600;
+
+    // Game state
+    let balance = parseFloat(localStorage.getItem('pachinko_balance')) || 1000;
+    let ballCount = 10;
+    let ballValue = 10;
+    let riskLevel = 'medium';
+    let activeBalls = [];
+    let pins = [];
+    let slots = [];
+    let isLaunching = false;
+    let lastBet = 0;
+    let lastWon = 0;
+    let canLaunch = true;
+    let cooldownTime = 1000;
+
+    // Risk configs
+    const riskConfigs = {
+      low: { maxMult: 10, winProb: 0.65, avgMult: 1.2 },
+      medium: { maxMult: 40, winProb: 0.45, avgMult: 1.8 },
+      high: { maxMult: 100, winProb: 0.25, avgMult: 3.5 }
+    };
+
+    // DOM elements
+    const balanceEl = document.getElementById('balance');
+    const ballCountSlider = document.getElementById('ballCount');
+    const ballValueSlider = document.getElementById('ballValue');
+    const ballCountVal = document.getElementById('ballCountVal');
+    const ballValueVal = document.getElementById('ballValueVal');
+    const totalCostEl = document.getElementById('totalCost');
+    const launchBtn = document.getElementById('launchBtn');
+    const betAmountEl = document.getElementById('betAmount');
+    const wonAmountEl = document.getElementById('wonAmount');
+    const profitEl = document.getElementById('profit');
+    const bankruptMessage = document.getElementById('bankruptMessage');
+    const continueBtn = document.getElementById('continueBtn');
+
+    function resize(){
+      const container = canvas.parentElement;
+      W = canvas.width = Math.min(800, container.clientWidth);
+      H = canvas.height = Math.min(600, container.clientHeight - 80);
+      initPins();
+      initSlots();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function initPins(){
+      pins = [];
+      const rows = 12;
+      const spacing = W / 14;
+      for(let row=0; row<rows; row++){
+        const y = H * 0.15 + row * (H * 0.5 / rows);
+        const offset = (row % 2) * spacing * 0.5;
+        const count = Math.floor(W / spacing) - 1;
+        for(let i=0; i<count; i++){
+          pins.push({ x: spacing * (i+1) + offset, y, r: 4 });
+        }
+      }
+    }
+
+    function initSlots(){
+      slots = [];
+      const slotCount = 9;
+      const slotWidth = W / slotCount;
+      const config = riskConfigs[riskLevel];
+      
+      // Distribution: center slots have lower multipliers, edges have higher (but rare)
+      const multipliers = {
+        low: [5, 3, 2, 1, 0.1, 1, 2, 3, 5],
+        medium: [20, 10, 5, 2, 0.3, 2, 5, 10, 20],
+        high: [100, 50, 0.5, 0.2, 0, 0.2, 0.5, 50, 100]
+      };
+
+      const mults = multipliers[riskLevel];
+      for(let i=0; i<slotCount; i++){
+        slots.push({
+          x: i * slotWidth,
+          w: slotWidth,
+          mult: mults[i],
+          count: 0
+        });
+      }
+    }
+
+    function updateUI(){
+      localStorage.setItem('pachinko_balance', balance.toFixed(0));
+      balanceEl.textContent = balance.toFixed(0);
+      ballCountVal.textContent = ballCount;
+      ballValueVal.textContent = ballValue;
+      const total = ballCount * ballValue;
+      totalCostEl.textContent = total;
+      launchBtn.disabled = !canLaunch;
+    }
+
+    function updateStats(){
+      betAmountEl.textContent = lastBet;
+      wonAmountEl.textContent = lastWon;
+      const profit = lastWon - lastBet;
+      profitEl.textContent = profit >= 0 ? '+' + profit : profit;
+      profitEl.style.color = profit >= 0 ? 'var(--success)' : 'var(--danger)';
+    }
+
+    ballCountSlider.addEventListener('input', e => { ballCount = +e.target.value; updateUI(); });
+    ballValueSlider.addEventListener('input', e => { ballValue = Math.max(1, +e.target.value || 1); updateUI(); });
+
+    document.querySelectorAll('.risk-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.risk-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        riskLevel = btn.dataset.risk;
+        initSlots();
+      });
+    });
+
+    function launchBalls(){
+      if(!canLaunch) return;
+      
+      canLaunch = false;
+      setTimeout(() => { canLaunch = true; }, cooldownTime);
+      
+      // Launch balls with delay, restando el coste por cada bola
+      for(let i=0; i<ballCount; i++){
+        setTimeout(() => {
+          balance -= ballValue;
+          lastBet += ballValue;
+          updateUI();
+          updateStats();
+          
+          activeBalls.push({
+            x: W * 0.5 + (Math.random() - 0.5) * 60,
+            y: 20,
+            vx: (Math.random() - 0.5) * 2,
+            vy: 0,
+            r: 5,
+            col: `hsl(${Math.random()*360}, 70%, 60%)`
+          });
+        }, i * 80);
+      }
+    }
+
+    launchBtn.addEventListener('click', launchBalls);
+
+    // Espacio para lanzar bolas
+    document.addEventListener('keydown', (e) => {
+      if(e.code === 'Space'){
+        e.preventDefault();
+        launchBalls();
+      }
+    });
+
+    function checkBankruptcy(){
+      if(balance <= 0){
+        bankruptMessage.classList.remove('hidden');
+      }
+    }
+
+    continueBtn.addEventListener('click', () => {
+      balance = 500;
+      updateUI();
+      bankruptMessage.classList.add('hidden');
+    });
+
+    function update(dt){
+      const gravity = 0.3;
+      const damping = 0.98;
+
+      for(let i=activeBalls.length-1; i>=0; i--){
+        const ball = activeBalls[i];
+        ball.vy += gravity;
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+        ball.vx *= damping;
+
+        // Pin collisions
+        for(let pin of pins){
+          const dx = ball.x - pin.x;
+          const dy = ball.y - pin.y;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          if(dist < ball.r + pin.r){
+            const angle = Math.atan2(dy, dx);
+            const overlap = ball.r + pin.r - dist;
+            ball.x += Math.cos(angle) * overlap;
+            ball.y += Math.sin(angle) * overlap;
+            const speed = Math.sqrt(ball.vx*ball.vx + ball.vy*ball.vy);
+            ball.vx = Math.cos(angle) * speed * 0.8;
+            ball.vy = Math.sin(angle) * speed * 0.8;
+          }
+        }
+
+        // Wall bounce
+        if(ball.x < ball.r){ ball.x = ball.r; ball.vx *= -0.7; }
+        if(ball.x > W - ball.r){ ball.x = W - ball.r; ball.vx *= -0.7; }
+
+        // Bottom slots
+        if(ball.y > H - 60){
+          const slotIdx = Math.floor(ball.x / (W / slots.length));
+          if(slotIdx >= 0 && slotIdx < slots.length){
+            slots[slotIdx].count++;
+            const winAmount = Math.floor(ballValue * slots[slotIdx].mult);
+            balance += winAmount;
+            lastWon += winAmount;
+            updateUI();
+            updateStats();
+            checkBankruptcy();
+          }
+          activeBalls.splice(i, 1);
+        }
+      }
+    }
+
+    function draw(){
+      ctx.clearRect(0,0,W,H);
+
+      // Pins
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      pins.forEach(pin => {
+        ctx.beginPath();
+        ctx.arc(pin.x, pin.y, pin.r, 0, Math.PI*2);
+        ctx.fill();
+      });
+
+      // Slots
+      const slotY = H - 55;
+      slots.forEach((slot, i) => {
+        const col = slot.mult === 0 ? 'rgba(248,113,113,0.3)' : 
+                    slot.mult >= 5 ? 'rgba(74,222,128,0.4)' : 'rgba(251,191,36,0.3)';
+        ctx.fillStyle = col;
+        ctx.fillRect(slot.x + 2, slotY, slot.w - 4, 50);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`x${slot.mult}`, slot.x + slot.w/2, slotY + 20);
+        
+        if(slot.count > 0){
+          ctx.font = '12px sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.fillText(slot.count, slot.x + slot.w/2, slotY + 40);
+        }
+      });
+
+      // Balls
+      activeBalls.forEach(ball => {
+        ctx.fillStyle = ball.col;
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
+    }
+
+    function gameLoop(){
+      update(1);
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    initPins();
+    initSlots();
+    updateUI();
+    updateStats();
+    gameLoop();
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="es">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>Balloon Ninja — Globos</title>
+	<style>
+		:root{--bg1:#102f4b;--bg2:#1b6b9b;--ui:#fff}
+		html,body{height:100%;margin:0;font-family:Inter,Segoe UI,Arial}
+		canvas{display:block;width:100%;height:100vh;background:linear-gradient(180deg,var(--bg1),var(--bg2));}
+		.ui{position:fixed;left:12px;top:12px;color:var(--ui);text-shadow:0 2px 6px rgba(0,0,0,.6);}
+		.ui .score{font-size:20px;font-weight:700}
+		.ui .best{font-size:12px;opacity:.9}
+		.lives{position:fixed;right:12px;top:12px;color:var(--ui);display:flex;gap:6px;align-items:center}
+		.center{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);color:var(--ui);text-align:center}
+		.btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);padding:10px 16px;border-radius:8px;color:var(--ui);cursor:pointer}
+		.small{font-size:14px;opacity:.95}
+	</style>
+</head>
+<body>
+	<canvas id="c"></canvas>
+	<div class="ui">
+		<div class="score">Puntos: <span id="score">0</span></div>
+		<div class="best">Mejor: <span id="best">0</span></div>
+		<div id="power" class="small" style="margin-top:6px;opacity:.95">Power-up: Ninguno</div>
+	</div>
+	<div class="lives" id="lives"></div>
+
+	<div class="center" id="overlay" style="display:none">
+		<h1 id="title">Balloon Ninja</h1>
+		<div id="message" class="small" style="margin:8px 0 16px;opacity:.95">Desliza para reventar globos. Evita las bombas.</div>
+		<button id="startBtn" class="btn">Jugar</button>
+	</div>
+
+	<script>
+	(()=>{
+		const canvas = document.getElementById('c');
+		const ctx = canvas.getContext('2d');
+		let W = canvas.width = innerWidth;
+		let H = canvas.height = innerHeight;
+
+		const scoreEl = document.getElementById('score');
+		const bestEl = document.getElementById('best');
+		const livesEl = document.getElementById('lives');
+		const overlay = document.getElementById('overlay');
+		const startBtn = document.getElementById('startBtn');
+		const title = document.getElementById('title');
+
+		let lastTime = 0;
+		let balloons = [];
+		let particles = [];
+		let slices = [];
+		let pointerDown = false;
+		let path = [];
+		let trail = []; // visual trail points
+		let flashAlpha = 0; // screen flash on lose life
+		const VIBRATE_ON_HIT = true;
+		// tuning
+		const MAX_BALLOONS_BASE = 5;
+		// power-up state
+		let powerUps = []; // floating pickups
+		let activePowerUp = null; // {type:'slow'|'shield'|'x2', end:time}
+		let scoreMultiplier = 1;
+		let shieldCount = 0;
+		let gameSpeed = 1; // scales physics while active slow
+		let spawnTimer = 0;
+		let spawnInterval = 900; // ms
+		let score = 0;
+		let best = localStorage.getItem('balloon_ninja_best')|0;
+		bestEl.textContent = best;
+		let lives = 3;
+		let running = false;
+		let timeElapsed = 0;
+		let difficultyMult = 1;
+
+		const colors = ['#ff6b6b','#ffd93d','#6bf178','#6bc3ff','#c07bff','#ff8cb3'];
+
+		function rand(a,b){return a + Math.random()*(b-a)}
+
+		function resize(){W=canvas.width=innerWidth;H=canvas.height=innerHeight}
+		addEventListener('resize',resize);
+
+		function spawnRandom(){
+			// Determine max balloons allowed depending on time
+			function getMaxBalloons(){
+				if(timeElapsed < 20) return 5;
+				if(timeElapsed < 60) return 6 + Math.floor((timeElapsed-20)/10); // 6..9
+				return 10 + Math.floor((timeElapsed-60)/15); // increases slowly
+			}
+			if(balloons.length >= getMaxBalloons()) return;
+
+			// Bomb probability staged by time to avoid early frustration
+			const scoreFactor = Math.min(0.18, score/2000);
+			let bombProb = 0.005; // very rare early
+			if(timeElapsed >= 20 && timeElapsed < 60) bombProb = 0.02 + (timeElapsed-20)/40*0.08;
+			if(timeElapsed >= 60) bombProb = 0.10 + Math.min(0.18, (timeElapsed-60)/120) + scoreFactor;
+			const isBomb = Math.random() < bombProb;
+			const radius = isBomb ? 28 : rand(20,40);
+			const x = rand(radius, W - radius);
+			// slower initial launch for accessibility, scales with difficulty
+			const vy = -rand(4,8) * difficultyMult; 
+			const vx = rand(-2.5,2.5);
+			const color = isBomb ? '#222' : colors[Math.floor(Math.random()*colors.length)];
+			const b = {x, y:H+radius+10, vx, vy, r:radius, col:color, popped:false, type: isBomb ? 'bomb' : 'balloon', id:Math.random()};
+			if(isBomb){
+				b.osc = {phase: Math.random()*Math.PI*2, amp: rand(6,20), speed: rand(0.6,2.2)};
+			}
+			balloons.push(b);
+		}
+
+		function spawnPowerUp(){
+			const types = ['slow','shield','x2'];
+			const type = types[Math.floor(Math.random()*types.length)];
+			const r = 18; const x = rand(r, W - r); const y = H + r + 8; const vy = -rand(3.8,6.2) * difficultyMult; const vx = rand(-1.2,1.2);
+			const col = type==='slow' ? '#7bdff6' : type==='shield' ? '#ffd36b' : '#c48bff';
+			powerUps.push({x,y,vx,vy,r,col,type,life:8});
+		}
+
+		function activatePowerUp(type){
+			const now = timeElapsed;
+			if(activePowerUp) return; // only 1 active
+			if(type==='slow'){ activePowerUp = {type:'slow', end: now + 4}; gameSpeed = 0.52; }
+			if(type==='shield'){ activePowerUp = {type:'shield', end: now + 12}; shieldCount = 1; }
+			if(type==='x2'){ activePowerUp = {type:'x2', end: now + 10}; scoreMultiplier = 2; }
+			// small audio cue
+			playCombo();
+			// show UI briefly by updating overlay message
+			document.getElementById('message').textContent = 'Power-up: ' + activePowerUp.type.toUpperCase();
+		}
+
+		function deactivatePowerUp(){
+			if(!activePowerUp) return; const t = activePowerUp.type; activePowerUp = null; if(t==='slow') gameSpeed = 1; if(t==='x2') scoreMultiplier = 1; if(t==='shield') shieldCount = 0; document.getElementById('message').textContent = 'Desliza para reventar globos. Evita las bombas.';
+		}
+
+		function collectPowerUp(pu){
+			activatePowerUp(pu.type);
+			// spawn small particles
+			for(let i=0;i<14;i++){ const ang=Math.random()*Math.PI*2; particles.push({x:pu.x,y:pu.y,vx:Math.cos(ang)*(Math.random()*4+1),vy:Math.sin(ang)*(Math.random()*4+1),r:Math.random()*2+1,life:0.6+Math.random()*0.6,maxLife:1,col: '#fff'}); }
+		}
+
+		function update(dt){
+			// dt is real time in seconds; timeElapsed tracks real elapsed
+			timeElapsed += dt;
+			const pdt = dt * gameSpeed; // physics dt scaled when slow power-up active
+			// faster ramp so 30-60s becomes noticeably harder
+			difficultyMult = 1 + Math.min(2.5, timeElapsed/15000);
+			spawnTimer += pdt*1000;
+			const interval = Math.max(300, spawnInterval - timeElapsed*0.04);
+			if(spawnTimer > interval / (1 + Math.floor(score/40)*0.12)){
+				spawnTimer = 0;
+				// spawn more as difficulty grows
+				const n = Math.ceil(1 + Math.min(3, timeElapsed/20000 + score/400));
+				for(let i=0;i<n;i++) spawnRandom();
+				// small chance to spawn a power-up
+				if(Math.random() < 0.012 && powerUps.length < 2){ spawnPowerUp(); }
+			}
+
+			// balloons (physics scaled)
+			for(let b of balloons){
+				if(b.type==='bomb' && b.osc){ b.x += Math.sin(timeElapsed*b.osc.speed + b.osc.phase) * b.osc.amp * pdt; }
+				b.x += b.vx * pdt * 60;
+				b.y += b.vy * pdt * 60;
+				b.vy += 0.018 * pdt * 60 * (1 + Math.min(1.5, timeElapsed/30000));
+
+				// invisible walls on left/right: keep balloons inside horizontally
+				if(b.x - b.r < 0){
+					b.x = b.r;
+					b.vx = Math.abs(b.vx) * 0.6; // bounce inward, damped
+					if(Math.abs(b.vx) < 0.5) b.vx = 0.8; 
+				}
+				if(b.x + b.r > W){
+					b.x = W - b.r;
+					b.vx = -Math.abs(b.vx) * 0.6;
+					if(Math.abs(b.vx) < 0.5) b.vx = -0.8;
+				}
+			}
+
+			// particles
+			for(let p of particles){ p.x += p.vx * pdt * 60; p.y += p.vy * pdt * 60; p.life -= dt; }
+			particles = particles.filter(p=>p.life>0);
+
+			// trail decay
+			for(let t of trail) t.life -= dt; trail = trail.filter(t=>t.life>0);
+
+			// flash decay
+			flashAlpha = Math.max(0, flashAlpha - dt * 2.4);
+
+			// remove off-screen balloons
+			for(let i=balloons.length-1;i>=0;i--){
+				const b=balloons[i];
+				if(!b.popped && b.y + b.r < -50){ balloons.splice(i,1); loseLife(); }
+				else if(b.popped && b._remove){ balloons.splice(i,1); }
+			}
+
+			// powerUp motion + cleanup
+			for(let i=powerUps.length-1;i>=0;i--){ const pu = powerUps[i]; pu.x += pu.vx * pdt * 60; pu.y += pu.vy * pdt * 60; pu.life -= dt; if(pu.y + pu.r < -50 || pu.life<=0) powerUps.splice(i,1); }
+
+			// active power-up expiration
+			if(activePowerUp && activePowerUp.end <= timeElapsed){ deactivatePowerUp(); }
+		}
+
+		function loseLife(){
+			lives -= 1; renderLives();
+			flashAlpha = 0.9; // strong flash
+			try{ if(VIBRATE_ON_HIT && navigator.vibrate) navigator.vibrate(120); }catch(e){}
+			if(lives<=0) endGame('Has perdido');
+		}
+
+		function renderLives(){
+			livesEl.innerHTML = '';
+			for(let i=0;i<lives;i++){
+				const s = document.createElement('div'); s.textContent='❤'; s.style.fontSize='20px'; s.style.opacity='0.95'; livesEl.appendChild(s);
+			}
+		}
+
+		function draw(){
+			ctx.clearRect(0,0,W,H);
+
+			// flash overlay when losing life
+			if(flashAlpha > 0){
+				ctx.fillStyle = `rgba(255,255,255,${flashAlpha*0.18})`;
+				ctx.fillRect(0,0,W,H);
+			}
+
+			// subtle background glow
+			const g = ctx.createLinearGradient(0,0,0,H);
+			g.addColorStop(0,'rgba(255,255,255,0.02)');
+			g.addColorStop(1,'rgba(0,0,0,0.06)');
+			ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+			// balloons
+			for(let b of balloons){
+				ctx.save();
+				ctx.beginPath();
+				ctx.fillStyle = b.col;
+				// bombs get a red aura for clarity
+				if(b.type==='bomb'){
+					ctx.shadowColor = 'rgba(220,40,40,0.9)'; ctx.shadowBlur = 28;
+				}else{
+					ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur=12;
+				}
+				ctx.ellipse(b.x,b.y,b.r*0.9,b.r,0,0,Math.PI*2);
+				ctx.fill();
+				ctx.shadowBlur=0;
+				// highlight
+				ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.ellipse(b.x-b.r*0.2,b.y-b.r*0.35,b.r*0.25,b.r*0.25,0,0,Math.PI*2); ctx.fill();
+				ctx.restore();
+				// string for balloon
+				ctx.beginPath(); ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.moveTo(b.x, b.y + b.r); ctx.lineTo(b.x, b.y + b.r + 30); ctx.stroke();
+				if(b.type==='bomb'){
+					ctx.beginPath(); ctx.fillStyle='rgba(0,0,0,0.9)'; ctx.arc(b.x,b.y,b.r*0.7,0,Math.PI*2); ctx.fill();
+					ctx.fillStyle='orange'; ctx.font='700 18px sans-serif'; ctx.textAlign='center'; ctx.fillText('💣', b.x, b.y+6);
+				}
+				// small balloon badge for visual clarity (small ones give bonus)
+				if(b.type!=='bomb' && b.r < 26){
+					ctx.beginPath(); ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.arc(b.x + b.r*0.6, b.y - b.r*0.6, 8, 0, Math.PI*2); ctx.fill();
+					ctx.fillStyle='yellow'; ctx.font='600 11px sans-serif'; ctx.textAlign='center'; ctx.fillText('★', b.x + b.r*0.6, b.y - b.r*0.6 + 4);
+				}
+			}
+
+			// particles
+			for(let p of particles){
+				ctx.beginPath(); ctx.fillStyle = p.col; ctx.globalAlpha = Math.max(0, p.life/ p.maxLife); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+			}
+
+			// power-up pickups
+			for(let pu of powerUps){
+				ctx.save(); ctx.beginPath(); ctx.fillStyle = pu.col; ctx.globalAlpha = Math.max(0, Math.min(1, pu.life/2)); ctx.ellipse(pu.x, pu.y, pu.r, pu.r, 0, 0, Math.PI*2); ctx.fill(); ctx.restore();
+				ctx.fillStyle = '#111'; ctx.font='700 14px sans-serif'; ctx.textAlign='center';
+				if(pu.type==='slow') ctx.fillText('⏱', pu.x, pu.y+5);
+				if(pu.type==='shield') ctx.fillText('🛡', pu.x, pu.y+5);
+				if(pu.type==='x2') ctx.fillText('×2', pu.x, pu.y+6);
+			}
+
+			// draw trail (fading)
+			if(trail.length>1){
+				ctx.lineWidth = 18; ctx.lineJoin='round'; ctx.lineCap='round';
+				for(let i=0;i<trail.length-1;i++){
+					const a = trail[i]; const b = trail[i+1];
+					const alpha = Math.max(0, Math.min(1, a.life/0.35));
+					ctx.strokeStyle = `rgba(255,255,255,${0.28*alpha})`;
+					ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+				}
+				// inner sharper line
+				ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.beginPath(); ctx.moveTo(trail[0].x,trail[0].y);
+				for(let i=1;i<trail.length;i++) ctx.lineTo(trail[i].x,trail[i].y);
+				ctx.stroke();
+			}
+
+			// slice path fallback (short-lived)
+			if(path.length>1){
+				ctx.beginPath(); ctx.lineWidth = 6; ctx.lineJoin='round'; ctx.lineCap='round';
+				ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.moveTo(path[0].x,path[0].y);
+				for(let i=1;i<path.length;i++) ctx.lineTo(path[i].x,path[i].y);
+				ctx.stroke();
+			}
+
+			// update power-up UI
+			const powerEl = document.getElementById('power');
+			if(activePowerUp){ const remaining = Math.max(0, Math.round((activePowerUp.end - timeElapsed)*10)/10); powerEl.textContent = `Power-up: ${activePowerUp.type.toUpperCase()} (${remaining}s)`; }
+			else { powerEl.textContent = 'Power-up: Ninguno'; }
+		}
+
+		function gameLoop(t){
+			const dt = Math.min(0.033, (t - lastTime)/1000 || 0.016);
+			lastTime = t;
+			if(running){ update(dt); checkSlices(); }
+			draw();
+			requestAnimationFrame(gameLoop);
+		}
+
+		function checkSlices(){
+			if(path.length < 2) return;
+			// Build segments
+			const segments = [];
+			let sliceLen = 0;
+			for(let i=1;i<path.length;i++){
+				const a = path[i-1], b = path[i];
+				const dx = b.x-a.x, dy = b.y-a.y; sliceLen += Math.sqrt(dx*dx+dy*dy);
+				segments.push([a,b]);
+			}
+
+			const comboMultiplier = Math.min(4, 1 + Math.floor(sliceLen / 160));
+			// ignore very slow traces to avoid phantom cuts
+			const durationMs = Math.max(1, (path[path.length-1].t - path[0].t));
+			const avgSpeed = sliceLen / durationMs; // px per ms
+			const MIN_SLICE_SPEED = 0.18; // ~180 px/s
+			if(avgSpeed < MIN_SLICE_SPEED || sliceLen < 24){ path = []; trail = []; return; }
+
+			// to track combos in this slice
+			let hitCount = 0;
+			const minSegLen = 8; // avoid phantom micro-segments
+			segloop: for(let b of balloons){
+				if(b.popped) continue;
+				for(let seg of segments){
+					const a = seg[0], c = seg[1];
+					const dx = c.x - a.x, dy = c.y - a.y; if(Math.hypot(dx,dy) < minSegLen) continue;
+					if(circleSegmentIntersect(b.x,b.y,b.r, a, c)){
+						b.popped = true; b._remove = true;
+						if(b.type==='bomb'){ triggerBomb(b); return; }
+						popBalloon(b, comboMultiplier);
+						hitCount++;
+						continue segloop;
+					}
+				}
+			}
+			if(hitCount>1) playCombo();
+
+			// check power-up pickups cut
+			for(let i=powerUps.length-1;i>=0;i--){
+				const pu = powerUps[i];
+				for(let seg of segments){
+					const a = seg[0], c = seg[1];
+					if(circleSegmentIntersect(pu.x, pu.y, pu.r, a, c)){
+						collectPowerUp(pu); powerUps.splice(i,1); break;
+					}
+				}
+			}
+			  // clear path after a short time
+			  path = [];
+			  // clear trail too
+			  trail = [];
+		}
+
+		function circleSegmentIntersect(cx,cy,r, a, b){
+			// distance from circle to segment
+			const vx = b.x - a.x; const vy = b.y - a.y;
+			const wx = cx - a.x; const wy = cy - a.y;
+			const c1 = vx*wx + vy*wy;
+			const c2 = vx*vx + vy*vy;
+			let t = 0;
+			if(c2>0) t = Math.max(0, Math.min(1, c1/c2));
+			const px = a.x + vx * t; const py = a.y + vy * t;
+			const dx = px - cx; const dy = py - cy;
+			// small tolerance so near-misses count reliably
+			const tol = Math.max(6, r*0.12);
+			return dx*dx + dy*dy <= (r+tol)*(r+tol);
+		}
+
+		function popBalloon(b, multiplier=1){
+			const base = Math.floor(10 * (b.r/30) * (1 + Math.min(3, timeElapsed/30000)));
+			const gained = base * multiplier;
+			score += gained;
+			// create particles
+			for(let i=0;i<18 + (multiplier-1)*6;i++){
+				const ang = Math.random()*Math.PI*2; const sp = Math.random()*6 + 1 + multiplier*0.8;
+				particles.push({x:b.x, y:b.y, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp, r:Math.random()*3+1, life:0.7+Math.random()*0.6, maxLife:1, col: b.col});
+			}
+			// small score pop visual particle
+			particles.push({x:b.x, y:b.y-10, vx:0, vy:-0.6, r:8, life:0.9, maxLife:1, col: 'rgba(255,255,255,0.9)', text: '+'+gained});
+			scoreEl.textContent = score;
+			if(score>best){ best = score; bestEl.textContent = best; localStorage.setItem('balloon_ninja_best', best); }
+			playPop();
+		}
+
+		// Simple audio using WebAudio
+		const AudioCtx = window.AudioContext || window.webkitAudioContext;
+		const audio = new AudioCtx();
+		function playPop(){
+			const o = audio.createOscillator(); const g = audio.createGain(); o.type='sine'; o.frequency.value = 900 + Math.random()*200; g.gain.value = 0.12; o.connect(g); g.connect(audio.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + 0.18); o.stop(audio.currentTime + 0.2);
+		}
+		function triggerBomb(b){
+			// if shield active, consume shield and avoid game over
+			if(shieldCount>0){
+				shieldCount = Math.max(0, shieldCount-1);
+				// smaller blast feedback
+				for(let i=0;i<22;i++){ const ang=Math.random()*Math.PI*2; particles.push({x:b.x,y:b.y,vx:Math.cos(ang)*(Math.random()*5+1),vy:Math.sin(ang)*(Math.random()*5+1),r:Math.random()*3+1,life:0.7+Math.random()*0.4,maxLife:1,col:'#ffd9b3'}); }
+				playCombo();
+				return;
+			}
+			// bomb explosion effect
+			for(let i=0;i<40;i++){ const ang=Math.random()*Math.PI*2; particles.push({x:b.x,y:b.y,vx:Math.cos(ang)*(Math.random()*8+2),vy:Math.sin(ang)*(Math.random()*8+2),r:Math.random()*4+1,life:0.9+Math.random()*0.6,maxLife:1,col:'#ffcc66'}); }
+			playBomb();
+			endGame('BOOM! Explotaste una bomba');
+		}
+		function playBomb(){
+			const o = audio.createOscillator(); const g = audio.createGain(); o.type='sawtooth'; o.frequency.value = 120; g.gain.value = 0.4; o.connect(g); g.connect(audio.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.001,audio.currentTime+0.6); o.stop(audio.currentTime+0.7);
+		}
+		function playCombo(){
+			const o = audio.createOscillator(); const g = audio.createGain(); o.type='triangle'; o.frequency.value = 1200; g.gain.value = 0.08; o.connect(g); g.connect(audio.destination); o.start(); g.gain.exponentialRampToValueAtTime(0.001,audio.currentTime+0.25); o.stop(audio.currentTime+0.3);
+		}
+
+		function endGame(msg){
+			running = false; overlay.style.display = 'block'; title.textContent = 'Game Over'; document.getElementById('message').textContent = msg + ' — Puntos: ' + score;
+		}
+
+		// Input handling (mouse + touch)
+		function startPointer(e){ pointerDown = true; path = []; addPoint(e); }
+		function movePointer(e){ if(!pointerDown) return; addPoint(e); }
+		function endPointer(e){ pointerDown = false; if(path.length>1) checkSlices(); setTimeout(()=>path=[],80); }
+
+		function addPoint(e){
+			const p0 = getPos(e); const p = {x:p0.x,y:p0.y,t:performance.now()}; path.push(p); if(path.length>36) path.shift();
+			// add to visual trail
+			trail.push({x:p.x, y:p.y, life:0.35}); if(trail.length>36) trail.shift();
+		}
+		function getPos(e){
+			const p = (e.touches && e.touches[0]) || e;
+			return {x: p.clientX, y: p.clientY};
+		}
+
+		addEventListener('mousedown', startPointer); addEventListener('mousemove', movePointer); addEventListener('mouseup', endPointer);
+		addEventListener('touchstart', (e)=>{ e.preventDefault(); startPointer(e); }, {passive:false});
+		addEventListener('touchmove', (e)=>{ e.preventDefault(); movePointer(e); },{passive:false});
+		addEventListener('touchend', (e)=>{ e.preventDefault(); endPointer(e); },{passive:false});
+
+		// Hover detection: passing the mouse over a balloon pops it (accessibility)
+		function hoverCheck(pos){
+			if(!pos) return;
+			for(let i=balloons.length-1;i>=0;i--){
+				const b = balloons[i];
+				if(b.popped) continue;
+				const dx = pos.x - b.x, dy = pos.y - b.y;
+				const dist2 = dx*dx + dy*dy;
+				const tol = Math.max(6, b.r*0.12);
+				if(dist2 <= (b.r + tol)*(b.r + tol)){
+					b.popped = true; b._remove = true;
+					if(b.type === 'bomb'){ triggerBomb(b); }
+					else { popBalloon(b, 1); }
+				}
+			}
+		}
+
+		// separate mousemove listener for hover (only when not dragging)
+		addEventListener('mousemove', (e)=>{
+			if(e.buttons) return; // user is dragging/holding — slicing handled elsewhere
+			hoverCheck({x: e.clientX, y: e.clientY});
+		});
+
+		// start / restart
+		startBtn.addEventListener('click', ()=>{ startGame(); });
+
+		function startGame(){
+			balloons = []; particles = []; path = []; score = 0; lives = 3; timeElapsed = 0; difficultyMult = 1;
+			scoreEl.textContent = '0'; renderLives(); overlay.style.display='none'; lastTime = performance.now(); running = true;
+		}
+
+		// initialize
+		renderLives(); overlay.style.display='block';
+		requestAnimationFrame(gameLoop);
+	})();
+	</script>
+</body>
+</html>
+
